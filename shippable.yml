@@ -13,12 +13,17 @@ build:
   cache_dir_list:
     - $SHIPPABLE_BUILD_DIR/.cache
   pre_ci_boot:
+#  --net-host - to see other containers as a host would
+#  --privileged in order to change vm.max_map_count, crateDb needs it
     options: "--net=host --privileged --pid=host -v $SHIPPABLE_BUILD_DIR:$SHIPPABLE_BUILD_DIR"
   pre_ci:
+    - docker info
+    - sysctl vm.max_map_count
     - sysctl -w vm.max_map_count=262144
     - sysctl vm.max_map_count
-    - docker info
     - if docker node ls > /dev/null 2>&1; then echo "this is a swarm node"; else docker swarm init; fi
+    - docker info
+    - docker service ls
     - docker service rm crate || true
     - >
       docker service create \
@@ -42,15 +47,13 @@ build:
           -Cnetwork.host=_site_ \
           -Clicense.enterprise=false
   ci:
-    - docker service ls
-    - sleep 30
+    - sleep 10
     - docker ps -a
     - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test --info --stacktrace
   post_ci:
-    - docker service rm crate
   on_failure:
-    - sysctl vm.max_map_count
     - docker service logs crate
+    - docker service rm crate
   on_success:
     - >
       (
@@ -60,3 +63,4 @@ build:
       ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache
       -Pversion="$GIT_TAG_NAME" --info bintrayUpload
       ) || (echo "SKIPPED")
+    - docker service rm crate
