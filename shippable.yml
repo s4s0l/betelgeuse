@@ -22,7 +22,7 @@ build:
       docker service create \
           --name crate \
           --mode global \
-          -e CRATE_HEAP_SIZE=256m \
+          -e CRATE_HEAP_SIZE=1024m \
           --endpoint-mode vip \
           --update-parallelism 1 \
           --update-delay 60s \
