@@ -15,7 +15,6 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.utils
 
 import java.net.InetAddress
@@ -32,7 +31,21 @@ object DnsUtils {
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
 
-  def getCurrentNodeHostName:String = InetAddress.getLocalHost.getHostName
+  val getCurrentNodeHostName: String = {
+    //on shippable UnknownHostException is thrown!
+    val fromInetAddress = try {
+      Some(InetAddress.getLocalHost.getHostName)
+    } catch {
+      case ex: java.net.UnknownHostException =>
+        LOGGER.warn("Unable to resolve host name from InetAddress.getLocalHost.getHostName, will try $HOSTNAME", ex)
+        None
+    }
+    fromInetAddress.orElse {
+      Option(System.getenv("HOSTNAME"))
+    }.getOrElse {
+      throw new Exception("Unablee to determine current node host name!")
+    }
+  }
 
   def lookupActorPaths(candidates: Seq[ActorPath])(implicit executor: ExecutionContext): Future[Seq[ActorPath]] = {
     import scala.collection.JavaConverters._
