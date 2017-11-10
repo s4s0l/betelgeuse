@@ -17,6 +17,9 @@
 println System.getProperty("java.version")
 buildscript {
     apply from: './gradle/buildscript.gradle', to: buildscript
+    dependencies {
+        classpath 'com.palantir:jacoco-coverage:0.4.0'
+    }
 }
 
 apply from: './gradle/common.gradle'
@@ -37,5 +40,18 @@ subprojects {
         githubRepository = "s4s0l/betelgeuse"
     }
     apply from: '../gradle/bintray.gradle'
+    apply plugin: 'jacoco'
+    jacocoTestReport {
+        reports {
+            xml.enabled true
+        }
+    }
 }
 
+apply plugin: 'com.palantir.jacoco-full-report'
+
+jacocoFullReport {
+    reports {
+        xml.enabled true
+    }
+}

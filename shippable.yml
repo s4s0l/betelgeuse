@@ -48,7 +48,7 @@ build:
   ci:
     - sleep 10
     - docker ps -a
-    - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test --info --stacktrace
+    - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test jacocoTestReport jacocoFullReport --info --stacktrace
   post_ci:
   on_failure:
     - docker service logs crate
@@ -65,3 +65,4 @@ build:
       ) || (echo "SKIPPED")
     - docker service rm crate
     - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
+    - cp build/reports/jacoco/jacocoFullReport/jacocoFullReport.xml shippable/codecoverage
