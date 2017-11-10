@@ -13,8 +13,10 @@ build:
   cache_dir_list:
     - $SHIPPABLE_BUILD_DIR/.cache
   pre_ci_boot:
-    options: "--net=host --pid=host -v $SHIPPABLE_BUILD_DIR:$SHIPPABLE_BUILD_DIR"
+    options: "--net=host --privileged --pid=host -v $SHIPPABLE_BUILD_DIR:$SHIPPABLE_BUILD_DIR"
   pre_ci:
+    - sysctl -w vm.max_map_count=262144
+    - sysctl vm.max_map_count
     - docker info
     - if docker node ls > /dev/null 2>&1; then echo "this is a swarm node"; else docker swarm init; fi
     - docker service rm crate || true
