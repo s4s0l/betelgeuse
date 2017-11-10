@@ -46,6 +46,8 @@ build:
     - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test --info --stacktrace
   post_ci:
     - docker service rm crate
+  on_failure:
+    - docker service logs crate
   on_success:
     - >
       (
