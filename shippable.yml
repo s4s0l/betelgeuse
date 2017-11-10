@@ -47,6 +47,7 @@ build:
   post_ci:
     - docker service rm crate
   on_failure:
+    - sysctl vm.max_map_count
     - docker service logs crate
   on_success:
     - >
