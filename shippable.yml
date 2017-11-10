@@ -40,6 +40,7 @@ build:
           -Cnetwork.host=_site_ \
           -Clicense.enterprise=false
   ci:
+    - docker ps
     - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test --info --stacktrace
   post_ci:
     - docker service rm crate
