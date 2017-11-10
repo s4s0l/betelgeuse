@@ -45,7 +45,7 @@ tasks.withType(Jar) {
                 "Build-Jdk": "${JavaVersion.current().toString()}",
                 "Url": "${websiteUrl}",
                 "Name": "${projectId}".replaceAll("\\.", "/"),
-                "Specification-Title": "Shathel Stack Deployer",
+                "Specification-Title": "${group}",
                 "Specification-Vendor": "${organization}",
                 "Specification-Version": "${version}",
                 "Implementation-Vendor": "${organization}",

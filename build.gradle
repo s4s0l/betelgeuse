@@ -26,5 +26,16 @@ allprojects {
 }
 subprojects {
 
+    ext {
+        tags = ['akka', 'utils', 'scala', 'java', 'microservices']
+        vcsUrl = "https://github.com/s4s0l/betelgeuse.git"
+        websiteUrl = "https://github.com/s4s0l/betelgeuse"
+        issueTrackerUrl = "https://github.com/s4s0l/betelgeuse/issues"
+        license = "Apache-2.0"
+        organization = "sasol-oss"
+        projectId = "${group}.${project.name}"
+        githubRepository = "s4s0l/betelgeuse"
+    }
+    apply from: '../gradle/bintray.gradle'
 }
 
