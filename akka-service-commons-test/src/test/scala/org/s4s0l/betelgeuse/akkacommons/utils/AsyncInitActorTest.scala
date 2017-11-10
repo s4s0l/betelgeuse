@@ -1,20 +1,28 @@
 /*
- *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
- *  Unauthorized copying of this file, via any medium is strictly prohibited
- *  Proprietary and confidential
- *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-09-15 04:05
+ * Copyright© 2017 the original author or authors.
  *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
+
+
 
 package org.s4s0l.betelgeuse.akkacommons.utils
 
 import akka.actor.Props
-import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BetelgeuseAkkaPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.{BetelgeuseAkkaTestWithCrateDb, DbCrateTest}
+import org.s4s0l.betelgeuse.akkacommons.test.BetelgeuseAkkaTestWithCrateDb
 import org.s4s0l.betelgeuse.akkacommons.utils.AsyncInitActorTestClasses.SampleAsyncInitActor
-import scalikejdbc.DBSession
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
