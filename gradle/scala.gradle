@@ -46,7 +46,12 @@ dependencies {
 }
 
 
+configurations {
+    agent
+}
+dependencies {
+    agent group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
+}
 test {
-    jvmArgs '-javaagent:/home/sasol/Projects/rntoktme/native/aspectjweaver-1.8.10.jar'
-    maxParallelForks = 1
+    jvmArgs "-javaagent:${configurations.agent.files.first().absolutePath}"
 }
