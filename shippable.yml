@@ -17,6 +17,7 @@ build:
   pre_ci:
     - docker info
     - if docker node ls > /dev/null 2>&1; then echo "this is a swarm node"; else docker swarm init; fi
+    - docker service rm crate || true
     - >
       docker service create \
           --name crate \
