@@ -53,6 +53,7 @@ build:
   on_failure:
     - docker service logs crate
     - docker service rm crate
+    - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
   on_success:
     - >
       (
@@ -63,3 +64,4 @@ build:
       -Pversion="$GIT_TAG_NAME" --info bintrayUpload
       ) || (echo "SKIPPED")
     - docker service rm crate
+    - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
