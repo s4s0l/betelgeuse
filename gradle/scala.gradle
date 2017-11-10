@@ -54,4 +54,5 @@ dependencies {
 }
 test {
     jvmArgs "-javaagent:${configurations.agent.files.first().absolutePath}"
+    maxParallelForks = 1
 }
