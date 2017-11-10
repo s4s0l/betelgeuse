@@ -1,0 +1,34 @@
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-08-23 12:26
+ *
+ */
+
+apply plugin: "kotlin"
+
+dependencies {
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:1.1.3-2"
+    compile "org.jetbrains.kotlin:kotlin-reflect:1.1.3-2"
+    testCompile "org.jetbrains.kotlin:kotlin-test:1.1.3-2"
+    testCompile "org.jetbrains.kotlin:kotlin-test-junit:1.1.3-2"
+
+}
+
+
+kotlin {
+    experimental {
+        coroutines 'enable'
+    }
+}
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+compileTestKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}

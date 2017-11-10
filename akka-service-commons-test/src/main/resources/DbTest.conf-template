@@ -1,0 +1,32 @@
+db.${testName} {
+
+  poolInitialSize = 2
+  poolMaxSize = 5
+  poolConnectionTimeoutMillis = 1000
+  poolValidationQuery = "select 1 as one"
+  poolFactoryName = "commons-dbcp2"
+
+  flyway {
+    locations = db/migration/${testName}
+    schemas="${schemaName}"
+  }
+}
+
+flyway {
+    enabled = true
+}
+
+scalikejdbc.global {
+  jtaDataSourceCompatible = true
+  loggingSQLAndTime.stackTraceDepth = 1
+  loggingSQLAndTime.enabled = true
+  loggingSQLAndTime.singleLineMode = true
+  loggingSQLAndTime.printUnprocessedStackTrace = false
+  loggingSQLAndTime.stackTraceDepth = 1
+  loggingSQLAndTime.logLevel = debug
+  loggingSQLAndTime.warningEnabled = false
+  loggingSQLAndTime.warningThresholdMillis = 3000
+  loggingSQLAndTime.warningLogLevel = warn
+  loggingSQLAndTime.maxColumnSize = 100
+  loggingSQLAndTime.maxBatchParamSize = 1
+}

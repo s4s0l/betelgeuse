@@ -1,0 +1,36 @@
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-09-04 13:01
+ *
+ */
+
+description = "Common utilities for creating akka services"
+ext {
+    displayName = "Akka Service Commons"
+    jacksonVersion = "2.8.9"
+}
+
+
+
+apply from: '../gradle/scala.gradle'
+apply from: '../gradle/akka.gradle'
+//apply from: '../gradle/kamon.gradle'
+apply from: '../gradle/scalike-jdbc.gradle'
+
+
+
+dependencies {
+    compile 'ch.qos.logback:logback-classic:1.2.3'
+    compile 'ch.qos.logback:logback-core:1.2.3'
+    compile 'io.crate:crate-jdbc:2.2.0'
+    compile "org.flywaydb:flyway-core:4.2.0"
+    compile "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    compile "com.fasterxml.jackson.module:jackson-module-scala_${scalaBinaryVersion}:${jacksonVersion}"
+    compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
+    compile group: 'com.lihaoyi', name: "fastparse_${scalaBinaryVersion}", version: '0.4.4'
+}
+
+
+

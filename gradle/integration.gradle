@@ -1,0 +1,57 @@
+
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-08-23 12:26
+ *
+ */
+
+if(project.plugins.hasPlugin(ScalaPlugin)){
+
+    sourceSets {
+        integrationTest {
+            scala {
+                compileClasspath += main.output + test.output
+                runtimeClasspath += main.output + test.output
+                srcDir file('src/integration-test/scala')
+            }
+            resources.srcDir file('src/integration-test/resources')
+        }
+    }
+
+}else{
+    sourceSets {
+        integrationTest {
+            groovy {
+                compileClasspath += main.output + test.output
+                runtimeClasspath += main.output + test.output
+                srcDir file('src/integration-test/groovy')
+            }
+            resources.srcDir file('src/integration-test/resources')
+        }
+    }
+
+}
+
+
+
+
+configurations {
+    integrationTestCompile.extendsFrom testCompile
+    integrationTestRuntime.extendsFrom testRuntime
+}
+
+
+task integrationTest(type: Test) {
+    testClassesDir = sourceSets.integrationTest.output.classesDir
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    outputs.upToDateWhen { false }
+}
+
+tasks.withType(Test) {
+    reports.html.destination = file("${reporting.baseDir}/${name}")
+}
+
+
+integrationTest.mustRunAfter test

@@ -1,0 +1,15 @@
+db.${datasource} {
+  poolInitialSize = 3
+  poolMaxSize = 20
+  poolConnectionTimeoutMillis = 1000
+  poolValidationQuery = "select 1 as one"
+  poolFactoryName = "commons-dbcp2"
+
+  flyway {
+    #needed for internal mechanizms schema migration (versions < 1.0)
+    outOfOrder = true
+    enabled = true
+    locations = "${locations}"
+    schemas = "${schema}"
+  }
+}

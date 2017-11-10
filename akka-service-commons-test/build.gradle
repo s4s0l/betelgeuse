@@ -1,0 +1,35 @@
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-08-23 12:26
+ *
+ */
+
+description = "Common utilities for testing akka services"
+ext {
+    displayName = "Akka Service Commons - Test"
+}
+
+
+
+apply from: '../gradle/scala.gradle'
+apply from: '../gradle/akka.gradle'
+
+
+
+dependencies {
+    compile project(":akka-service-commons")
+    compile "com.typesafe.akka:akka-http-testkit_${scalaBinaryVersion}:${akkaHttpVersion}"
+    // https://mvnrepository.com/artifact/org.scalamock/scalamock-scalatest-support_2.12
+    compile group: 'org.scalamock', name: "scalamock-scalatest-support_${scalaBinaryVersion}", version: '3.6.0'
+    compile "org.scalatest:scalatest_${scalaBinaryVersion}:3.0.3"
+    compile 'org.pegdown:pegdown:1.6.0'
+
+
+
+
+}
+
+
+

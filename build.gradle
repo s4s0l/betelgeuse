@@ -1,0 +1,38 @@
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-09-04 13:01
+ *
+ */
+
+println System.getProperty("java.version")
+buildscript {
+    apply from: './gradle/buildscript.gradle', to: buildscript
+}
+
+apply from: './gradle/common.gradle'
+
+allprojects {
+    group = 'org.s4s0l.betelgeuse'
+}
+subprojects {
+    dependencies {
+
+    }
+}
+
+configurations {
+    extracted
+    agent
+}
+
+dependencies {
+    agent group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
+}
+
+task extractAgents(type:Copy){
+    from configurations.agent
+    into "${rootDir}/native/agent"
+}
+

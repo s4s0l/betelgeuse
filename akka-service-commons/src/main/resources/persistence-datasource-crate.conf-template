@@ -1,0 +1,7 @@
+db.${datasource} {
+  driver = "io.crate.client.jdbc.CrateDriver"
+  url = "jdbc:crate://${address}:5432/?strict=false"
+  user = ""
+  password = ""
+  locksProvider = "org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateDbLocks"
+}

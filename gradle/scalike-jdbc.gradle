@@ -1,0 +1,33 @@
+
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-09-12 20:16
+ *
+ */
+
+ext {
+    scaliceJdbcVersion = '3.0.2'
+}
+
+
+dependencies {
+    compile ("org.scalikejdbc:scalikejdbc_${scalaBinaryVersion}:${scaliceJdbcVersion}") {
+        exclude group: 'commons-logging'
+    }
+    compile ("org.scalikejdbc:scalikejdbc-config_${scalaBinaryVersion}:${scaliceJdbcVersion}"){
+        exclude group: 'commons-logging'
+    }
+    compile ("org.scalikejdbc:scalikejdbc-streams_${scalaBinaryVersion}:${scaliceJdbcVersion}"){
+        exclude group: 'commons-logging'
+    }
+    compile ("org.scalikejdbc:scalikejdbc-interpolation_${scalaBinaryVersion}:${scaliceJdbcVersion}"){
+        exclude group: 'commons-logging'
+    }
+    compile ("org.scalikejdbc:scalikejdbc-syntax-support-macro_${scalaBinaryVersion}:${scaliceJdbcVersion}"){
+        exclude group: 'commons-logging'
+    }
+    testCompile "org.scalikejdbc:scalikejdbc-test_${scalaBinaryVersion}:${scaliceJdbcVersion}"
+
+}

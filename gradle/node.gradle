@@ -1,0 +1,90 @@
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-08-23 12:26
+ *
+ */
+
+apply plugin: 'com.moowork.node'
+apply plugin: 'base'
+
+node {
+    // Version of node to use.
+    version = '6.11.0'
+
+    // Version of npm to use.
+    npmVersion = '5.0.4'
+
+    // Version of Yarn to use.
+    yarnVersion = '0.16.1'
+
+    // Base URL for fetching node distributions (change if you have a mirror).
+    distBaseUrl = 'https://nodejs.org/dist'
+
+    // If true, it will download node using above parameters.
+    // If false, it will try to use globally installed node.
+    download = true
+
+    // Set the work directory for unpacking node
+    workDir = file("${project.projectDir}/build-npm/nodejs")
+
+    // Set the work directory for NPM
+    npmWorkDir = file("${project.projectDir}/build-npm/npm")
+
+    // Set the work directory for Yarn
+    yarnWorkDir = file("${project.projectDir}/build-npm/yarn")
+
+    // Set the work directory where node_modules should be located
+    nodeModulesDir = file("${project.projectDir}")
+}
+
+
+
+task nodeClean(type: Delete) {
+    delete "${project.buildDir}/dist",
+            "${project.projectDir}/client/dist",
+            fileTree('e2e') {
+                include '**/*.js'
+                include '**/*.js.map'
+            },
+            fileTree('client') {
+                include '**/*.js'
+                include '**/*.js.map'
+            }
+}
+
+clean.dependsOn nodeClean
+
+
+task nodeCleanLibs(type: Delete,dependsOn: nodeClean) {
+    delete "${project.projectDir}/build-npm",
+            "${project.projectDir}/node_modules"
+}
+
+task nodeRemovePackageLock(type:Delete) {
+    delete "${project.projectDir}/package-lock.json"
+}
+task nodeReset(dependsOn: ['nodeRemovePackageLock','nodeCleanLibs','npm_install'])
+
+
+task nodeBuild(type: NpmTask,dependsOn:npm_install) {
+    inputs.files(file("package.json"), fileTree("client"))
+    outputs.dir("$buildDir/dist/client")
+    args = ['run','build']
+
+}
+
+task nodeDistProd(type: NpmTask,dependsOn:npm_install) {
+    inputs.files(file("package.json"), fileTree("client"))
+    outputs.dir("$buildDir/dist-prod/client")
+    args = ['run','dist-prod']
+
+}
+
+build.dependsOn nodeBuild
+
+
+task nodeRun(type: NpmTask,dependsOn:[nodeBuild]) {
+    args = ['run','start']
+}

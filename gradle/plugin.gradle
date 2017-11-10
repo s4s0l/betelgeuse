@@ -1,0 +1,57 @@
+apply plugin: 'com.gradle.plugin-publish'
+
+project.ext.set('gradle.publish.key', System.getenv('GRADLE_PORTAL_KEY'))
+project.ext.set('gradle.publish.secret', System.getenv('GRADLE_PORTAL_SECRET'))
+
+pluginBundle {
+    website = "${project.websiteUrl}"
+    vcsUrl = "${project.vcsUrl}"
+    description = "${project.description}"
+    tags = project.tags
+    plugins {
+        dockerComposePlugin {
+            id = "${project.projectId}"
+            displayName = "${project.displayName}"
+        }
+    }
+}
+
+
+
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-08-23 12:26
+ *
+ */
+
+//ext.localRepoUrl = new File(rootProject.buildDir, 'localrepo')
+//System.setProperty("maven.repo.local", ext.localRepoUrl.getAbsolutePath())
+//plugins.withType(MavenPlugin) {
+//    install {
+//        repositories {
+//            mavenDeployer {
+//                repositoryName(url: localRepoUrl.toURI())
+//            }
+//        }
+//    }
+//}
+
+tasks.withType(Test) {
+    environment "GRADLE_USER_HOME", gradle.gradleUserHomeDir
+    environment "PROJECT_VERSION", project.version
+    environment "LOCAL_REPO", localRepoUrl.absolutePath
+    environment "LOCAL_BUILD_DIR", rootProject.buildDir.absolutePath + "/PluginTests"
+    dependsOn install
+    testLogging {
+        exceptionFormat 'full'
+    }
+}
+
+task("cleanupPluginTests", type:Delete) {
+    delete rootProject.buildDir.absolutePath + "/PluginTests"
+}
+clean.dependsOn cleanupPluginTests
+
+

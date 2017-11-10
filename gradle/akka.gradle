@@ -1,0 +1,32 @@
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-09-14 13:42
+ *
+ */
+
+ext {
+    akkaBinaryVersion = '2.5'
+    akkaVersion = '2.5.4'
+    akkaHttpVersion = '10.0.10'
+}
+
+
+dependencies {
+    compile "ch.megard:akka-http-cors_${scalaBinaryVersion}:0.2.1"
+    compile "com.softwaremill.akka-http-session:core_${scalaBinaryVersion}:0.4.0"
+    compile "com.typesafe.akka:akka-actor_${scalaBinaryVersion}:${akkaVersion}"
+    compile "com.typesafe.akka:akka-remote_${scalaBinaryVersion}:${akkaVersion}"
+    compile "com.typesafe.akka:akka-cluster_${scalaBinaryVersion}:${akkaVersion}"
+    compile "com.typesafe.akka:akka-cluster-sharding_${scalaBinaryVersion}:${akkaVersion}"
+    compile "com.typesafe.akka:akka-cluster-tools_${scalaBinaryVersion}:${akkaVersion}"
+    compile "com.typesafe.akka:akka-slf4j_${scalaBinaryVersion}:${akkaVersion}"
+    compile "com.typesafe.akka:akka-http_${scalaBinaryVersion}:${akkaHttpVersion}"
+//    compile "com.typesafe.akka:akka-http-jackson_${scalaBinaryVersion}:${akkaHttpVersion}"
+    compile "com.typesafe.akka:akka-http-xml_${scalaBinaryVersion}:${akkaHttpVersion}"
+    compile "com.typesafe.akka:akka-http-spray-json_${scalaBinaryVersion}:${akkaHttpVersion}"
+//    compile "com.iheart:ficus_${scalaBinaryVersion}:1.4.1"
+    testCompile "com.typesafe.akka:akka-http-testkit_${scalaBinaryVersion}:${akkaHttpVersion}"
+
+}

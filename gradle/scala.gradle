@@ -1,0 +1,43 @@
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-09-13 10:51
+ */
+
+apply plugin: 'scala'
+apply plugin: "com.github.maiflai.scalatest"
+ext {
+    scalaBinaryVersion = '2.12'
+    scalaVersion = '2.12.2'
+}
+configurations {
+    all {
+        if (it.name != "zinc") {
+            resolutionStrategy.force "org.scala-lang:scala-library:${scalaVersion}"
+            resolutionStrategy.force "org.scala-lang:scala-compiler:${scalaVersion}"
+            resolutionStrategy.force "org.scala-lang:scala-reflect:${scalaVersion}"
+        }
+    }
+}
+
+dependencies {
+    zinc 'com.typesafe.zinc:zinc:0.3.15'
+    compile "org.scala-lang:scala-library:${scalaVersion}"
+    compile "org.scala-lang:scala-reflect:${scalaVersion}"
+    compile "org.scala-lang:scala-compiler:${scalaVersion}"
+//fajne ale stara scala
+//    compile group: 'com.github.wheaties', name: 'predicates_2.11', version: '0.1'
+
+    // https://mvnrepository.com/artifact/org.scalamock/scalamock-scalatest-support_2.12
+    testCompile group: 'org.scalamock', name: "scalamock-scalatest-support_${scalaBinaryVersion}", version: '3.6.0'
+    testCompile "org.scalatest:scalatest_${scalaBinaryVersion}:3.0.3"
+    testRuntime 'org.pegdown:pegdown:1.6.0'
+
+}
+
+
+test {
+    jvmArgs '-javaagent:/home/sasol/Projects/rntoktme/native/aspectjweaver-1.8.10.jar'
+    maxParallelForks = 1
+}

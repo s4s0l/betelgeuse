@@ -1,0 +1,81 @@
+apply plugin: 'maven'
+apply plugin: 'com.jfrog.bintray'
+
+/*
+ *  Copyright© 2017 by Marcin Wielgus - All Rights Reserved
+ *  Unauthorized copying of this file, via any medium is strictly prohibited
+ *  Proprietary and confidential
+ *  Written by Marcin Wielgus <mwielgus@outlook.com>, 2017-08-23 12:26
+ *
+ */
+
+/************************************************************************************
+ * Packaging section
+ */
+task sourcesJar(type: Jar) {
+    classifier 'sources'
+    from sourceSets.main.allSource
+}
+if (tasks.getAsMap()['groovydoc']) {
+    task javadocJar(type: Jar, dependsOn: [tasks.getAsMap()['groovydoc']]) {
+        classifier 'javadoc'
+        from tasks.getAsMap()['groovydoc'].destinationDir
+    }
+} else {
+    task javadocJar(type: Jar, dependsOn: [javadoc]) {
+        classifier 'javadoc'
+        from javadoc.destinationDir
+    }
+}
+
+tasks.withType(Jar) {
+    manifest {
+        attributes(
+                "Manifest-Version": "1.0",
+                "Gradle-Version": "${gradle.gradleVersion}",
+                "Extension-Name": "${archivesBaseName}",
+                "Build-Jdk": "${JavaVersion.current().toString()}",
+                "Url": "${websiteUrl}",
+                "Name": "${projectId}".replaceAll("\\.", "/"),
+                "Specification-Title": "Shathel Stack Deployer",
+                "Specification-Vendor": "${organization}",
+                "Specification-Version": "${version}",
+                "Implementation-Vendor": "${organization}",
+                "Implementation-Title": "${group}.${archivesBaseName}",
+                "Implementation-Version": "${version}",
+                "License": "${license}",
+        )
+    }
+    from("LICENSE") {
+        into "META-INF"
+    }
+}
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+
+bintray {
+    user = System.getenv('BINTRAY_USER')
+    key = System.getenv('BINTRAY_KEY')
+    configurations = ['archives']
+    publish = true
+    pkg {
+        repo = 'maven'
+        name = "${project.archivesBaseName}"
+        desc = "${project.description}"
+        userOrg = "${project.organization}"
+        licenses = ["${project.license}"]
+        vcsUrl = "${project.vcsUrl}"
+        websiteUrl = "${project.websiteUrl}"
+        issueTrackerUrl = "${project.issueTrackerUrl}"
+        githubRepo = "${project.githubRepository}" //Optional Github repositoryName
+        githubReleaseNotesFile = 'README.md'
+        labels = project.tags
+        version {
+            name = project.version
+            vcsTag = project.version
+        }
+    }
+}
