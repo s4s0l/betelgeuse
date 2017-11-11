@@ -66,4 +66,4 @@ build:
       ) || (echo "SKIPPED")
     - docker service rm crate
     - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
-    - cp -R build/reports/jacoco shippable/codecoverage
+    - cp build/reports/jacoco/jacocoFullReport/jacocoFullReport.xml shippable/codecoverage
