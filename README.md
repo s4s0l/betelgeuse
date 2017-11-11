@@ -3,6 +3,7 @@
 [![Coverage Badge](https://api.shippable.com/projects/5a05f31eb705db0700aec972/coverageBadge?branch=master)](https://app.shippable.com/github/s4s0l/betelgeuse)
 [![GitHub release](https://img.shields.io/github/release/s4s0l/betelgeuse/all.svg?style=plastic)](https://github.com/s4s0l/betelgeuse/releases/latest)
 [![Bintray](https://img.shields.io/bintray/v/sasol-oss/maven/akka-service-commons.svg?style=plastic)](https://bintray.com/sasol-oss/maven)
+[![CLA assistant](https://cla-assistant.io/readme/badge/s4s0l/betelgeuse)](https://cla-assistant.io/s4s0l/betelgeuse)
 
 
 # betelgeuse

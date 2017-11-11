@@ -16,7 +16,7 @@ build:
 #  --privileged in order to change vm.max_map_count, crateDb needs it
     options: "--net=host --privileged --pid=host -v $SHIPPABLE_BUILD_DIR:$SHIPPABLE_BUILD_DIR"
   pre_ci:
-    - rm -R build
+    - rm -fR ./build
     - docker info
     - sysctl vm.max_map_count
     - sysctl -w vm.max_map_count=262144
