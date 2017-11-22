@@ -1,3 +1,32 @@
+# cratedbstartup
+Swarm required: `docker swarm init`
+
+```
+#!/usr/bin/env bash
+docker network create -d overlay crate-network
+docker service create \
+    --name crate \
+    --network crate-network \
+    --mode global \
+    -e CRATE_HEAP_SIZE=1024m \
+    --endpoint-mode vip \
+    --update-parallelism 1 \
+    --update-delay 60s \
+    --publish 4200:4200 \
+    --publish 4300:4300 \
+    --publish 5432:5432 \
+    --mount type=volume,source=crate-test-db,target=/data \
+  crate:latest \
+    crate \
+    -Cpath.repo=/data/repos \
+    -Cdiscovery.zen.ping.unicast.hosts=crate \
+    -Cgateway.expected_nodes=1 \
+    -Cdiscovery.zen.minimum_master_nodes=1 \
+    -Cgateway.recover_after_nodes=1 \
+    -Cnetwork.host=_site_ \
+    -Clicense.enterprise=false
+```
+
 # copyright idea template
 
 ```
