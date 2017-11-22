@@ -16,6 +16,7 @@ build:
 #  --privileged in order to change vm.max_map_count, crateDb needs it
     options: "--net=host --privileged --pid=host -v $SHIPPABLE_BUILD_DIR:$SHIPPABLE_BUILD_DIR"
   pre_ci:
+    - rm -fR ./build
     - docker info
     - sysctl vm.max_map_count
     - sysctl -w vm.max_map_count=262144
@@ -48,11 +49,12 @@ build:
   ci:
     - sleep 10
     - docker ps -a
-    - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test --info --stacktrace
+    - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test jacocoTestReport jacocoFullReport --info --stacktrace
   post_ci:
   on_failure:
     - docker service logs crate
     - docker service rm crate
+    - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
   on_success:
     - >
       (
@@ -63,3 +65,5 @@ build:
       -Pversion="$GIT_TAG_NAME" --info bintrayUpload
       ) || (echo "SKIPPED")
     - docker service rm crate
+    - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
+    - cp build/reports/jacoco/jacocoFullReport/jacocoFullReport.xml shippable/codecoverage
