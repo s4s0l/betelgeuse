@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2017 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +36,7 @@ object MessageHeaders {
   val HEADER_FAILED: String = "failed"
   val HEADER_CREATION_TIME: String = "timestamp"
   val HEADER_SEQUENCE_LAST: String = "seqLast"
-  val HEADER_SEQUENCE: String = "seq"
+  val HEADER_SEQUENCE_NUMBER: String = "seqNum"
   val HEADER_SEQUENCE_ID: String = "seqId"
   val HEADER_CORRELATION_ID: String = "correlationId"
   val HEADER_TRACE_IDS: String = "traceIds"
@@ -40,7 +46,10 @@ object MessageHeaders {
   val FORWARDED_HEADERS: Seq[String] = Seq(
     HEADER_TRACE_IDS,
     HEADER_TRACE_TARGETS,
-    HEADER_USER_ID
+    HEADER_USER_ID,
+    HEADER_SEQUENCE_LAST,
+    HEADER_SEQUENCE_NUMBER,
+    HEADER_SEQUENCE_ID
   )
 
   trait HeaderAccessors {
@@ -55,7 +64,7 @@ object MessageHeaders {
 
     def sequenceNumber: Int = sequenceNumberOpt.get
 
-    def sequenceNumberOpt: Option[Int] = headers.get(HEADER_SEQUENCE).map(_.toInt)
+    def sequenceNumberOpt: Option[Int] = headers.get(HEADER_SEQUENCE_NUMBER).map(_.toInt)
 
     def sequenceId: String = sequenceIdOpt.get
 
@@ -136,7 +145,7 @@ object MessageHeaders {
 
     def withFailedFrom(as: Map[String, String]): T = withHeaderFrom(HEADER_FAILED, as)
 
-    def withSequenceNumber(seq: Int): T = withHeader(HEADER_SEQUENCE, seq.toString)
+    def withSequenceNumber(seq: Int): T = withHeader(HEADER_SEQUENCE_NUMBER, seq.toString)
 
     def withSequenceId(seq: String): T = withHeader(HEADER_SEQUENCE_ID, seq)
 
@@ -144,7 +153,7 @@ object MessageHeaders {
 
     def withSequenceLastFrom(as: Map[String, String]): T = withHeaderFrom(HEADER_SEQUENCE_LAST, as)
 
-    def withSequenceNumberFrom(as: Map[String, String]): T = withHeaderFrom(HEADER_SEQUENCE, as)
+    def withSequenceNumberFrom(as: Map[String, String]): T = withHeaderFrom(HEADER_SEQUENCE_NUMBER, as)
 
     def withSequenceIdFrom(as: Map[String, String]): T = withHeaderFrom(HEADER_SEQUENCE_ID, as)
 
