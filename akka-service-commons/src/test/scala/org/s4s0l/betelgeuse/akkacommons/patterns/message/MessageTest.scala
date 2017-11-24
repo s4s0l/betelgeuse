@@ -30,7 +30,7 @@ class MessageTest extends FeatureSpec {
     scenario("Headers are being set") {
       val message = Message("target", "body")
       assert(message.id.length > 0)
-      assert(message.payload == "body")
+      assert(message.payload.asString == "body")
       assert(message.target == "target")
       assert(message.timestamp > 0)
       assert(message.headers.size == 1)

@@ -21,23 +21,26 @@ import java.util.UUID
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.Message.ForwardHeaderProvider
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.{HeaderAccessors, HeaderSetter, _}
 
+import scala.language.implicitConversions
+
 /**
   * @author Marcin Wielgus
   */
 object Message {
+
   implicit def toMap(msg: Message): Map[String, String] = msg.headers
 
   val defaultForward: ForwardHeaderProvider = () => Seq()
 
-  def apply(target: String, id: String, headers: Map[String, String], payload: String): Message = new Message(target, id, headers + createTimestamp, payload)
+  def apply(target: String, id: String, headers: Map[String, String], payload: Payload): Message = new Message(target, id, headers + createTimestamp, payload)
 
-  def apply(target: String, headers: Map[String, String], payload: String): Message = new Message(target, UUID.randomUUID().toString, headers + createTimestamp, payload)
+  def apply(target: String, headers: Map[String, String], payload: Payload): Message = new Message(target, UUID.randomUUID().toString, headers + createTimestamp, payload)
 
   private def createTimestamp = {
     MessageHeaders.HEADER_CREATION_TIME -> System.currentTimeMillis().toString
   }
 
-  def apply(target: String, payload: String): Message = new Message(target, UUID.randomUUID().toString, Map() + createTimestamp, payload)
+  def apply(target: String, payload: Payload): Message = new Message(target, UUID.randomUUID().toString, Map() + createTimestamp, payload)
 
   trait ForwardHeaderProvider {
     def apply(): Seq[String]
@@ -46,7 +49,7 @@ object Message {
 }
 
 @SerialVersionUID(2L)
-final case class Message(target: String, id: String, headers: Map[String, String], payload: String)
+final case class Message(target: String, id: String, headers: Map[String, String], payload: Payload)
   extends HeaderAccessors
     with HeaderSetter[Message] {
 
@@ -56,13 +59,13 @@ final case class Message(target: String, id: String, headers: Map[String, String
     copy(headers = headers + (key -> value))
   }
 
-  def response(newTarget: String, newPayload: String, newHeaders: Map[String, String] = Map())
+  def response(newTarget: String, newPayload: Payload, newHeaders: Map[String, String] = Map())
               (implicit extraHeaders: ForwardHeaderProvider): Message = {
     Message(newTarget, UUID.randomUUID().toString,
       (followHeaders(extraHeaders()) + (MessageHeaders.HEADER_CORRELATION_ID -> id)) ++ newHeaders, newPayload)
   }
 
-  def forward(newTarget: String, newPayload: String = payload, newHeaders: Map[String, String] = Map())
+  def forward(newTarget: String, newPayload: Payload = payload, newHeaders: Map[String, String] = Map())
              (implicit extraHeaders: ForwardHeaderProvider): Message = {
     Message(newTarget, UUID.randomUUID().toString,
       followHeaders(extraHeaders()) ++ newHeaders, newPayload)

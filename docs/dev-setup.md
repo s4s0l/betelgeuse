@@ -48,3 +48,10 @@ limitations under the License.
 And the regexpr:
 
 `Copyright© ([0-9]{4}) the original author or authors.`
+
+
+## workaroud for idea changing gradlew files every refresh:
+`git update-index --assume-unchanged gradle/wrapper/gradle-wrapper.properties gradlew.bat gradle/wrapper/gradle-wrapper.jar`
+
+to restore it:
+`git update-index --no-assume-unchanged gradle/wrapper/gradle-wrapper.properties gradlew.bat gradle/wrapper/gradle-wrapper.jar`
