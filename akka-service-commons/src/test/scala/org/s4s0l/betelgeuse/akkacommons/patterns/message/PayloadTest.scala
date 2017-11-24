@@ -35,6 +35,27 @@ class PayloadTest extends FeatureSpec {
       assert(payloadFromBytes.asBytes == ByteString("somepayload"))
 
     }
+    scenario("Implicit conversions to string and byteString") {
+      val payload:Payload = "somepayload"
+      val s:String = payload
+      val x:ByteString = payload
+    }
+
+    scenario("isEmpty checks") {
+      val payload1:Payload = Payload("")
+      val payload2:Payload = Payload(ByteString(Array[Byte]()))
+      val payload3:Payload = Payload.empty
+
+      assert(payload1.isEmpty)
+      assert(payload2.isEmpty)
+      assert(payload3.isEmpty)
+
+      val payload4:Payload = Payload("x")
+      val payload5:Payload = Payload(ByteString(Array[Byte](0)))
+
+      assert(!payload4.isEmpty)
+      assert(!payload5.isEmpty)
+    }
 
   }
 

@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.message
 
 import java.nio.charset.{Charset, StandardCharsets}
 
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.util.ByteString
 
 import scala.language.implicitConversions
@@ -27,16 +28,27 @@ import scala.language.implicitConversions
   * This payload wraps either bytestring or string, and allows conversion between both.
   * User of this class is not aware whether it was created with string or bytestring and
   * can use it as both.
+  *
   * @author Marcin Wielgus
   */
-class Payload private (val contents:Either[ByteString,String]) {
+class Payload private(val contents: Either[ByteString, String]) {
 
-  implicit lazy val asBytes:ByteString = {
+  def asBytes: ByteString = _asBytes
+
+  def asString: String = _asString
+
+  private lazy val _asBytes: ByteString = {
     contents.left.getOrElse(ByteString(contents.right.get, StandardCharsets.UTF_8))
   }
 
-  implicit lazy val asString:String = {
+  private lazy val _asString: String = {
     contents.right.getOrElse(contents.left.get.decodeString(StandardCharsets.UTF_8))
+  }
+
+  def isEmpty:Boolean = if(contents.isLeft) {
+    contents.left.get.isEmpty
+  } else {
+    contents.right.get.isEmpty
   }
 
   def canEqual(other: Any): Boolean = other.isInstanceOf[Payload]
@@ -56,8 +68,19 @@ class Payload private (val contents:Either[ByteString,String]) {
 
 object Payload {
 
-  implicit def apply(bytes:ByteString): Payload = new Payload(Left(bytes))
-  implicit def apply(bytes:Array[Byte]): Payload = new Payload(Left(ByteString(bytes)))
-  implicit def apply(string:String): Payload = new Payload(Right(string))
+  def empty:Payload = new Payload(Right(""))
+
+  implicit def apply(bytes: ByteString): Payload = new Payload(Left(bytes))
+
+  implicit def apply(bytes: Array[Byte]): Payload = new Payload(Left(ByteString(bytes)))
+
+  implicit def apply(string: String): Payload = new Payload(Right(string))
+
+  implicit def asBytes(p:Payload): ByteString = p.asBytes
+
+  implicit def asString(p:Payload): String = p.asString
+
+  implicit def toResponseMarshallable(p:Payload):ToResponseMarshallable =
+    if(p.contents.isLeft) p.contents.left.get else p.contents.right.get
 
 }
