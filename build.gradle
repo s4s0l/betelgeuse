@@ -39,3 +39,15 @@ subprojects {
     }
     apply from: '../gradle/bintray.gradle'
 }
+
+
+configurations {
+    agent
+}
+dependencies {
+    agent group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
+}
+task exportAgent(type: Copy) {
+    from configurations.agent
+    into "build/agent"
+}

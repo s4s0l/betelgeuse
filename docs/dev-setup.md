@@ -55,3 +55,10 @@ And the regexpr:
 
 to restore it:
 `git update-index --no-assume-unchanged gradle/wrapper/gradle-wrapper.properties gradlew.bat gradle/wrapper/gradle-wrapper.jar`
+
+
+## aspect j in tests from idea
+vm parameters for scala test:
+`-javaagent:build/agent/aspectjweaver-1.8.10.jar`
+
+but befor it run `./gradlew exportAgent` it will download and extract aspectj to above location
