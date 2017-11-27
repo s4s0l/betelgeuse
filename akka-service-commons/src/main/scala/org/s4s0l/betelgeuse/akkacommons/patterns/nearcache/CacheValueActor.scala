@@ -16,50 +16,89 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
-import akka.pattern.ask
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheValueActor.Protocol.{DefaultIncomingMessage, DefaultOutgoingMessage}
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheValueActor.Settings
+import akka.actor.{Actor, ActorContext, ActorLogging, ActorRef, ActorRefFactory, Props}
+import akka.pattern.pipe
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheValueActor.Protocol.GetCacheValue
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheValueActor.{Settings, ValueEnriched, ValueEnrichedFailure}
+import org.s4s0l.betelgeuse.akkacommons.utils.{AsyncInitActor, TimeoutActor}
 
 import scala.concurrent.Future
+import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
 
 /**
+  *
+  * Uses AsyncInitSo that initialization will be done in this actor dispatcher context.
+  *
   * @author Marcin Wielgus
+  *
+  *
   */
-class CacheValueActor(settings: Settings) extends Actor with ActorLogging {
+private[nearcache] class CacheValueActor[K, R, V](settings: Settings[K, R, V]) extends Actor
+  with AsyncInitActor
+  with TimeoutActor
+  with ActorLogging {
+
+  override val timeoutTime: FiniteDuration = settings.timeoutTime
+  var value: R = _
+
+  override def preStart(): Unit = {
+    //TODO: configurable dispatcher so rich value creation would not block us if is blocking?
+    import context.dispatcher
+    Future(settings.valueEnricher(settings.valueMessage))
+      .map(it => ValueEnriched(it))
+      .pipeTo(self)
+      .failed
+      .map(it => ValueEnrichedFailure(it))
+      .pipeTo(self)
+  }
+
+  override def initialReceive: PartialFunction[Any, Unit] = {
+    case ValueEnriched(r) =>
+      value = r.asInstanceOf[R]
+      initiationComplete()
+      context.parent ! CacheAccessActor.Protocol.CacheValueOk(settings.key)
+    case ValueEnrichedFailure(ex) =>
+      //we fail this actor, its supervisor problem
+      context.parent ! CacheAccessActor.Protocol.CacheValueDied(settings.key, ex)
+      context.stop(self)
+  }
 
   override def receive: Actor.Receive = {
-    case _: DefaultIncomingMessage =>
+    case _: GetCacheValue =>
+      sender() ! CacheAccessActor.Protocol.CacheValue(settings.key, Left(Some(value)))
   }
 
 
 }
 
 
-object CacheValueActor {
+private[nearcache] object CacheValueActor {
   /**
     * creates props for actor
     */
-  def props(settings: Settings): Props = {
-    Props(new CacheValueActor(settings))
+  def start[K, R, V](name: String, settings: Settings[K, R, V], propsMapper: Props => Props = identity)
+                    (implicit actorSystem: ActorRefFactory): Protocol = {
+    val ref = actorSystem.actorOf(Props(new CacheValueActor(settings)), name)
+    Protocol(ref)
   }
 
-  final case class Settings()
+  final case class Settings[K, R, V](key: K, valueMessage: V, valueEnricher: V => R, timeoutTime: FiniteDuration = 10 minutes)
 
-  /**
-    * An protocol for [[CacheValueActor]]
-    */
   final class Protocol private(actorRef: => ActorRef) {
 
-    import concurrent.duration._
+    def apply(msg: GetCacheValue)(implicit sender: ActorRef = Actor.noSender): Unit = actorRef ! msg
 
-    def defaultMessage(msg: DefaultIncomingMessage): Unit = actorRef ! msg
+    def watchWith(context: ActorContext, msg: Any): Unit = {
+      context.watchWith(actorRef, msg)
+    }
 
-    def defaultMessageAsk(msg: DefaultIncomingMessage): Future[DefaultOutgoingMessage] =
 
-      actorRef.ask(msg)(5 seconds).mapTo
   }
+
+  private case class ValueEnriched[R](enriched: R)
+
+  private case class ValueEnrichedFailure(ex: Throwable)
 
   object Protocol {
     /**
@@ -69,15 +108,8 @@ object CacheValueActor {
 
     sealed trait IncomingMessage
 
-    sealed trait OutgoingMessage
-
-    //outgoing
-
-    case class DefaultIncomingMessage() extends IncomingMessage
-
-    case class DefaultOutgoingMessage() extends OutgoingMessage
+    case class GetCacheValue() extends IncomingMessage
 
   }
-
 
 }    
