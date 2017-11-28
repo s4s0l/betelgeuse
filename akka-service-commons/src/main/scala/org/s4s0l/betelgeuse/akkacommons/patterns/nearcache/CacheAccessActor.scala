@@ -16,7 +16,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, SupervisorStrategy}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props, SupervisorStrategy}
 import akka.pattern.ask
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{CacheValue, CacheValueDied, CacheValueOk, GetCacheValue}
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.{CreateValueActor, CreateValueActorFailed, CreateValueActorTerminated, Settings}
@@ -65,9 +65,7 @@ class CacheAccessActor[G, K, R, V](settings: Settings[G, K, R, V]) extends Actor
         val senderTmp = sender()
         settings.valueOwnerFacade(getterMessage.asInstanceOf[G])
           .map(it => CreateValueActor(key, it, senderTmp))
-          .pipeTo(self)
-          .failed
-          .map(ex => CreateValueActorFailed(key, getterMessage, ex, senderTmp))
+          .recover { case ex: Throwable => CreateValueActorFailed(key, getterMessage, ex, senderTmp) }
           .pipeTo(self)
       }
 
@@ -133,7 +131,7 @@ object CacheAccessActor {
     * @return an protocol to use
     */
   def start[G, K, R, V](settings: Settings[G, K, R, V], propsMapper: Props => Props = identity)
-                       (implicit actorSystem: ActorSystem): Protocol[G, K, R] = {
+                       (implicit actorSystem: ActorRefFactory): Protocol[G, K, R] = {
     val ref = actorSystem.actorOf(Props(new CacheAccessActor(settings)), settings.name)
     Protocol(ref)
 

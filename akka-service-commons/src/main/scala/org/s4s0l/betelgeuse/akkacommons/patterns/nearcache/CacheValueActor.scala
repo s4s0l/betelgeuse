@@ -47,9 +47,7 @@ private[nearcache] class CacheValueActor[K, R, V](settings: Settings[K, R, V]) e
     import context.dispatcher
     Future(settings.valueEnricher(settings.valueMessage))
       .map(it => ValueEnriched(it))
-      .pipeTo(self)
-      .failed
-      .map(it => ValueEnrichedFailure(it))
+      .recover { case it: Throwable => ValueEnrichedFailure(it) }
       .pipeTo(self)
   }
 
