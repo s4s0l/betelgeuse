@@ -8,8 +8,13 @@
 
 
 # betelgeuse
-Opinionated akka utils and tool set for microservices.
+Opinionated akka utils and tool set for microservices. Work in progress do not use. yet.
+These docs are more like a notebook for now so don't bother to read or understand. 
 
+
+* Extension - needs some initialization, or has predefined configuration
+* Pattern - something that solves some problem, relatively high level
+* Util - anything else that has some value
 
 
 # Extensions

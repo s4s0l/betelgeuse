@@ -14,18 +14,13 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.distributedsharedstate
+package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 /**
+  * Actor that is a versioned entity that can handle state distribution
+  * via [[OriginStateDistributor]].
+  *
   * @author Marcin Wielgus
   */
-class XX {
-  def stateDistributor(name: String): Unit = {
-
-    //    OriginStateDistributor.start(Settings(name, ))
-  }
-}
-
-object XX {
-
+class OriginStateActor {
 }

@@ -17,7 +17,7 @@
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import akka.actor.Status.{Failure, Status}
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedConfirm}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor._
@@ -87,7 +87,7 @@ object OriginStateDistributor {
     * creates props for actor
     */
   def start[T](settings: Settings[T], propsMapper: Props => Props = identity)
-              (implicit actorSystem: ActorSystem): Protocol[T] = {
+              (implicit actorSystem: ActorRefFactory): Protocol[T] = {
     val ref = actorSystem.actorOf(Props(new OriginStateDistributor(settings)))
     Protocol(ref)
   }
