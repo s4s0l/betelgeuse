@@ -18,14 +18,13 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
-import akka.pattern.ask
 import akka.persistence.RecoveryCompleted
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
-import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
+import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, TimeoutShardedActor}
 
 import scala.concurrent.Future
 import scala.language.postfixOps
@@ -123,7 +122,7 @@ object VersionedEntityActor {
   /**
     * An protocol for [[VersionedEntityActor]]
     */
-  class Protocol[T] protected(actorRef: => ActorRef) {
+  class Protocol[T] protected(actorTarget: ActorTarget) {
 
     import concurrent.duration._
 
@@ -133,7 +132,7 @@ object VersionedEntityActor {
       * @return current version (last)
       */
     def getVersion(msg: GetValueVersion)(implicit sender: ActorRef = Actor.noSender): Future[ValueVersion] =
-      actorRef.ask(msg)(5 seconds, sender).mapTo[ValueVersion]
+      actorTarget.?(msg)(5 seconds, sender).mapTo[ValueVersion]
 
     /**
       * Gets a value of a given id and version.
@@ -141,7 +140,7 @@ object VersionedEntityActor {
       * @return a value with version
       */
     def getValue(msg: GetValue)(implicit sender: ActorRef = Actor.noSender): Future[Value[T]] =
-      actorRef.ask(msg)(5 seconds, sender).mapTo[Value[T]]
+      actorTarget.?(msg)(5 seconds, sender).mapTo[Value[T]]
 
     /**
       * Sets a value of entity of given id.
@@ -149,14 +148,14 @@ object VersionedEntityActor {
       * @return id and version of updated entity
       */
     def setValue(msg: SetValue[T])(implicit sender: ActorRef = Actor.noSender): Future[ValueUpdated] =
-      actorRef.ask(msg)(5 seconds, sender).mapTo[ValueUpdated]
+      actorTarget.?(msg)(5 seconds, sender).mapTo[ValueUpdated]
 
     /**
       * same as [[setValue()]] but without ask pattern, response of type [[ValueUpdated]] will be delivered to
       * sender
       */
     def setValueMsg(msg: SetValue[T])(implicit sender: ActorRef = Actor.noSender): Unit =
-      actorRef.tell(msg, sender)
+      actorTarget.!(msg)(sender)
 
     /**
       * Tries to do optimistically locked update.
@@ -168,21 +167,21 @@ object VersionedEntityActor {
       *         [[ValueUpdateOptimisticError]] which will contain current version of entity
       */
     def setVersionedValue(msg: SetVersionedValue[T])(implicit timeout: Timeout, sender: ActorRef = Actor.noSender): Future[ValueUpdateResult] =
-      actorRef.ask(msg).mapTo[ValueUpdateResult]
+      actorTarget.?(msg).mapTo[ValueUpdateResult]
 
     /**
       * same as [[setVersionedValue()]] but without ask pattern, response of type [[ValueUpdateResult]] will be delivered to
       * sender
       */
     def setVersionedValueMsg(msg: SetVersionedValue[T])(implicit sender: ActorRef = Actor.noSender): Unit =
-      actorRef.tell(msg, sender)
+      actorTarget.!(msg)(sender)
   }
 
   object Protocol {
     /**
       * Wraps actor ref factory with protocol interface
       */
-    def apply[T](actorRef: => ActorRef): Protocol[T] = new Protocol[T](actorRef)
+    def apply[T](actorTarget: ActorTarget): Protocol[T] = new Protocol[T](actorTarget)
 
     sealed trait IncomingMessage {
       def id: String

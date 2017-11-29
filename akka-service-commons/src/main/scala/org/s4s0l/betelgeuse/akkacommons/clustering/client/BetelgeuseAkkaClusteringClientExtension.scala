@@ -1,29 +1,29 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.clustering.client
 
-import akka.actor.{Actor, ActorRef, ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
-import akka.cluster.client.ClusterClient
+import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
 import akka.pattern.ask
 import akka.util.Timeout
+import org.s4s0l.betelgeuse.akkacommons.BetelgeuseAkkaServiceId
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.ClusterClientsSupervisor.{AllReferencesMessage, GetAllReferencesMessage}
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
 import scala.language.postfixOps
 
 /**
@@ -37,25 +37,7 @@ class BetelgeuseAkkaClusteringClientExtension(private val system: ExtendedActorS
     Await.result(asking, 45 seconds).references
   }
 
-  def client(name: String): ActorRef = clientActors(name)
-
-  def asClientTarget(name:String): ClusterClientTarget = new ClusterClientTarget(client(name))
-
-  def send(name: String, actorPath: String, msg: Any, localAffinity: Boolean = true)(implicit sender: ActorRef = Actor.noSender): Unit = {
-    client(name) ! ClusterClient.Send(actorPath, msg, localAffinity)
-  }
-
-  def sendAll(name: String, actorPath: String, msg: Any, localAffinity: Boolean = true)(implicit sender: ActorRef = Actor.noSender): Unit = {
-    client(name) ! ClusterClient.SendToAll(actorPath, msg)
-  }
-
-  def publish(name: String, topic: String, msg: Any)(implicit sender: ActorRef = Actor.noSender): Unit = {
-    client(name) ! ClusterClient.Publish(topic, msg)
-  }
-
-  def question(name: String, actorPath: String, msg: Any, localAffinity: Boolean = true)(implicit timeout: Timeout, sender: ActorRef = Actor.noSender): Future[Any] = {
-    client(name) ? ClusterClient.Send(actorPath, msg, localAffinity)
-  }
+  def client(id: BetelgeuseAkkaServiceId): ClusterClientTarget = new ClusterClientTarget(clientActors(id.systemName))
 
 }
 

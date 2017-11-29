@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 
@@ -22,6 +22,7 @@ import java.util.UUID
 
 import akka.actor.{Actor, ActorRef, ActorSystem}
 import akka.util.Timeout
+import org.s4s0l.betelgeuse.akkacommons.BetelgeuseAkkaServiceId
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BetelgeuseAkkaClusteringClientExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigActor.GlobalConfigActorSettings
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigSupervisorActor.{ConfigurationChanged, ConfigurationChangedAck}
@@ -58,11 +59,11 @@ trait GlobalConfigsFactory {
     pubSub.question("/globalcfgs/" + name, evt).mapTo[ConfigurationChangedAck]
   }
 
-  def eventPublisherRemote[T](clientName: String, ext: BetelgeuseAkkaClusteringClientExtension, configName: String)
-                       (implicit timeout: Timeout, sender: ActorRef = Actor.noSender): GlobalConfigsEventPublisher[T] = (id: String, value: T, uuid: String) => {
+  def eventPublisherRemote[T](clientName: BetelgeuseAkkaServiceId, ext: BetelgeuseAkkaClusteringClientExtension, configName: String)
+                             (implicit timeout: Timeout, sender: ActorRef = Actor.noSender): GlobalConfigsEventPublisher[T] = (id: String, value: T, uuid: String) => {
     val name = getGlobalConfigName(configName)
     val evt = ConfigurationChanged(uuid, PersistenceId(name, id), value)
-    ext.question(clientName, "/globalcfgs/" + name, evt).mapTo[ConfigurationChangedAck]
+    ext.client(clientName).question("/globalcfgs/" + name, evt).mapTo[ConfigurationChangedAck]
   }
 
 }

@@ -26,6 +26,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistrib
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListenerResponse, Settings, StateDistributed, StateDistributedConfirm}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{IncomingMessage, SetVersionedValue, ValueUpdateOptimisticError, ValueUpdated}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
+import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
@@ -87,7 +88,7 @@ object SatelliteStateActor {
   /**
     * An protocol for [[SatelliteStateActor]]
     */
-  final class Protocol[T] private(actorRef: => ActorRef) extends VersionedEntityActor.Protocol[T](actorRef)
+  final class Protocol[T] private(actorTarget: ActorTarget) extends VersionedEntityActor.Protocol[T](actorTarget)
     with SatelliteProtocol[T] {
 
 
@@ -111,8 +112,7 @@ object SatelliteStateActor {
       */
     override def stateDistributed(versionedId: VersionedId, destination: String)
                                  (implicit timeout: Timeout, executionContext: ExecutionContext): Future[Status] = {
-      import akka.pattern.ask
-      actorRef.ask(StateDistributed(versionedId, destination))
+      actorTarget.?(StateDistributed(versionedId, destination))
         .mapTo[StateDistributedConfirm]
         .map {
           case msg@StateDistributedConfirm(_, _, true) => Success(msg)
@@ -130,7 +130,7 @@ object SatelliteStateActor {
     /**
       * Wraps actor ref factory with protocol interface
       */
-    def apply[T](actorRef: => ActorRef): Protocol[T] = new Protocol(actorRef)
+    def apply[T](actorTarget: ActorTarget): Protocol[T] = new Protocol(actorTarget)
 
 
   }
