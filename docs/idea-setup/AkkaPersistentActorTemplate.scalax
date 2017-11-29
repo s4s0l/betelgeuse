@@ -2,10 +2,15 @@
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.pattern.ask
+import akka.persistence.RecoveryCompleted
+import akka.cluster.sharding.ShardRegion
 import ${PACKAGE_NAME}.${NAME}.Protocol.{DefaultIncomingMessage, DefaultOutgoingMessage}
 import ${PACKAGE_NAME}.${NAME}.Settings
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
+import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringShardingExtension
+
+
 
 import scala.concurrent.Future
 import scala.language.postfixOps
@@ -41,12 +46,11 @@ object ${NAME} {
   final case class Settings(name:String)
 
   def startSharded(settings: Settings, propsMapper: Props => Props = identity)(implicit shardingExt: BetelgeuseAkkaClusteringShardingExtension): Protocol = {
-    val ref = shardingExt.start(settings.name, props(settings), entityExtractor)
+    val ref = shardingExt.start(
+        settings.name,
+        propsMapper(Props(new ${NAME}(settings))),
+        entityExtractor)
     Protocol(ref)
-  }
-
-  private def props(settings: Settings): Props = {
-    Props(new ${NAME}(settings))
   }
 
   private def entityExtractor: ShardRegion.ExtractEntityId = {
@@ -78,11 +82,14 @@ object ${NAME} {
 
     import concurrent.duration._
 
-    def defaultMessage(msg: DefaultIncomingMessage): Unit = actorRef ! msg
+    def defaultMessage(msg: DefaultIncomingMessage)
+        (implicit sender: ActorRef = Actor.noSender): Unit =
+            actorRef ! msg
 
-    def defaultMessageAsk(msg: DefaultIncomingMessage): Future[DefaultOutgoingMessage] =
-
-      actorRef.ask(msg)(5 seconds).mapTo
+    def defaultMessageAsk(msg: DefaultIncomingMessage)
+        (implicit sender: ActorRef = Actor.noSender)
+        : Future[DefaultOutgoingMessage] =
+          actorRef.ask(msg)(5 seconds).mapTo[DefaultOutgoingMessage]
   }
 
   private object Events {

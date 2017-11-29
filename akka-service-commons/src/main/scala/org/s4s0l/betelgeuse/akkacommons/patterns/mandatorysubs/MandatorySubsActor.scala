@@ -78,10 +78,11 @@ class MandatorySubsActor(settings: Settings) extends Actor with ActorLogging {
       log.error("Published message result received after timeout had id {} from {} received at {}", pm.id, originalSender, receptionTime)
 
     case InternalPublicationResult(pm, originalSender, _, scala.util.Success(results))
-      if results.filter(_._2.isInstanceOf[Success]).map(_._1) != settings.mandatorySubscriptionKeys =>
+      if results.filter(_._2.isInstanceOf[Success]).map(_._1).filter(it => settings.mandatorySubscriptionKeys.contains(it)) != settings.mandatorySubscriptionKeys =>
       val failedReceivers = results.filter(!_._2.isInstanceOf[Success]).map(_._1)
       val allReceived = results.map(_._1)
       val missingReceivers = settings.mandatorySubscriptionKeys.filter(!allReceived.contains(_))
+
       log.error("Published message result does not contain all mandatory receivers, message had id {} from {}, failed receivers {}, missing receivers {}",
         pm.id, originalSender, failedReceivers.mkString(","), missingReceivers.mkString(","))
 

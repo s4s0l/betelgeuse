@@ -18,7 +18,6 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import akka.actor.Status.{Failure, Status}
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
-import akka.pattern.pipe
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedConfirm}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor._
@@ -53,17 +52,30 @@ class OriginStateDistributor[T](settings: Settings[T]) extends Actor with ActorL
         .filter(seq => !seq.exists(_.isInstanceOf[Failure]))
         .map(_ => "ok")
 
+
       stateChangeResult.flatMap { _ =>
-        implicit val timeout: Timeout = duration - ((System.currentTimeMillis() - start) millisecond)
-        listOfFuturesToFutureOfList(
-          settings.satelliteStates.map { case (satellite, api) =>
-            api.stateDistributed(versionedId, satellite)
-              .recoverToAkkaStatus
-          }.toSeq)
-          .filter(seq => !seq.exists(_.isInstanceOf[Failure]))
+        val timeSpentSoFar = System.currentTimeMillis() - start
+        if (timeSpentSoFar > duration.toMillis) {
+          Future.failed(new Exception("state distribution took too long, aborting commit."))
+        } else {
+          implicit val timeout: Timeout = duration - (timeSpentSoFar millisecond)
+          listOfFuturesToFutureOfList(
+            settings.satelliteStates.map { case (satellite, api) =>
+              api.stateDistributed(versionedId, satellite)
+                .recoverToAkkaStatus
+            }.toSeq)
+            .filter(seq => !seq.exists(_.isInstanceOf[Failure]))
+        }
       }
         .map(_ => OriginStateChangedConfirm(versionedId))
-        .pipeTo(originalSender)
+        .andThen {
+          case scala.util.Success(r) ⇒
+            val timeSpentSoFar = System.currentTimeMillis() - start
+            if (timeSpentSoFar <= duration.toMillis) {
+              originalSender ! r
+            }
+          case scala.util.Failure(_) ⇒
+        }
 
 
   }

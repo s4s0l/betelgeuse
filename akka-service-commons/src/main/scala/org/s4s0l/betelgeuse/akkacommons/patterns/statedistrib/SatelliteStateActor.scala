@@ -23,8 +23,7 @@ import akka.pattern.pipe
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.Protocol.{StateDistributed, StateDistributedConfirm}
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListenerResponse, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListenerResponse, Settings, StateDistributed, StateDistributedConfirm}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{IncomingMessage, SetVersionedValue, ValueUpdateOptimisticError, ValueUpdated}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
 
@@ -39,19 +38,27 @@ class SatelliteStateActor[T](settings: Settings[T]) extends VersionedEntityActor
   override def receiveCommand: Receive = super.receiveCommand orElse {
     case msg@StateDistributed(versionedId, _) =>
       val senderTmp = sender()
-      getValueAtVersion(versionedId).foreach { it =>
-        import context.dispatcher
-        settings.listener.configurationChanged(versionedId, it.asInstanceOf[T])
-          .map(it => SatelliteStateListenerResponse(it, msg, senderTmp))
-          .recover { case it: Throwable => SatelliteStateListenerResponse(Failure(it), msg, senderTmp) }
-          .pipeTo(self)
+      val option = getValueAtVersion(versionedId)
+      if (option.isDefined) {
+        option.foreach { it =>
+          import context.dispatcher
+          settings.listener.configurationChanged(versionedId, it.asInstanceOf[T])
+            .map(it => SatelliteStateListenerResponse(it, msg, senderTmp))
+            .recover { case it: Throwable => SatelliteStateListenerResponse(Failure(it), msg, senderTmp) }
+            .pipeTo(self)
+        }
+      } else {
+        senderTmp ! StateDistributedConfirm(versionedId, msg.destination, ok = false)
       }
 
-    case SatelliteStateListenerResponse(Success(_), StateDistributed(versionedId, dest), originalSender) =>
-      originalSender ! StateDistributedConfirm(versionedId, dest);
 
-    case SatelliteStateListenerResponse(Failure(ex), StateDistributed(versionedId, _), _) =>
-      log.error(ex, "Unable to confirm StateDistributed for SatelliteState {}, id={}", settings.name, versionedId)
+    case SatelliteStateListenerResponse(Success(_), StateDistributed(versionedId, dest), originalSender) =>
+      originalSender ! StateDistributedConfirm(versionedId, dest, ok = true);
+
+    case SatelliteStateListenerResponse(Failure(ex), StateDistributed(versionedId, dest), originalSender) =>
+      if (log.isDebugEnabled)
+        log.error(ex, "Unable to confirm StateDistributed for SatelliteState {}, id={}", settings.name, versionedId)
+      originalSender ! StateDistributedConfirm(versionedId, dest, ok = false);
   }
 
 }
@@ -107,7 +114,10 @@ object SatelliteStateActor {
       import akka.pattern.ask
       actorRef.ask(StateDistributed(versionedId, destination))
         .mapTo[StateDistributedConfirm]
-        .map(Success(_))
+        .map {
+          case msg@StateDistributedConfirm(_, _, true) => Success(msg)
+          case StateDistributedConfirm(_, _, false) => Failure(new Exception(s"Unable to distribute confirmation to destination $destination for version $versionedId"))
+        }
         .recover { case ex: Throwable => Failure(ex) }
     }
 
@@ -122,11 +132,11 @@ object SatelliteStateActor {
       */
     def apply[T](actorRef: => ActorRef): Protocol[T] = new Protocol(actorRef)
 
-    case class StateDistributed(versionedId: VersionedId, destination: String)
-
-    case class StateDistributedConfirm(versionedId: VersionedId, destination: String)
 
   }
 
+  private case class StateDistributed(versionedId: VersionedId, destination: String)
+
+  private case class StateDistributedConfirm(versionedId: VersionedId, destination: String, ok: Boolean)
 
 }    

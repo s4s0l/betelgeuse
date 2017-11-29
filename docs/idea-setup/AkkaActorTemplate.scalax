@@ -1,5 +1,5 @@
 #if ((${PACKAGE_NAME} && ${PACKAGE_NAME} != ""))package ${PACKAGE_NAME} #end
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.pattern.ask
 import ${PACKAGE_NAME}.${NAME}.Protocol.{DefaultIncomingMessage, DefaultOutgoingMessage}
 import ${PACKAGE_NAME}.${NAME}.Settings
@@ -21,8 +21,10 @@ object ${NAME} {
   /**
     * creates props for actor
     */
-  def props(settings: Settings): Props = {
-    Props(new ${NAME}(settings))
+  def start(settings: Settings, propsMapper: Props => Props = identity)
+           (implicit actorSystem: ActorSystem): Protocol = {
+    val ref = actorSystem.actorOf(Props(new ${NAME}(settings)))
+    Protocol(ref)
   }
 
   final case class Settings()
@@ -52,11 +54,15 @@ object ${NAME} {
 
     import concurrent.duration._
 
-    def defaultMessage(msg: DefaultIncomingMessage): Unit = actorRef ! msg
+    def defaultMessage(msg: DefaultIncomingMessage)
+        (implicit sender: ActorRef = Actor.noSender)
+        : Unit =
+            actorRef ! msg
 
-    def defaultMessageAsk(msg: DefaultIncomingMessage): Future[DefaultOutgoingMessage] =
-
-      actorRef.ask(msg)(5 seconds).mapTo
+    def defaultMessageAsk(msg: DefaultIncomingMessage)
+        (implicit sender: ActorRef = Actor.noSender)
+        : Future[DefaultOutgoingMessage] =
+              actorRef.ask(msg)(5 seconds).mapTo[DefaultOutgoingMessage]
   }
 
 
