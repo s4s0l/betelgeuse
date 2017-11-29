@@ -20,7 +20,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.persistence.RecoveryCompleted
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringShardingExtension
+import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
@@ -103,7 +103,7 @@ class VersionedEntityActor(settings: Settings) extends Actor
 
 object VersionedEntityActor {
 
-  def startSharded[T](settings: Settings, propsMapper: Props => Props = identity)(implicit shardingExt: BetelgeuseAkkaClusteringShardingExtension)
+  def startSharded[T](settings: Settings, propsMapper: Props => Props = identity)(implicit shardingExt: BgClusteringShardingExtension)
   : Protocol[T] = {
     val ref = shardingExt.start(settings.name, props(settings), entityExtractor)
     Protocol(ref)

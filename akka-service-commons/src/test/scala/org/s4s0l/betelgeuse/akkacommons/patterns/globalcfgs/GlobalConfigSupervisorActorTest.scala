@@ -20,10 +20,10 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs
 
 import akka.pattern._
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkacommons.clustering.pubsub.BetelgeuseAkkaClusteringPubSub
+import org.s4s0l.betelgeuse.akkacommons.clustering.pubsub.BgClusteringPubSub
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigSupervisorActor.ConfigurationChangedAck
-import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BetelgeuseAkkaPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.BetelgeuseAkkaTestWithCrateDb
+import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithCrateDb
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -32,11 +32,11 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class GlobalConfigSupervisorActorTest extends BetelgeuseAkkaTestWithCrateDb[BetelgeuseAkkaPersistenceJournalCrate with BetelgeuseAkkaClusteringPubSub] {
+class GlobalConfigSupervisorActorTest extends BgTestWithCrateDb[BgPersistenceJournalCrate with BgClusteringPubSub] {
   //  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
-  override def createService(): BetelgeuseAkkaPersistenceJournalCrate with BetelgeuseAkkaClusteringPubSub
-  = new BetelgeuseAkkaPersistenceJournalCrate with BetelgeuseAkkaClusteringPubSub {
+  override def createService(): BgPersistenceJournalCrate with BgClusteringPubSub
+  = new BgPersistenceJournalCrate with BgClusteringPubSub {
 
   }
 

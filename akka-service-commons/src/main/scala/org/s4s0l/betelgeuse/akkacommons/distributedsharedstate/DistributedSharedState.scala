@@ -17,8 +17,8 @@
 package org.s4s0l.betelgeuse.akkacommons.distributedsharedstate
 
 import akka.actor.ActorRefFactory
-import org.s4s0l.betelgeuse.akkacommons.BetelgeuseAkkaServiceId
-import org.s4s0l.betelgeuse.akkacommons.clustering.client.BetelgeuseAkkaClusteringClientExtension
+import org.s4s0l.betelgeuse.akkacommons.BgServiceId
+import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClientExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.{Protocol, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.{OriginStateDistributor, SatelliteStateActor}
 
@@ -34,8 +34,8 @@ object DistributedSharedState {
     * @param name     the name must be same at origin and at satellite ends
     * @param services list of remote services to which changes will be distributed
     */
-  def createStateDistributionToRemoteServices[T](name: String, services: Seq[BetelgeuseAkkaServiceId])
-                                                (implicit clientExt: BetelgeuseAkkaClusteringClientExtension,
+  def createStateDistributionToRemoteServices[T](name: String, services: Seq[BgServiceId])
+                                                (implicit clientExt: BgClusteringClientExtension,
                                                  actorRefFactory: ActorRefFactory): Protocol[T] = {
     val satellites: Map[String, SatelliteStateActor.Protocol[T]] = services.map { it =>
       it.systemName -> SatelliteStateActor.Protocol[T](clientExt.client(it).toActorTarget(s"/satellite-state-$name"))

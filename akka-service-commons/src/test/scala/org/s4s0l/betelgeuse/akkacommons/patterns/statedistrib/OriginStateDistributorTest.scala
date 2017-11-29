@@ -20,12 +20,12 @@ import java.util.concurrent.ConcurrentLinkedQueue
 
 import akka.actor.Status.{Failure, Status, Success}
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkacommons.BetelgeuseAkkaService
+import org.s4s0l.betelgeuse.akkacommons.BgService
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedConfirm}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributorTest._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.test.BetelgeuseAkkaServiceSpecLike
+import org.s4s0l.betelgeuse.akkacommons.test.BgServiceSpecLike
 import org.scalatest.Outcome
 
 import scala.concurrent.duration._
@@ -36,9 +36,9 @@ import scala.language.postfixOps
   * @author Marcin Wielgus
   */
 class OriginStateDistributorTest
-  extends BetelgeuseAkkaServiceSpecLike[BetelgeuseAkkaService] {
+  extends BgServiceSpecLike[BgService] {
 
-  override def createService(): BetelgeuseAkkaService = new BetelgeuseAkkaService {}
+  override def createService(): BgService = new BgService {}
 
   val to: FiniteDuration = 5 second
   implicit val timeUnit: Timeout = to

@@ -17,10 +17,10 @@
 package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 
 import akka.pattern.pipe
-import org.s4s0l.betelgeuse.akkacommons.BetelgeuseAkkaService
+import org.s4s0l.betelgeuse.akkacommons.BgService
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{CacheValue, GetCacheValue}
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Settings
-import org.s4s0l.betelgeuse.akkacommons.test.BetelgeuseAkkaServiceSpecLike
+import org.s4s0l.betelgeuse.akkacommons.test.BgServiceSpecLike
 
 import scala.concurrent.Future
 import scala.language.postfixOps
@@ -28,8 +28,8 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class CacheAccessActorTest extends BetelgeuseAkkaServiceSpecLike[BetelgeuseAkkaService] {
-  override def createService(): BetelgeuseAkkaService = new BetelgeuseAkkaService {}
+class CacheAccessActorTest extends BgServiceSpecLike[BgService] {
+  override def createService(): BgService = new BgService {}
 
   feature("Near cache holds and reference to some value calculated from some value produced from incoming message") {
     scenario("Cached instance is removed") {

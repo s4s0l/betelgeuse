@@ -21,7 +21,7 @@ import akka.actor.{ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.pattern.pipe
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringShardingExtension
+import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListenerResponse, Settings, StateDistributed, StateDistributedConfirm}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{IncomingMessage, SetVersionedValue, ValueUpdateOptimisticError, ValueUpdated}
@@ -67,7 +67,7 @@ class SatelliteStateActor[T](settings: Settings[T]) extends VersionedEntityActor
 object SatelliteStateActor {
 
   def startSharded[T](settings: Settings[T], propsMapper: Props => Props = identity)
-                     (implicit shardingExt: BetelgeuseAkkaClusteringShardingExtension)
+                     (implicit shardingExt: BgClusteringShardingExtension)
   : Protocol[T] = {
     val ref = shardingExt.start(settings.name, Props(new SatelliteStateActor[T](settings)), entityExtractor)
     Protocol(ref)

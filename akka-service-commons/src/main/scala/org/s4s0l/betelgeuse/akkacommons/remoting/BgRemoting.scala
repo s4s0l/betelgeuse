@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons
 
-/**
-  * @author Marcin Wielgus
-  */
-class ServiceInfo(val id: BgServiceId, val instance: Int, val docker: Boolean) {
 
-  val portSuffix: String = if (docker) firstPortSuffix else "%02d%02d".format(id.portBase, instance)
-  val externalAddress: String = if (docker) s"${id.systemName}_service" else "127.0.0.1"
+package org.s4s0l.betelgeuse.akkacommons.remoting
 
-  def firstPort(portType: Int): Int = "%d%02d%02d".format(portType, id.portBase, instance).toInt
+import com.typesafe.config.{Config, ConfigFactory}
+import org.s4s0l.betelgeuse.akkacommons.BgService
 
-  val bindAddress: String = "0.0.0.0"
 
-  def firstPortSuffix: String = "%02d%02d".format(id.portBase, 1)
+trait BgRemoting extends BgService {
+  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgRemoting])
 
+  abstract override def customizeConfiguration:Config = {
+    LOGGER.info("Customize config with remoting.conf as fallback to...")
+    super.customizeConfiguration.withFallback(ConfigFactory.parseResources("remoting.conf"))
+  }
 }

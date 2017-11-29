@@ -22,8 +22,8 @@ import java.util.UUID
 
 import akka.actor.{Actor, ActorRef, ActorSystem}
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkacommons.BetelgeuseAkkaServiceId
-import org.s4s0l.betelgeuse.akkacommons.clustering.client.BetelgeuseAkkaClusteringClientExtension
+import org.s4s0l.betelgeuse.akkacommons.BgServiceId
+import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClientExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigActor.GlobalConfigActorSettings
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigSupervisorActor.{ConfigurationChanged, ConfigurationChangedAck}
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigsFactory.GlobalConfigsEventPublisher
@@ -59,7 +59,7 @@ trait GlobalConfigsFactory {
     pubSub.question("/globalcfgs/" + name, evt).mapTo[ConfigurationChangedAck]
   }
 
-  def eventPublisherRemote[T](clientName: BetelgeuseAkkaServiceId, ext: BetelgeuseAkkaClusteringClientExtension, configName: String)
+  def eventPublisherRemote[T](clientName: BgServiceId, ext: BgClusteringClientExtension, configName: String)
                              (implicit timeout: Timeout, sender: ActorRef = Actor.noSender): GlobalConfigsEventPublisher[T] = (id: String, value: T, uuid: String) => {
     val name = getGlobalConfigName(configName)
     val evt = ConfigurationChanged(uuid, PersistenceId(name, id), value)

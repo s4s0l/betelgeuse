@@ -18,11 +18,11 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import akka.actor.Status.{Failure, Status, Success}
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringSharding
+import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListener, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BetelgeuseAkkaPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.BetelgeuseAkkaTestWithCrateDb
+import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithCrateDb
 import org.scalatest.Outcome
 
 import scala.concurrent.duration._
@@ -33,15 +33,15 @@ import scala.language.postfixOps
   * @author Marcin Wielgus
   */
 class SatelliteStateActorTest extends
-  BetelgeuseAkkaTestWithCrateDb[BetelgeuseAkkaPersistenceJournalCrate with BetelgeuseAkkaClusteringSharding] {
+  BgTestWithCrateDb[BgPersistenceJournalCrate with BgClusteringSharding] {
 
   val to: FiniteDuration = 5 second
   implicit val timeUnit: Timeout = to
 
-  override def createService(): BetelgeuseAkkaPersistenceJournalCrate
-    with BetelgeuseAkkaClusteringSharding
-  = new BetelgeuseAkkaPersistenceJournalCrate
-    with BetelgeuseAkkaClusteringSharding {
+  override def createService(): BgPersistenceJournalCrate
+    with BgClusteringSharding
+  = new BgPersistenceJournalCrate
+    with BgClusteringSharding {
 
   }
 

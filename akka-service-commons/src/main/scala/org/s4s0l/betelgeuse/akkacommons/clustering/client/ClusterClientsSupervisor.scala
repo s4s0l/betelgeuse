@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.clustering.client
@@ -22,7 +22,7 @@ import akka.cluster.client.{ClusterClient, ClusterClientSettings}
 import akka.japi.Util.immutableSeq
 import akka.pattern.pipe
 import com.typesafe.config.{Config, ConfigObject}
-import org.s4s0l.betelgeuse.akkacommons.BetelgeuseAkkaServiceExtension
+import org.s4s0l.betelgeuse.akkacommons.BgServiceExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.ClusterClientsSupervisor.{AllReferencesMessage, CheckDnsForServiceMessage, DnsForServiceMessage, GetAllReferencesMessage}
 import org.s4s0l.betelgeuse.akkacommons.utils.DnsUtils
 
@@ -69,7 +69,7 @@ class ClusterClientsSupervisor extends Actor with ActorLogging {
   }
 
   val schedulers: Iterable[Cancellable] = resolvedClientConfigs
-    .filter(_._2.getBoolean("resolve-dns") || BetelgeuseAkkaServiceExtension.get(context.system).serviceInfo.docker)
+    .filter(_._2.getBoolean("resolve-dns") || BgServiceExtension.get(context.system).serviceInfo.docker)
     .map {
       case (name, config) =>
         context.system.scheduler.schedule(Duration.Zero, config.getDuration("resolve-dns-interval", MILLISECONDS).millis, self, CheckDnsForServiceMessage(name))

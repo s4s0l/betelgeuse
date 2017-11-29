@@ -8,7 +8,7 @@ import ${PACKAGE_NAME}.${NAME}.Protocol.{DefaultIncomingMessage, DefaultOutgoing
 import ${PACKAGE_NAME}.${NAME}.Settings
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
-import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringShardingExtension
+import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 
 
 
@@ -45,7 +45,7 @@ class ${NAME}(settings: Settings) extends Actor
 object ${NAME} {
   final case class Settings(name:String)
 
-  def startSharded(settings: Settings, propsMapper: Props => Props = identity)(implicit shardingExt: BetelgeuseAkkaClusteringShardingExtension): Protocol = {
+  def startSharded(settings: Settings, propsMapper: Props => Props = identity)(implicit shardingExt: BgClusteringShardingExtension): Protocol = {
     val ref = shardingExt.start(
         settings.name,
         propsMapper(Props(new ${NAME}(settings))),

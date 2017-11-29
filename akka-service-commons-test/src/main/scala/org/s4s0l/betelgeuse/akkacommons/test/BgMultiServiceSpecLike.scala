@@ -14,20 +14,11 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons
+package org.s4s0l.betelgeuse.akkacommons.test
 
 /**
   * @author Marcin Wielgus
   */
-class ServiceInfo(val id: BgServiceId, val instance: Int, val docker: Boolean) {
-
-  val portSuffix: String = if (docker) firstPortSuffix else "%02d%02d".format(id.portBase, instance)
-  val externalAddress: String = if (docker) s"${id.systemName}_service" else "127.0.0.1"
-
-  def firstPort(portType: Int): Int = "%d%02d%02d".format(portType, id.portBase, instance).toInt
-
-  val bindAddress: String = "0.0.0.0"
-
-  def firstPortSuffix: String = "%02d%02d".format(id.portBase, 1)
+class BgMultiServiceSpecLike {
 
 }

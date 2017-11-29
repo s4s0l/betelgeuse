@@ -20,9 +20,9 @@ package org.s4s0l.betelgeuse.akkacommons.utils
 
 import akka.actor.Props
 import akka.persistence.PersistentActor
-import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BetelgeuseAkkaClusteringSharding
-import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BetelgeuseAkkaPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.BetelgeuseAkkaTestWithCrateDb
+import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
+import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithCrateDb
 import org.s4s0l.betelgeuse.akkacommons.utils.AsyncInitActorTest.SampleAsyncInitActor
 
 import scala.concurrent.duration._
@@ -31,8 +31,8 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class AsyncInitActorTest extends BetelgeuseAkkaTestWithCrateDb[BetelgeuseAkkaPersistenceJournalCrate with BetelgeuseAkkaClusteringSharding] {
-  override def createService(): BetelgeuseAkkaPersistenceJournalCrate with BetelgeuseAkkaClusteringSharding = new BetelgeuseAkkaPersistenceJournalCrate with BetelgeuseAkkaClusteringSharding {
+class AsyncInitActorTest extends BgTestWithCrateDb[BgPersistenceJournalCrate with BgClusteringSharding] {
+  override def createService(): BgPersistenceJournalCrate with BgClusteringSharding = new BgPersistenceJournalCrate with BgClusteringSharding {
 
   }
 
