@@ -33,6 +33,7 @@ import scala.language.postfixOps
   *
   * @author Marcin Wielgus
   */
+@deprecated("Please migrate to BgTestService")
 trait BgServiceSpecLike[T <: BgService]
   extends BgTestService {
 

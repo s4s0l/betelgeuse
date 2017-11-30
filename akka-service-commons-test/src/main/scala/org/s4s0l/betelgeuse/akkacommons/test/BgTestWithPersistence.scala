@@ -21,6 +21,7 @@ import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistence
 /**
   * @author Marcin Wielgus
   */
+@deprecated("Please migrate to BgTestPersistence")
 trait BgTestWithPersistence[T <: BgPersistence] extends BgServiceSpecLike[T] with BgTestPersistence {
 
 }

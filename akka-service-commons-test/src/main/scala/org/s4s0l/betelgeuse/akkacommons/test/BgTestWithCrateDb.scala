@@ -25,6 +25,7 @@ import scalikejdbc.DBSession
 /**
   * @author Marcin Wielgus
   */
+@deprecated("Please migrate to BgTestCrate")
 trait BgTestWithCrateDb[T <: BgPersistenceCrate] extends BgTestWithPersistence[T] {
 
   override def isCleanupOn: Boolean = true
