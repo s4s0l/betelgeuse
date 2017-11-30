@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.test
+def x(a: => String): Unit = {
+  //  val aa =a
+  val aaa = a
+}
 
-/**
-  * @author Marcin Wielgus
-  */
-class BgMultiServiceSpecLike {
 
+x {
+  println("AAA")
+  "w"
 }

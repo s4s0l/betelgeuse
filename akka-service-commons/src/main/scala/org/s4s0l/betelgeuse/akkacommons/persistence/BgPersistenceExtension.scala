@@ -15,14 +15,12 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.persistence
 
 import akka.actor.{ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
 import akka.dispatch.MessageDispatcher
-import org.s4s0l.betelgeuse.akkacommons.BgServiceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelgeuseDb, DbAccess, DbLocksSupport}
-import scalikejdbc.{DBSession, NamedDB, SettingsProvider}
+import scalikejdbc.DBSession
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -37,8 +35,6 @@ class BgPersistenceExtension(private val system: ExtendedActorSystem) extends Ex
     override def locksSupport(): DbLocksSupport = BgPersistenceExtension.this.locksSupport()
 
     override def update[A](execution: (DBSession) => A): A = BgPersistenceExtension.this.update(execution)
-
-    override def scalikeDb(): NamedDB = BgPersistenceExtension.this.scalikeDb()
 
     lazy val ec: MessageDispatcher = system.dispatchers.lookup("db-dispatcher")
 
@@ -63,25 +59,19 @@ class BgPersistenceExtension(private val system: ExtendedActorSystem) extends Ex
     db
   }
 
-  def defaultPoolName: String = serviceName
+  def defaultSchemaName: String = betelgeuseDb.getDefaultSchemaNameFromPoolName(defaultPoolName).get
 
-  def defaultSchemaName: String = BetelgeuseDb.getDefaultSchemaName.get
+  def defaultPoolName: String = betelgeuseDb.getDefaultPoolName.get
 
-  def scalikeDb(name: String = defaultPoolName, settingsProvider: SettingsProvider = SettingsProvider.default): NamedDB = {
-    betelgeuseDb.underlyingPureScalikeJdbcDb(name, settingsProvider)
-  }
-
-  def query[A](execution: DBSession => A): A = {
-    betelgeuseDb.readOnly(execution)
+  def query[A](execution: DBSession => A, name: String = defaultPoolName): A = {
+    betelgeuseDb.readOnly(execution, name = name)
   }
 
   def locksSupport(name: String = defaultPoolName): DbLocksSupport = betelgeuseDb.getLocks(name)
 
-  def update[A](execution: DBSession => A): A = {
-    betelgeuseDb.localTx(execution)
+  def update[A](execution: DBSession => A, name: String = defaultPoolName): A = {
+    betelgeuseDb.localTx(execution, name = name)
   }
-
-  private val serviceName = BgServiceExtension.get(system).serviceInfo.id.systemName
 
   private[persistence] def closeDb(): Unit = {
     betelgeuseDb.closeAll()

@@ -20,55 +20,62 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.{ImplicitSender, TestKit}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.scalamock.scalatest.MockFactory
-import org.scalatest._
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.TestedService
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
 /**
+  * This should be deprecated! in favour of [[BgTestService]]
+  * for now it adapts apis to old mechanizm but it makes whole api
+  * cumbersome
+  *
   * @author Marcin Wielgus
   */
 trait BgServiceSpecLike[T <: BgService]
-  extends FeatureSpecLike
-    with Matchers
-    with BeforeAndAfterAll
-    with GivenWhenThen
-    with MockFactory {
+  extends BgTestService {
 
   def createService(): T
 
   var service: T = _
   implicit var system: ActorSystem = _
   var testKit: TestKit with ImplicitSender = _
-  val defaultTimeout = Timeout(10 seconds)
+  var defaultTimeout = Timeout(10 seconds)
 
   implicit def self: ActorRef = testKit.testActor
 
   implicit def execContext: ExecutionContextExecutor = service.executor
 
-  def initializeService(): Unit = {
-    system = service.run()
-    testKit = new TestKit(system) with ImplicitSender
-  }
+  private var guard = false
 
   def restartService(): Unit = {
-    service.shutdown()
-    service = createService()
-    system = service.run()
-    testKit = new TestKit(system) with ImplicitSender
-    assert(testKit != null)
+    super.restartServices()
   }
 
   override protected def beforeAll(): Unit = {
-    service = createService()
-    initializeService()
-    assert(testKit != null)
+    guard = true
+    testWith(createService())
+    guard = false
+    super.beforeAll()
+
   }
 
-  override protected def afterAll(): Unit = {
-    service.shutdown()
+  override def testWith[X <: BgService](bgServiceFactory: => X): TestedService[X] = {
+    if (!guard) {
+      throw new Exception("BgServiceSpecLike can be used only for testing single service")
+    }
+    val ts = new TestedService[X](bgServiceFactory) {
+      override def startService(): Unit = {
+        super.startService()
+        BgServiceSpecLike.this.service = service.asInstanceOf[T]
+        BgServiceSpecLike.this.system = system
+        BgServiceSpecLike.this.testKit = testKit
+      }
+    }
+    servicesUnderTest = ts :: servicesUnderTest
+    ts
   }
+
 
 }

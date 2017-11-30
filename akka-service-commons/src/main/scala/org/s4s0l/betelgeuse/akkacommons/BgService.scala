@@ -34,13 +34,14 @@ import scala.language.postfixOps
 trait BgService {
 
   protected final lazy val log: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(this.getClass)
-  protected lazy val serviceId: BgServiceId = BgServiceId(systemName, portBase)
+
+  lazy val serviceId: BgServiceId = BgServiceId(systemName, portBase)
 
   private var configInited = false
   private var mainRunned = false
   private val classNameMatch = "[^A-Z]+([A-Z][^$\\.]+)(?:.*)".r
 
-  private lazy val defaultSystemName = {
+  protected lazy val defaultSystemName: String = {
     this.getClass.getName match {
       case classNameMatch(name) => name
       case _ =>
@@ -52,6 +53,7 @@ trait BgService {
   protected def systemName: String = defaultSystemName
 
   protected def portBase: Int = 1
+
   protected lazy val serviceInfo: ServiceInfo = new ServiceInfo(
     serviceId,
     System.getProperty(s"${BgServiceExtension.configBaseKey}.instance", "1").toInt,

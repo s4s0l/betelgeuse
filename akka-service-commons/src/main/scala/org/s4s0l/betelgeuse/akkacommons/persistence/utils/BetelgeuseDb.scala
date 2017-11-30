@@ -1,19 +1,18 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
@@ -39,36 +38,23 @@ class BetelgeuseDb(val config: Config) extends DBs
   private val encounteredPoolLocks = mutable.Map[String, DbLocksSupport]()
   private val LOGGER = LoggerFactory.getLogger(getClass)
 
-  def underlyingPureScalikeJdbcDb(name: String = BetelgeuseDb.getDefaultPoolName.get,
-                                  settingsProvider: SettingsProvider = SettingsProvider.default): NamedDB = {
-    NamedDB(Symbol(name), settingsProvider)
-  }
-
-  def readOnly[A](execution: DBSession => A, name: String = BetelgeuseDb.getDefaultPoolName.get,
+  def readOnly[A](execution: DBSession => A, name: String = getDefaultPoolName.get,
                   settingsProvider: SettingsProvider = SettingsProvider.default): A = {
     underlyingPureScalikeJdbcDb(name, settingsProvider).readOnly {
       implicit session =>
-        BetelgeuseDb.getDefaultSchemaName match {
-          case None => LOGGER.warn("No default scheme for read only session.")
-          case Some(x) => session.connection.setSchema(x)
+        val schema = getDefaultSchemaNameFromPoolName(name) match {
+          case None => throw new Exception("No default scheme for read only session.")
+          case Some(x) =>
+            session.connection.setSchema(x)
+            x
         }
-        execution(session)
+        BetelgeuseEntityObject.runWithSchemaAndPool(name, schema) {
+          execution(session)
+        }
     }
   }
 
-  def localTx[A](execution: DBSession => A, name: String = BetelgeuseDb.getDefaultPoolName.get,
-                 settingsProvider: SettingsProvider = SettingsProvider.default): A = {
-    underlyingPureScalikeJdbcDb(name, settingsProvider).localTx {
-      implicit session =>
-        BetelgeuseDb.getDefaultSchemaName match {
-          case None => LOGGER.warn("No default scheme for read only session.")
-          case Some(x) => session.connection.setSchema(x)
-        }
-        execution(session)
-    }
-  }
-
-  def getLocks(name: String = BetelgeuseDb.getDefaultPoolName.get): DbLocksSupport = {
+  def getLocks(name: String = getDefaultPoolName.get): DbLocksSupport = {
     encounteredPoolLocks(name)
   }
 
@@ -80,7 +66,7 @@ class BetelgeuseDb(val config: Config) extends DBs
     if (flywayConfig.hasPath("schemas")) {
       val schemasString = flywayConfig.getString("schemas")
       val schemas = StringUtils.tokenizeToStringArray(schemasString, ",")
-      BetelgeuseDb.encounteredPoolAndSchemas(dbName.name, schemas)
+      encounteredPoolAndSchemas(dbName.name, schemas)
     } else {
       LOGGER.warn(s"Flyway config has no schemas defined for database ${dbName.name}")
     }
@@ -97,15 +83,36 @@ class BetelgeuseDb(val config: Config) extends DBs
     encounteredPoolLocks += (dbName.name -> locksSupport)
 
     if (flywayConfig.hasPath("enabled") && flywayConfig.getBoolean("enabled")) {
-      localTx {
+      localTx({
         implicit session =>
           import scala.concurrent.duration._
           locksSupport.initLocks(session)
           locksSupport.runLocked(s"MigrationOf${dbName.name}", DbLocksSettings(10 minutes, 35, 1 seconds)) {
             new FlyTrackPersistenceSchemaUpdater(flywayConfig).updateSchema(new DummyDataSource(dbName))
           }
-      }
+      }, name = dbName.name)
     }
+  }
+
+  def localTx[A](execution: DBSession => A, name: String = getDefaultPoolName.get,
+                 settingsProvider: SettingsProvider = SettingsProvider.default): A = {
+    underlyingPureScalikeJdbcDb(name, settingsProvider).localTx {
+      implicit session =>
+        val schema = getDefaultSchemaNameFromPoolName(name) match {
+          case None => throw new Exception("No default scheme for read only session.")
+          case Some(x) =>
+            session.connection.setSchema(x)
+            x
+        }
+        BetelgeuseEntityObject.runWithSchemaAndPool(name, schema) {
+          execution(session)
+        }
+    }
+  }
+
+  private def underlyingPureScalikeJdbcDb(name: String = getDefaultPoolName.get,
+                                          settingsProvider: SettingsProvider = SettingsProvider.default): NamedDB = {
+    NamedDB(Symbol(name), settingsProvider)
   }
 
   private def getFlywayConfig(dbName: Symbol, dbConfig: Config) = {
@@ -159,21 +166,24 @@ class BetelgeuseDb(val config: Config) extends DBs
     if (config.hasPath(path)) Some(config.getBoolean(path)) else None
   }
 
-
-  override def close(dbName: Symbol): Unit = {
-    DBs.close(dbName)
-    BetelgeuseDb.encounteredPoolReleased(dbName.name)
+  def getDefaultSchemaNameFromPoolName(poolName: String): Option[String] = {
+    encounteredPoolsAndSchemas.synchronized {
+      Some(poolName)
+        .map(it => encounteredPoolsAndSchemas(it))
+        .filter(it => it.size == 1)
+        .map(it => it.head)
+        .orElse {
+          LOGGER.warn(s"Multiple pool names/schemas found ($encounteredPoolsAndSchemas), unable to reasonably select default schema - override schemaName in table classes")
+          None
+        }
+    }
   }
 
   override def closeAll(): Unit = {
     dbNames.foreach { dbName => close(Symbol(dbName)) }
-    BetelgeuseDb.encounteredPoolReleaseAll(dbNames)
+    encounteredPoolReleaseAll(dbNames)
   }
 
-}
-
-object BetelgeuseDb {
-  private val LOGGER = LoggerFactory.getLogger(getClass)
   private val encounteredPoolsAndSchemas = mutable.Map[String, Seq[String]]()
 
   private def encounteredPoolReleased(poolName: String): Unit = {
@@ -210,17 +220,10 @@ object BetelgeuseDb {
     }
   }
 
-  def getDefaultSchemaName: Option[String] = {
-    encounteredPoolsAndSchemas.synchronized {
-      getDefaultPoolName
-        .map(it => encounteredPoolsAndSchemas(it))
-        .filter(it => it.size == 1)
-        .map(it => it.head)
-        .orElse {
-          LOGGER.warn(s"Multiple pool names/schemas found ($encounteredPoolsAndSchemas), unable to reasonably select default schema - override schemaName in table classes")
-          None
-        }
-    }
+  override def close(dbName: Symbol): Unit = {
+    DBs.close(dbName)
+    encounteredPoolReleased(dbName.name)
   }
 
 }
+

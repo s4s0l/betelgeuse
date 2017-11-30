@@ -44,15 +44,15 @@ class BetelgeuseDbTest extends FeatureSpec with BeforeAndAfterAll {
       }
       assert(vals == List("1"))
     }
-    scenario("Direct usage of scalike api") {
-      val tablesInSchema = scalike.underlyingPureScalikeJdbcDb().readOnly { implicit session =>
-        sql"""SELECT TABLE_NAME FROM information_schema.tables
-           WHERE TABLE_NAME = 'test_schema_version' AND table_schema= 'betelgeusedbtest'"""
-          .map(_.string(1)).list.apply()
-      }
-
-      assert(tablesInSchema.size == 1)
-    }
+    //    scenario("Direct usage of scalike api") {
+    //      val tablesInSchema = scalike.underlyingPureScalikeJdbcDb().readOnly { implicit session =>
+    //        sql"""SELECT TABLE_NAME FROM information_schema.tables
+    //           WHERE TABLE_NAME = 'test_schema_version' AND table_schema= 'betelgeusedbtest'"""
+    //          .map(_.string(1)).list.apply()
+    //      }
+    //
+    //      assert(tablesInSchema.size == 1)
+    //    }
   }
 
   override protected def beforeAll(): Unit = {
