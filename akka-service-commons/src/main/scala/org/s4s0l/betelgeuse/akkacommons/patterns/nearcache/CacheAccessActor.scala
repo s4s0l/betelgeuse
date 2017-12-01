@@ -154,6 +154,7 @@ object CacheAccessActor {
     * @param valueEnricher    function that creates value to be cached from value returned by valueOwnerFacade
     *                      function. Can be an identity function of course.
     * @param valueOwnerFacade function for getting value for given 'GetValue' message passed in [[GetCacheValue]]
+    *                         todo: replace Future and potential ask pattern with tell
     * @param timeoutTime      after what time of inactivity value for a given key should be forgotten.
     * @tparam G type of 'GetValue' message
     * @tparam K cache key type

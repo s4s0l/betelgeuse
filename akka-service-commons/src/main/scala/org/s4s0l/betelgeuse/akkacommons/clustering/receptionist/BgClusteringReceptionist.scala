@@ -32,7 +32,7 @@ trait BgClusteringReceptionist extends BgClusteringPubSub {
     ConfigFactory.parseResources("clustering-receptionist.conf").withFallback(super.customizeConfiguration)
   }
 
-  def clusteringReceptionistExtension: BgClusteringReceptionistExtension = BgClusteringReceptionistExtension.get(system)
+  implicit def clusteringReceptionistExtension: BgClusteringReceptionistExtension = BgClusteringReceptionistExtension.get(system)
 
   override protected def initialize(): Unit = {
     super.initialize()

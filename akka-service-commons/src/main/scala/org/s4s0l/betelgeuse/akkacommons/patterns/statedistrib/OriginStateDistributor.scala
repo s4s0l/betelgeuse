@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import akka.actor.Status.{Failure, Status}
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props}
+import akka.persistence.AtLeastOnceDelivery
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedConfirm}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor._
@@ -40,7 +41,7 @@ class OriginStateDistributor[T](settings: Settings[T]) extends Actor with ActorL
   import context.dispatcher
 
   override def receive: Actor.Receive = {
-    case OriginStateChanged(versionedId, value, duration) =>
+    case OriginStateChanged(deliveryId, versionedId, value, duration) =>
       val originalSender = sender()
       val start = System.currentTimeMillis()
       implicit val timeout: Timeout = duration
@@ -67,7 +68,7 @@ class OriginStateDistributor[T](settings: Settings[T]) extends Actor with ActorL
             .filter(seq => !seq.exists(_.isInstanceOf[Failure]))
         }
       }
-        .map(_ => OriginStateChangedConfirm(versionedId))
+        .map(_ => OriginStateChangedConfirm(deliveryId, versionedId))
         .andThen {
           case scala.util.Success(r) ⇒
             val timeSpentSoFar = System.currentTimeMillis() - start
@@ -92,6 +93,9 @@ object OriginStateDistributor {
     Protocol(ref)
   }
 
+  /**
+    * TODO: rewrite to not use asks so it could be faster
+    */
   trait SatelliteProtocol[T] {
     /**
       * distributes state change
@@ -123,6 +127,15 @@ object OriginStateDistributor {
     : Unit =
       actorRef ! msg
 
+    /**
+      * uses deliver method of [[AtLeastOnceDelivery]].
+      * Works like [[Protocol.stateChanged]].
+      * Utility to hide actor ref from user of this protocol
+      */
+    def deliver(from: AtLeastOnceDelivery)(versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration): Unit = {
+      from.deliver(actorRef.path)(deliveryId => OriginStateChanged(deliveryId, versionedId, value, expectedConfirmIn))
+    }
+
   }
 
   object Protocol {
@@ -131,9 +144,9 @@ object OriginStateDistributor {
       */
     def apply[T](actorRef: => ActorRef): Protocol[T] = new Protocol(actorRef)
 
-    case class OriginStateChanged[T](versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
+    case class OriginStateChanged[T](deliveryId: Long, versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
 
-    case class OriginStateChangedConfirm(versionedId: VersionedId)
+    case class OriginStateChangedConfirm(deliveryId: Long, versionedId: VersionedId)
 
   }
 

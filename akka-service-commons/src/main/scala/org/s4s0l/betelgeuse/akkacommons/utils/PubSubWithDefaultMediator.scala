@@ -27,6 +27,11 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.pubsub.BgClusteringPubSubProv
 import scala.concurrent.Future
 
 /**
+  *
+  * TODO: subscribe and register should return futures!!!
+  * TODO: should be splitted to PubSubBroker and PubSubSender or sth
+  * TODO: should use ActorTargets for sending
+  *
   * @author Marcin Wielgus
   */
 trait PubSubWithDefaultMediator extends BgClusteringPubSubProvider {

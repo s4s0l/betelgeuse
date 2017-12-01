@@ -51,9 +51,10 @@ class VersionedEntityActor(settings: Settings) extends Actor
 
   override def receiveRecover: Receive = {
     case e: CqrsEvent if processEvent(true).isDefinedAt(e) => processEvent(true)
-    case _: RecoveryCompleted =>
-    case e => throw new Exception(s"unable to recover, unknown or unsupported event $e")
+    case _: RecoveryCompleted => recoveryCompleted()
   }
+
+  protected def recoveryCompleted(): Unit = {}
 
   override def receiveCommand: Receive = {
     case m: IncomingMessage => m match {
@@ -74,17 +75,24 @@ class VersionedEntityActor(settings: Settings) extends Actor
     }
   }
 
-  private def processEvent(recover: Boolean): PartialFunction[CqrsEvent, Unit] = {
+  def processEvent(recover: Boolean): PartialFunction[Any, Unit] = {
     case ValueEvent(cmd) =>
       if (cmd.versionedId.version > currentVersion) {
         currentVersion = cmd.versionedId.version
         currentValue = Some(cmd.value)
       }
       versionMap = versionMap + (cmd.versionedId.version -> cmd.value)
+      valueUpdated(cmd.versionedId, cmd.value)
       if (!recover)
         confirmUpdated(cmd)
   }
 
+  protected def valueUpdated(versionedId: VersionedId, value: Any): Unit = {}
+
+  /**
+    * confirms successfull processing of command, not event!
+    *
+    */
   protected def confirmUpdated(cmd: SetVersionedValue[Any]): Unit = {
     sender() ! ValueUpdated(cmd.versionedId, cmd.tag)
   }
@@ -113,7 +121,7 @@ object VersionedEntityActor {
     Props(new VersionedEntityActor(settings))
   }
 
-  private def entityExtractor: ShardRegion.ExtractEntityId = {
+  def entityExtractor: ShardRegion.ExtractEntityId = {
     case a: IncomingMessage => (a.id, a)
   }
 

@@ -22,11 +22,13 @@ import akka.testkit.{ImplicitSender, TestKit}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.TestedService
+import org.s4s0l.betelgeuse.utils.AllUtils
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.{BeforeAndAfterAll, FeatureSpecLike, GivenWhenThen, Matchers}
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.collection.immutable
 import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 
 /**
@@ -47,6 +49,7 @@ trait BgTestService extends FeatureSpecLike
   }
 
   def restartServices(): Unit = {
+
     servicesUnderTest.foreach(_.restartService())
   }
 
@@ -56,8 +59,18 @@ trait BgTestService extends FeatureSpecLike
     initializeServices()
   }
 
+  var concurentRun = false
+
   def initializeServices(): Unit = {
-    servicesUnderTest.foreach(_.startService())
+    if (concurentRun) {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val eventualUnits: immutable.Seq[Future[Unit]] = servicesUnderTest.map(serv => Future(serv.startService()))
+      val eventualUnit: Future[Seq[Unit]] = AllUtils.listOfFuturesToFutureOfList(eventualUnits)
+      import concurrent.duration._
+      Await.result(eventualUnit, 60 seconds)
+    } else {
+      servicesUnderTest.foreach(_.startService())
+    }
   }
 
   def validateServices(): Unit = {
@@ -69,11 +82,27 @@ trait BgTestService extends FeatureSpecLike
   }
 
   def createServices(): Unit = {
-    servicesUnderTest.foreach(_.createService())
+    if (concurentRun) {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val eventualUnits: immutable.Seq[Future[Unit]] = servicesUnderTest.map(serv => Future(serv.createService()))
+      val eventualUnit: Future[Seq[Unit]] = AllUtils.listOfFuturesToFutureOfList(eventualUnits)
+      import concurrent.duration._
+      Await.result(eventualUnit, 60 seconds)
+    } else {
+      servicesUnderTest.foreach(_.createService())
+    }
   }
 
   override protected def afterAll(): Unit = {
-    servicesUnderTest.foreach(_.stopService())
+    if (concurentRun) {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val eventualUnits: immutable.Seq[Future[Unit]] = servicesUnderTest.map(serv => Future(serv.stopService()))
+      val eventualUnit: Future[Seq[Unit]] = AllUtils.listOfFuturesToFutureOfList(eventualUnits)
+      import concurrent.duration._
+      Await.result(eventualUnit, 60 seconds)
+    } else {
+      servicesUnderTest.foreach(_.stopService())
+    }
   }
 
 }

@@ -21,6 +21,7 @@ import akka.actor.{ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.pattern.pipe
 import akka.util.Timeout
+import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionistExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListenerResponse, Settings, StateDistributed, StateDistributedConfirm}
@@ -66,12 +67,15 @@ class SatelliteStateActor[T](settings: Settings[T]) extends VersionedEntityActor
 
 object SatelliteStateActor {
 
-  def startSharded[T](settings: Settings[T], propsMapper: Props => Props = identity)
+  def startSharded[T](settings: Settings[T], propsMapper: Props => Props = identity, receptionist: Option[BgClusteringReceptionistExtension] = None)
                      (implicit shardingExt: BgClusteringShardingExtension)
   : Protocol[T] = {
-    val ref = shardingExt.start(settings.name, Props(new SatelliteStateActor[T](settings)), entityExtractor)
+    val ref = shardingExt.start(s"/user/satellite-state-${settings.name}", Props(new SatelliteStateActor[T](settings)), entityExtractor)
+    receptionist.foreach(_.registerByName(getRemoteName(settings.name), ref))
     Protocol(ref)
   }
+
+  def getRemoteName(name: String): String = s"/user/satellite-state-$name"
 
   private def entityExtractor: ShardRegion.ExtractEntityId = {
     case a: IncomingMessage => (a.id, a)
@@ -80,7 +84,7 @@ object SatelliteStateActor {
 
   trait SatelliteStateListener[T] {
     def configurationChanged(versionedId: VersionedId, value: T)
-                            (implicit executionContext: ExecutionContext): Future[Status]
+                            (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender): Future[Status]
   }
 
   final case class Settings[T](name: String, listener: SatelliteStateListener[T])
@@ -91,6 +95,9 @@ object SatelliteStateActor {
   final class Protocol[T] private(actorTarget: ActorTarget) extends VersionedEntityActor.Protocol[T](actorTarget)
     with SatelliteProtocol[T] {
 
+    def registerByName(): Unit = {
+
+    }
 
     /**
       * distributes state change

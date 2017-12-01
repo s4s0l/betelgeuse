@@ -26,6 +26,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActo
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.utils.AllUtils._
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}
 import scala.util.Try
@@ -40,7 +41,7 @@ import scala.util.Try
   *
   * @author Marcin Wielgus
   */
-class MandatorySubsActor(settings: Settings) extends Actor with ActorLogging {
+class MandatorySubsActor[T](settings: Settings[T]) extends Actor with ActorLogging {
 
   private var subscriptions: Map[String, ActorRef] = Map()
 
@@ -54,7 +55,7 @@ class MandatorySubsActor(settings: Settings) extends Actor with ActorLogging {
     case ActorDead(key, _) =>
       subscriptions = subscriptions - key
 
-    case pm: PublishMessage =>
+    case pm: PublishMessage[T] =>
 
       val originalSender = sender()
       val receptionTime = System.currentTimeMillis()
@@ -97,21 +98,24 @@ class MandatorySubsActor(settings: Settings) extends Actor with ActorLogging {
 
 
 object MandatorySubsActor {
-  val defaultMessageForwarder: MessageForwarder = new MessageForwarder {
-    override def forward(publishMessage: PublishMessage, context: MessageForwarderContext)(implicit ec: ExecutionContext): Future[Status] = {
+
+  /**
+    * default forwarder. Forwards payload only treats any response as ack.
+    */
+  def defaultMessageForwarder[T]: MessageForwarder[T] = new MessageForwarder[T] {
+    override def forward(publishMessage: PublishMessage[T], context: MessageForwarderContext[T])(implicit ec: ExecutionContext): Future[Status] = {
       context.actorRef.ask(publishMessage.payload)(context.settings.ackTimeout)
         .map(_ => Success(None))
         .recover { case x: Throwable => Failure(x) }
     }
   }
 
-  import concurrent.duration._
 
   /**
     * creates props for actor
     */
-  def start(settings: Settings, propsMapper: Props => Props = identity)
-           (implicit actorSystem: ActorSystem): Protocol = {
+  def start[T](settings: Settings[T], propsMapper: Props => Props = identity)
+              (implicit actorSystem: ActorSystem): Protocol[T] = {
     val ref = actorSystem.actorOf(Props(new MandatorySubsActor(settings)), settings.name)
     Protocol(ref, settings)
   }
@@ -120,12 +124,15 @@ object MandatorySubsActor {
     * Message forwarder, from received message, subscription key, sunscribed actor to
     * future containing status of forward. It should prepare message an interpret response
     * (ack vs nack)
+    *
+    * todo: replace with regular send get rid of ask pattern?
+    *
     */
-  trait MessageForwarder {
-    def forward(pm: PublishMessage, context: MessageForwarderContext)(implicit ec: ExecutionContext): Future[Status]
+  trait MessageForwarder[T] {
+    def forward(pm: PublishMessage[T], context: MessageForwarderContext[T])(implicit ec: ExecutionContext): Future[Status]
   }
 
-  case class MessageForwarderContext(key: String, actorRef: ActorRef, settings: Settings)
+  case class MessageForwarderContext[T](key: String, actorRef: ActorRef, settings: Settings[T])
 
   /**
     *
@@ -133,21 +140,21 @@ object MandatorySubsActor {
     * @param messageForwarder          tool used for sending messages to subscribers
     * @param ackTimeout                how long will we wait for confirmation
     */
-  final case class Settings(name: String,
-                            mandatorySubscriptionKeys: Seq[String],
-                            messageForwarder: MessageForwarder,
-                            ackTimeout: Timeout = 5 seconds)
+  final case class Settings[T](name: String,
+                               mandatorySubscriptionKeys: Seq[String],
+                               messageForwarder: MessageForwarder[T],
+                               ackTimeout: Timeout = 5 seconds)
 
   /**
     * An protocol for [[MandatorySubsActor]]
     */
-  final class Protocol private(actorRef: => ActorRef, settings: Settings) {
+  final class Protocol[T] private(actorRef: => ActorRef, settings: Settings[T]) {
 
     /**
       * emits event, sender have to expect [[Ack]] on successfull delivery to all mandatory subscribers
       *
       */
-    def send(msg: PublishMessage)(implicit sender: ActorRef = Actor.noSender)
+    def send(msg: PublishMessage[T])(implicit sender: ActorRef = Actor.noSender)
     : Unit =
       actorRef ! msg
 
@@ -155,7 +162,7 @@ object MandatorySubsActor {
       * ask pattern version of [[Protocol.send]]
       *
       */
-    def sendAsk(msg: PublishMessage)
+    def sendAsk(msg: PublishMessage[T])
                (implicit sender: ActorRef = Actor.noSender)
     : Future[Ack] =
       actorRef.ask(msg)(settings.ackTimeout).mapTo[Ack]
@@ -176,22 +183,22 @@ object MandatorySubsActor {
 
   private case class PublicationResult()
 
-  private case class InternalPublicationResult(publishMessage: PublishMessage,
-                                               originalSender: ActorRef,
-                                               receptionTime: Long,
-                                               results: Try[Seq[(String, Status)]])
+  private case class InternalPublicationResult[T](publishMessage: PublishMessage[T],
+                                                  originalSender: ActorRef,
+                                                  receptionTime: Long,
+                                                  results: Try[Seq[(String, Status)]])
 
   object Protocol {
     /**
       * Wraps actor ref factory with protocol interface
       */
-    def apply(actorRef: => ActorRef, settings: Settings): Protocol = new Protocol(actorRef, settings)
+    def apply[T](actorRef: => ActorRef, settings: Settings[T]): Protocol[T] = new Protocol(actorRef, settings)
 
     sealed trait IncomingMessage
 
     sealed trait OutgoingMessage
 
-    case class PublishMessage(id: Any, payload: Any) extends IncomingMessage
+    case class PublishMessage[T](id: Any, payload: T) extends IncomingMessage
 
     case class Subscribe(key: String, ref: ActorRef) extends IncomingMessage
 
@@ -200,9 +207,9 @@ object MandatorySubsActor {
     case class SubscribeAck(key: String, ref: ActorRef) extends OutgoingMessage
 
 
-    implicit def asSatelliteStateListener[T](protocol: Protocol): SatelliteStateListener[T] = new SatelliteStateListener[T] {
-      override def configurationChanged(versionedId: VersionedId, value: T)(implicit executionContext: ExecutionContext): Future[Status] = {
-        protocol.sendAsk(PublishMessage(versionedId, value)).map(Success(_))
+    implicit def asSatelliteStateListener[T](protocol: Protocol[T]): SatelliteStateListener[T] = new SatelliteStateListener[T] {
+      override def configurationChanged(versionedId: VersionedId, value: T)(implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender): Future[Status] = {
+        protocol.sendAsk(PublishMessage[T](versionedId, value)).map(Success(_))
       }
     }
   }

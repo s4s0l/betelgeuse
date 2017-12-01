@@ -15,7 +15,6 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.utils
 
 import akka.HackedActor
@@ -47,22 +46,21 @@ trait TimeoutActor extends HackedActor with ActorLogging {
   }
 
 
-
   val timeoutHandlerReceiver: Actor.Receive = {
     case x if x == timeoutSelfMessage => timeoutHandler()
   }
 
-  override def aroundReceive(receive: Receive, msg: Any): Unit = {
+  override protected def hackedAroundReceive(receive: Receive, msg: Any): Unit = {
     if (timeoutHandlerReceiver.isDefinedAt(msg)) {
       cancelTimeoutTimer()
-      super.aroundReceive(timeoutHandlerReceiver, msg)
+      super.hackedAroundReceive(timeoutHandlerReceiver, msg)
     } else if (receive.isDefinedAt(msg)) {
-      super.aroundReceive(receive, msg)
+      super.hackedAroundReceive(receive, msg)
       if (timeoutAutoDelayOnMessage(msg)) {
         timeoutDelay()
       }
     } else {
-      super.aroundReceive(receive, msg)
+      super.hackedAroundReceive(receive, msg)
     }
   }
 

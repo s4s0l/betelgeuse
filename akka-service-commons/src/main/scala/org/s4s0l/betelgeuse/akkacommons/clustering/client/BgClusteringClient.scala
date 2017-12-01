@@ -27,7 +27,7 @@ trait BgClusteringClient extends BgService {
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgClusteringClient])
   private lazy val vipDockerMode = if (System.getProperty("akka.cluster.dns.vipMode", "false") == "true") "tasks." else ""
 
-  def clusteringClientExtension: BgClusteringClientExtension = BgClusteringClientExtension.get(system)
+  implicit def clusteringClientExtension: BgClusteringClientExtension = BgClusteringClientExtension.get(system)
 
   abstract override def customizeConfiguration: Config = {
     LOGGER.info("Customize config with clustering-client.conf with fallback to...")

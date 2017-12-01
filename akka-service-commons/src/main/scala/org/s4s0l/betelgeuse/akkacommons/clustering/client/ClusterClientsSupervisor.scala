@@ -104,16 +104,17 @@ class ClusterClientsSupervisor extends Actor with ActorLogging {
   def setDnsNamesForClient(clientName: String, addresses: Seq[ActorPath]): Unit = {
     val orderedAddresses = addresses.sortBy(_.address.host.get)
     //todo: publishedContacts should come from subscription on client! because
-    // sending contacts may fail and then wy got stuck with never updated
+    // sending contacts may fail and then we got stuck with never updated
     // state
     if (publishedContacts.getOrElse(clientName, List()) != orderedAddresses) {
       log.info("For client {} dns resolutions changed to {}", clientName, orderedAddresses)
       publishedContacts(clientName) = orderedAddresses
       clientActors(clientName) ! Hack.contacts(orderedAddresses.map(_.toString).toVector)
     } else {
-      log.debug("For client {} dns resolutions have not changed changed to {}", clientName, orderedAddresses)
+      log.debug("For client {} dns resolutions have not changed, list was {}", clientName, orderedAddresses)
     }
-
+    //todo: wtf?? why do it again? why do it at all? It's obvoiusly a work arounf
+    //for note from above....
     clientActors(clientName) ! Hack.contacts(orderedAddresses.map(_.toString).toVector)
   }
 
