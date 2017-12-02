@@ -112,7 +112,8 @@ object BgTestService {
 
 
   class WithService[T <: BgService](ts: TestedService[T]) {
-    implicit val defaultTimeout: Timeout = ts.defaultTimeout
+    implicit val timeout: Timeout = ts.timeout
+    implicit val to: FiniteDuration = ts.to
     implicit val service: T = ts.service
     implicit val system: ActorSystem = ts.system
     implicit val testKit: TestKit with ImplicitSender = ts.testKit
@@ -123,8 +124,8 @@ object BgTestService {
 
   class TestedService[T <: BgService](bgServiceFactory: => T) {
 
-    val defaultTimeout: Timeout = Timeout(1 second)
-
+    val to: FiniteDuration = 2 seconds
+    val timeout: Timeout = Timeout(to)
     var service: T = _
     var system: ActorSystem = _
     var testKit: TestKit with ImplicitSender = _

@@ -62,15 +62,15 @@ class OriginStateDistributorTest
         testKit.expectMsg(to, OriginStateChangedConfirm(1, VersionedId("id1", 1)))
 
         And("Change was delivered")
-        private val emited = queue.toArray(new Array[String](4))
+        private val emitted = queue.toArray(new Array[String](4))
         private val changes = List("one:SC:value:id1@1", "two:SC:value:id1@1")
-        assert(changes.contains(emited(0)))
-        assert(changes.contains(emited(1)))
+        assert(changes.contains(emitted(0)))
+        assert(changes.contains(emitted(1)))
 
         And("Change confirm was emitted")
         private val commits = List("one:SD:id1@1", "two:SD:id1@1")
-        assert(commits.contains(emited(2)))
-        assert(commits.contains(emited(3)))
+        assert(commits.contains(emitted(2)))
+        assert(commits.contains(emitted(3)))
 
       }
     }
@@ -172,7 +172,7 @@ object OriginStateDistributorTest {
       * distributes state change
       */
     override def stateChanged(versionedId: VersionedId, value: String, destination: String)
-                             (implicit timeouted: Timeout, executionContext: ExecutionContext)
+                             (implicit timeout: Timeout, executionContext: ExecutionContext)
     : Future[Status] = {
       assert(destination == name)
       queue.add(s"$name:SC:$value:$versionedId")
@@ -183,7 +183,7 @@ object OriginStateDistributorTest {
       * informs that all destinations confirmed
       */
     override def stateDistributed(versionedId: VersionedId, destination: String)
-                                 (implicit timeouted: Timeout, executionContext: ExecutionContext)
+                                 (implicit timeout: Timeout, executionContext: ExecutionContext)
     : Future[Status] = {
       assert(destination == name)
       queue.add(s"$name:SD:$versionedId")

@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.message
@@ -48,6 +48,7 @@ class MessageTest extends FeatureSpec {
       val message = Message("target", "body")
         .withHeader("header", "value") //custom header
         .withUser("userId") // standard forwarded header
+      Thread.sleep(1) //we need to wait at least 1 ms to be sure timestamp is changed in forwarded message
       val forwarded = message.forward("target2")(() => Seq("header"))
       assert(forwarded.payload == message.payload)
       assert(forwarded.id != message.id)
