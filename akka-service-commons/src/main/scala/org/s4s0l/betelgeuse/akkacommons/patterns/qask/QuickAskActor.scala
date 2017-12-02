@@ -71,7 +71,7 @@ trait QuickAskActor {
     if (mostProbable.isEmpty) {
       log.debug("Got answer that cannot be handled, from {}, of type {}", sender(), answer.getClass.getName)
     } else {
-      questionsSeen = questionsSeen.filter(!answered.contains(_))
+      questionsAsked = questionsAsked.filter(!answered.contains(_))
     }
   }
 
@@ -98,6 +98,8 @@ object QuickAskActor {
 
   trait Question[A] {
     def isAnsweredBy(answer: A): Boolean
+
+
   }
 
   class AnswerInterceptor[A, B](val classTag: ClassTag[A],
