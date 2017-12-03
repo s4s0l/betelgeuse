@@ -22,7 +22,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Cancellable, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.qask.QuickAskActorTest.{Answer, Question}
+import org.s4s0l.betelgeuse.akkacommons.patterns.qask.QuickAskActorTest.{Answer, Question, TAnswer, TQuestion}
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 
@@ -39,13 +39,14 @@ import scala.util.Success
 class QuickAskActorTest extends BgTestService {
 
 
-  val messageCount: Int = 1000000
-  val runs: Int = 20
+  val messageCount: Int = 1
+  val runs: Int = 1
 
   private val echoingService = testWith(new BgService {
     lazy val echoActor: ActorRef = system.actorOf(Props(new Actor {
       override def receive: Receive = {
         case Question(id) => sender() ! Answer(id)
+        case TQuestion(id) => sender() ! TAnswer(id)
         case x => sender() ! x
       }
     }))
@@ -55,10 +56,10 @@ class QuickAskActorTest extends BgTestService {
       var count: AtomicInteger = new AtomicInteger(0)
       var promise: Promise[Boolean] = _
       var currentTimes = 0
-      val questions: mutable.Map[Int, (Cancellable, Question)] = mutable.Map()
+      val questions: mutable.Map[Int, (Cancellable, TQuestion)] = mutable.Map()
 
       override def receive: Receive = fAskPf orElse {
-        case Answer(id) =>
+        case TAnswer(id) =>
           val q = questions(id)
           q._1.cancel()
           questions.remove(id)
@@ -70,7 +71,7 @@ class QuickAskActorTest extends BgTestService {
           promise = p.asInstanceOf[Promise[Boolean]]
           count = new AtomicInteger(0)
           (1 to times).foreach { it =>
-            val q = Question(it)
+            val q = TQuestion(it)
             val cancellable = context.system.scheduler.scheduleOnce(20 seconds, self, "Never should happen")
             questions.put(it, (cancellable, q))
             echoActor ! q
@@ -81,7 +82,7 @@ class QuickAskActorTest extends BgTestService {
           count = new AtomicInteger(0)
           (1 to times).foreach { it =>
             fAsk(echoActor, Question(it)).onComplete {
-              case Success(a) =>
+              case Success(_) =>
                 if (count.incrementAndGet() >= times) {
                   promise.complete(Success(true))
                 }
@@ -92,7 +93,7 @@ class QuickAskActorTest extends BgTestService {
           count = new AtomicInteger(0)
           (1 to times).foreach { it =>
             (echoActor ? Question(it)).onComplete {
-              case Success(a) =>
+              case Success(_) =>
                 if (count.incrementAndGet() >= times) {
                   promise.complete(Success(true))
                 }
@@ -107,64 +108,63 @@ class QuickAskActorTest extends BgTestService {
             (echoActor ? question).mapTo[Answer].map(x => (question, x, times)).pipeTo(self)
           }
         case (question: Question, a: Answer, times: Int) =>
-          if (count.incrementAndGet() >= times) {
-            promise.complete(Success(true))
-          }
+          if (question.getMessageId == a.getCorrelationId)
+            if (count.incrementAndGet() >= times) {
+              promise.complete(Success(true))
+            }
       }
     }))
   })
 
   feature("Fast asking is like asking but without temporary actor") {
-    scenario("Warmup") {
+    scenario("Warm Up") {
       new WithService(echoingService) {
-        val p = Promise[Boolean]()
+        private val p = Promise[Boolean]()
         service.fAskingActor.tell(("fAsk", 1000, p), self)
         Await.result(p.future, 1 minute)
 
-        val p2 = Promise[Boolean]()
+        private val p2 = Promise[Boolean]()
         service.fAskingActor.tell(("ask", 1000, p2), self)
         Await.result(p2.future, 1 minute)
 
-        val p3 = Promise[Boolean]()
+        private val p3 = Promise[Boolean]()
         service.fAskingActor.tell(("pipe", 1000, p3), self)
         Await.result(p3.future, 1 minute)
       }
     }
 
     (1 to runs).foreach { it =>
-      scenario(s"${it}. Tell") {
+      scenario(s"$it. Tell") {
         new WithService(echoingService) {
-          val p = Promise[Boolean]()
+          private val p = Promise[Boolean]()
           service.fAskingActor.tell(("tell", messageCount, p), self)
           Await.result(p.future, 1 minute)
 
         }
       }
-      scenario(s"${it}. Ask") {
+      scenario(s"$it. Ask") {
         new WithService(echoingService) {
-          val p = Promise[Boolean]()
+          private val p = Promise[Boolean]()
           service.fAskingActor.tell(("ask", messageCount, p), self)
           Await.result(p.future, 1 minute)
         }
       }
-      scenario(s"${it}. Pipe") {
+      scenario(s"$it. Pipe") {
         new WithService(echoingService) {
-          val p = Promise[Boolean]()
+          private val p = Promise[Boolean]()
           service.fAskingActor.tell(("pipe", messageCount, p), self)
+          Await.result(p.future, 1 minute)
+        }
+      }
+      scenario(s"$it. fAsk") {
+        new WithService(echoingService) {
+          private val p = Promise[Boolean]()
+          service.fAskingActor.tell(("fAsk", messageCount, p), self)
           Await.result(p.future, 1 minute)
         }
       }
     }
 
-
-    scenario("3Handling of responses looks like regular future") {
-      new WithService(echoingService) {
-        val p = Promise[Boolean]()
-        service.fAskingActor.tell(("fAsk", 10000, p), self)
-        Await.result(p.future, 1 minute)
-
-      }
-    }
 
   }
 
@@ -174,11 +174,17 @@ class QuickAskActorTest extends BgTestService {
 
 object QuickAskActorTest {
 
-  case class Answer(id: Int)
+  case class TQuestion(id: Int)
 
-  case class Question(id: Int) extends QuickAskActor.Question[Answer] {
+  case class TAnswer(id: Int)
+
+  case class Answer(getCorrelationId: Int) extends QuickAskActor.Answer
+
+  case class Question(getMessageId: Int) extends QuickAskActor.Question[Answer] {
+
+
     override def isAnsweredBy(answer: Answer): Boolean = {
-      answer.id == id
+      answer.getCorrelationId == getMessageId
     }
   }
 
