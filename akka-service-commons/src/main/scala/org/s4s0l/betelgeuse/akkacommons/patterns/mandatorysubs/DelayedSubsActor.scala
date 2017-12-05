@@ -20,11 +20,12 @@ import akka.actor.Status.{Failure, Status, Success}
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor.Protocol.{Ack, PublishMessage}
+import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor.Protocol.PublishMessage
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor._
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.utils.AsyncInitActor
+import org.s4s0l.betelgeuse.akkacommons.utils.QA.{NotOk, Ok, SimpleResult}
+import org.s4s0l.betelgeuse.akkacommons.utils.{AsyncInitActor, QA}
 import org.s4s0l.betelgeuse.utils.AllUtils._
 
 import scala.concurrent.duration._
@@ -70,22 +71,18 @@ class DelayedSubsActor[K, V](settings: Settings[K, V]) extends Actor with ActorL
   }
 
   override def receive: Actor.Receive = {
-    case PublishMessage(id, v) =>
+    case pm@PublishMessage(id, _) =>
       val originalSender = sender()
       listOfFuturesToFutureOfList(
         listeners.map(listener =>
-          listener.onMessage(id.asInstanceOf[K], v.asInstanceOf[V])(self)
-            .map(result => (result, listener))
+          listener.onMessage(pm.asInstanceOf[PublishMessage[K, V]])(context.dispatcher, self)
+            .map(result => (Success(result): Status, listener))
             .recover { case ex: Throwable => (Failure(ex), listener) }
         )
       )
         .map(listeners => listeners.filter(_._1.isInstanceOf[Failure]).map(_._2.name))
-        .map(failedListeners => if (failedListeners.isEmpty) PublicationOk(id, originalSender) else PublicationFailed(failedListeners))
-        .pipeTo(self)
-    case PublicationOk(id, originalSender) =>
-      originalSender ! Ack(id)
-    case PublicationFailed(failedListenersNames) =>
-      log.error("Publication failed for listeners: {}", failedListenersNames.mkString(", "))
+        .map(failedListeners => if (failedListeners.isEmpty) Ok(id, _) else NotOk(id, s"There were failed listeners ${failedListeners.mkString(",")}"))
+        .pipeTo(originalSender)
 
   }
 
@@ -104,7 +101,9 @@ object DelayedSubsActor {
   }
 
   trait Listener[K, V] {
-    def onMessage(key: K, value: V)(implicit sender: ActorRef = ActorRef.noSender): Future[Status]
+    def onMessage(publishMessage: PublishMessage[K, V])
+                 (implicit executionContext: ExecutionContext, sender: ActorRef):
+    Future[SimpleResult[K]]
 
     def name: String
   }
@@ -119,10 +118,11 @@ object DelayedSubsActor {
   final class Protocol[K, V] private(actorRef: => ActorRef, settings: Settings[K, V]) {
 
     /**
-      * emits event, sender have to expect [[Ack]] on successfull delivery to all mandatory subscribers
+      * emits event, sender have to expect [[SimpleResult[K]] on successful delivery to all mandatory subscribers
       *
       */
-    def send(msg: PublishMessage[K, V])(implicit sender: ActorRef = Actor.noSender)
+    def send(msg: PublishMessage[K, V])
+            (implicit executionContext: ExecutionContext, sender: ActorRef)
     : Unit =
       actorRef ! msg
 
@@ -131,9 +131,9 @@ object DelayedSubsActor {
       *
       */
     def sendAsk(msg: PublishMessage[K, V])
-               (implicit sender: ActorRef = Actor.noSender)
-    : Future[Ack] =
-      actorRef.ask(msg)(settings.ackTimeout, sender).mapTo[Ack]
+               (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[SimpleResult[K]] =
+      actorRef.ask(msg)(settings.ackTimeout, sender).mapTo[SimpleResult[K]]
 
   }
 
@@ -141,9 +141,6 @@ object DelayedSubsActor {
 
   private case class ListenersFailed(ex: Throwable)
 
-  private case class PublicationFailed(failedListenersNames: Seq[String])
-
-  private case class PublicationOk[K](key: K, originalSender: ActorRef)
 
   object Protocol {
     /**
@@ -151,9 +148,7 @@ object DelayedSubsActor {
       */
     def apply[K, V](actorRef: => ActorRef, settings: Settings[K, V]): Protocol[K, V] = new Protocol(actorRef, settings)
 
-    case class PublishMessage[K, V](id: K, payload: V)
-
-    case class Ack(id: Any)
+    case class PublishMessage[K, V](messageId: K, payload: V) extends QA.Question[K]
 
     implicit def asSatelliteStateListener[T](protocol: Protocol[VersionedId, T]): SatelliteStateListener[T] = new SatelliteStateListener[T] {
       override def configurationChanged(versionedId: VersionedId, value: T)(implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender): Future[Status] = {
