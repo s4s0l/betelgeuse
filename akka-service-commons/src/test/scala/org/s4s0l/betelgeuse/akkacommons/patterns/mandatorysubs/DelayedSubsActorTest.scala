@@ -18,7 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs
 
 import akka.actor.ActorRef
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor.Protocol.{PublicationResultNotOk, PublicationResultOk, PublishMessage}
+import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor.Protocol.{Publish, PublishNotOk, PublishOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor.{Listener, Settings}
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
@@ -45,18 +45,18 @@ class DelayedSubsActorTest extends BgTestService {
         When("Promise completes with two always successful listeners")
         private val listenerOne = stub[Listener[String, String]]
         private val listenerTwo = stub[Listener[String, String]]
-        (listenerOne.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).when(PublishMessage("1", "value"), *, *).returns(Future.successful(PublicationResultOk("1")))
-        (listenerTwo.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).when(PublishMessage("1", "value"), *, *).returns(Future.successful(PublicationResultOk("1")))
+        (listenerOne.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).when(Publish("1", "value"), *, *).returns(Future.successful(PublishOk("1")))
+        (listenerTwo.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).when(Publish("1", "value"), *, *).returns(Future.successful(PublishOk("1")))
         promisedListeners.complete(util.Success(Seq(listenerOne, listenerTwo)))
 
         And("We send publication")
-        delayedSubsActor.send(PublishMessage("1", "value"))
+        delayedSubsActor.publishMsg(Publish("1", "value"))
 
         Then("We expect an ack")
-        testKit.expectMsg(to, PublicationResultOk("1"))
+        testKit.expectMsg(to, PublishOk("1"))
         And("All listeners where notified")
-        (listenerOne.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).verify(PublishMessage("1", "value"), *, *)
-        (listenerTwo.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).verify(PublishMessage("1", "value"), *, *)
+        (listenerOne.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).verify(Publish("1", "value"), *, *)
+        (listenerTwo.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).verify(Publish("1", "value"), *, *)
 
       }
     }
@@ -67,11 +67,11 @@ class DelayedSubsActorTest extends BgTestService {
         private val delayedSubsActor = DelayedSubsActor.start(Settings("test1", promisedListeners.future))
         private val listenerOne = stub[Listener[String, String]]
         private val listenerTwo = stub[Listener[String, String]]
-        (listenerOne.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).when(PublishMessage("1", "value"), *, *).returns(Future.successful(PublicationResultOk("1")))
-        (listenerTwo.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).when(PublishMessage("1", "value"), *, *).returns(Future.successful(PublicationResultOk("1")))
+        (listenerOne.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).when(Publish("1", "value"), *, *).returns(Future.successful(PublishOk("1")))
+        (listenerTwo.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).when(Publish("1", "value"), *, *).returns(Future.successful(PublishOk("1")))
         When("We send publication")
 
-        delayedSubsActor.send(PublishMessage("1", "value"))
+        delayedSubsActor.publishMsg(Publish("1", "value"))
 
         Then("No ack is received")
         testKit.expectNoMsg(to)
@@ -82,11 +82,11 @@ class DelayedSubsActorTest extends BgTestService {
 
 
         Then("We expect an ack")
-        testKit.expectMsg(PublicationResultOk("1"))
+        testKit.expectMsg(PublishOk("1"))
 
         And("All listeners where notified")
-        (listenerOne.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).verify(PublishMessage("1", "value"), *, *)
-        (listenerTwo.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).verify(PublishMessage("1", "value"), *, *)
+        (listenerOne.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).verify(Publish("1", "value"), *, *)
+        (listenerTwo.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).verify(Publish("1", "value"), *, *)
 
       }
     }
@@ -97,21 +97,21 @@ class DelayedSubsActorTest extends BgTestService {
         private val promisedListeners = Promise[Seq[Listener[String, String]]]()
         private val listenerOne = stub[Listener[String, String]]
         private val listenerTwo = stub[Listener[String, String]]
-        (listenerOne.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).when(PublishMessage("1", "value"), *, *).returns(Future.failed(new Exception("!")))
-        (listenerTwo.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).when(PublishMessage("1", "value"), *, *).returns(Future.successful(PublicationResultOk("1")))
+        (listenerOne.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).when(Publish("1", "value"), *, *).returns(Future.failed(new Exception("!")))
+        (listenerTwo.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).when(Publish("1", "value"), *, *).returns(Future.successful(PublishOk("1")))
         promisedListeners.complete(util.Success(Seq(listenerOne, listenerTwo)))
         private val delayedSubsActor = DelayedSubsActor.start(Settings("test1", promisedListeners.future))
 
         When("We send publication")
 
-        delayedSubsActor.send(PublishMessage("1", "value"))
+        delayedSubsActor.publishMsg(Publish("1", "value"))
 
         Then("No ack is received")
-        testKit.expectMsgClass(to, classOf[PublicationResultNotOk[String]])
+        testKit.expectMsgClass(to, classOf[PublishNotOk[String]])
 
         And("All listeners where notified")
-        (listenerOne.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).verify(PublishMessage("1", "value"), *, *)
-        (listenerTwo.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).verify(PublishMessage("1", "value"), *, *)
+        (listenerOne.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).verify(Publish("1", "value"), *, *)
+        (listenerTwo.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).verify(Publish("1", "value"), *, *)
 
       }
     }
@@ -122,21 +122,21 @@ class DelayedSubsActorTest extends BgTestService {
         private val promisedListeners = Promise[Seq[Listener[String, String]]]()
         private val listenerOne = stub[Listener[String, String]]
         private val listenerTwo = stub[Listener[String, String]]
-        (listenerOne.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).when(PublishMessage("1", "value"), *, *).returns(Future.successful(PublicationResultNotOk("1", new Exception("!"))))
-        (listenerTwo.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).when(PublishMessage("1", "value"), *, *).returns(Future.successful(PublicationResultOk("1")))
+        (listenerOne.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).when(Publish("1", "value"), *, *).returns(Future.successful(PublishNotOk("1", new Exception("!"))))
+        (listenerTwo.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).when(Publish("1", "value"), *, *).returns(Future.successful(PublishOk("1")))
         promisedListeners.complete(util.Success(Seq(listenerOne, listenerTwo)))
         private val delayedSubsActor = DelayedSubsActor.start(Settings("test1", promisedListeners.future))
 
         When("We send publication")
 
-        delayedSubsActor.send(PublishMessage("1", "value"))
+        delayedSubsActor.publishMsg(Publish("1", "value"))
 
         Then("No ack is received")
-        testKit.expectMsgClass(to, classOf[PublicationResultNotOk[String]])
+        testKit.expectMsgClass(to, classOf[PublishNotOk[String]])
 
         And("All listeners where notified")
-        (listenerOne.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).verify(PublishMessage("1", "value"), *, *)
-        (listenerTwo.onMessage(_: PublishMessage[String, String])(_: ExecutionContext, _: ActorRef)).verify(PublishMessage("1", "value"), *, *)
+        (listenerOne.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).verify(Publish("1", "value"), *, *)
+        (listenerTwo.publish(_: Publish[String, String])(_: ExecutionContext, _: ActorRef)).verify(Publish("1", "value"), *, *)
 
       }
     }

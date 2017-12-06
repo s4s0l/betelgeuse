@@ -18,8 +18,8 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.pattern.ask
-import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{PublishMessage, _}
-import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.{ActorDead, MessageForwarderContext, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{Publish, _}
+import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.{InternalActorDead, MessageForwarderContext, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener.{StateChanged, StateChangedNotOk, StateChangedOk, StateChangedResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
@@ -49,39 +49,39 @@ class MandatorySubsActor[K, T](settings: Settings[K, T]) extends Actor with Acto
   override def receive: Actor.Receive = {
     case Subscribe(key, ref) =>
       subscriptions.put(key, ref)
-      context.watchWith(ref, ActorDead(key, ref))
+      context.watchWith(ref, InternalActorDead(key, ref))
       sender() ! SubscribeOk(key)
 
-    case ActorDead(key, _) =>
+    case InternalActorDead(key, _) =>
       subscriptions.remove(key)
 
-    case pm: PublishMessage[K, T] =>
+    case pm: Publish[K, T] =>
       val originalSender = sender()
       import context.dispatcher
       val notificationFuture = listOfFuturesToFutureOfList(
         subscriptions
           .map { it =>
-            settings.messageForwarder.forward(pm, MessageForwarderContext(it._1, it._2, settings))(context.dispatcher, self)
+            settings.messageForwarder.forwardAsk(pm, MessageForwarderContext(it._1, it._2, settings))(context.dispatcher, self)
               .map(x => (it._1, x))
-              .recover { case x: Throwable => (it._1, NotOk(pm.messageId, x)) }
+              .recover { case x: Throwable => (it._1, PublishNotOk(pm.messageId, x)) }
           }.toSeq)
         .map { seq =>
-          val failedOnes = seq.filter(_._2.isNotOk).map(it => (it._1, it._2.asInstanceOf[NotOk[K]]))
+          val failedOnes = seq.filter(_._2.isNotOk).map(it => (it._1, it._2.asInstanceOf[PublishNotOk[K]]))
           failedOnes.foreach { it =>
             log.error(it._2.ex, s"Unable to get state from subscriber ${it._1}")
           }
           val successOnes = seq.filter(_._2.isOk).map(_._1)
           if (failedOnes.isEmpty && settings.mandatorySubscriptionKeys.forall(successOnes.contains(_))) {
-            Ok(pm.messageId)
+            PublishOk(pm.messageId)
           } else {
-            NotOk(pm.messageId, new Exception(s"Unable to get results from ${failedOnes.map(_._1).mkString(",")}"))
+            PublishNotOk(pm.messageId, new Exception(s"Unable to get results from ${failedOnes.map(_._1).mkString(",")}"))
           }
         }
-        .recover { case it: Throwable => NotOk(pm.messageId, it) }
+        .recover { case it: Throwable => PublishNotOk(pm.messageId, it) }
 
       import org.s4s0l.betelgeuse.utils.AllUtils._
       notificationFuture.pipeToWithTimeout(originalSender, pm.maxDuration,
-        NotOk(pm.messageId, new Exception(s"Timeout publishing ${pm.messageId}!")), context.system.scheduler)
+        PublishNotOk(pm.messageId, new Exception(s"Timeout publishing ${pm.messageId}!")), context.system.scheduler)
 
 
   }
@@ -96,12 +96,12 @@ object MandatorySubsActor {
     * default forwarder. Forwards payload only treats any response as ack.
     */
   def defaultMessageForwarder[K, T]: MessageForwarder[K, T] = new MessageForwarder[K, T] {
-    override def forward(pm: PublishMessage[K, T], context: MessageForwarderContext[K, T])
-                        (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[PublishMessageResult[K]] = {
+    override def forwardAsk(pm: Publish[K, T], context: MessageForwarderContext[K, T])
+                           (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[PublishResult[K]] = {
       context.actorRef.ask(pm.payload)(pm.maxDuration)
-        .map(_ => Ok(pm.messageId))
-        .recover { case x: Throwable => NotOk(pm.messageId, x) }
+        .map(_ => PublishOk(pm.messageId))
+        .recover { case x: Throwable => PublishNotOk(pm.messageId, x) }
     }
   }
 
@@ -124,9 +124,9 @@ object MandatorySubsActor {
     *
     */
   trait MessageForwarder[K, T] {
-    def forward(pm: PublishMessage[K, T], context: MessageForwarderContext[K, T])
-               (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[PublishMessageResult[K]]
+    def forwardAsk(pm: Publish[K, T], context: MessageForwarderContext[K, T])
+                  (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[PublishResult[K]]
   }
 
   case class MessageForwarderContext[K, T](subscriptionKey: String, actorRef: ActorRef, settings: Settings[K, T])
@@ -146,10 +146,10 @@ object MandatorySubsActor {
   final class Protocol[K, T] private(actorRef: => ActorRef, settings: Settings[K, T]) {
 
     /**
-      * emits event, sender have to expect [[PublishMessageResult[K]]] on successful delivery to all mandatory subscribers
+      * emits event, sender have to expect [[PublishResult[K]]] on successful delivery to all mandatory subscribers
       *
       */
-    def send(msg: PublishMessage[K, T])
+    def send(msg: Publish[K, T])
             (implicit executionContext: ExecutionContext, sender: ActorRef)
     : Unit =
       actorRef ! msg
@@ -158,10 +158,10 @@ object MandatorySubsActor {
       * ask pattern version of [[Protocol.send]]
       *
       */
-    def sendAsk(msg: PublishMessage[K, T])
+    def sendAsk(msg: Publish[K, T])
                (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[PublishMessageResult[K]] =
-      actorRef.ask(msg)(msg.maxDuration).mapTo[PublishMessageResult[K]]
+    : Future[PublishResult[K]] =
+      actorRef.ask(msg)(msg.maxDuration).mapTo[PublishResult[K]]
 
     /**
       * subscribes actor on key
@@ -176,7 +176,7 @@ object MandatorySubsActor {
 
   }
 
-  private case class ActorDead(key: String, actorRef: ActorRef)
+  private case class InternalActorDead(key: String, actorRef: ActorRef)
 
 
   object Protocol {
@@ -191,13 +191,13 @@ object MandatorySubsActor {
 
     sealed trait SubscribeResult extends NullResult[String]
 
-    trait PublishMessageResult[K] extends NullResult[K]
+    trait PublishResult[K] extends NullResult[K]
 
-    case class PublishMessage[K, T](messageId: K, payload: T, maxDuration: FiniteDuration) extends IncomingMessage with Question[K]
+    case class Publish[K, T](messageId: K, payload: T, maxDuration: FiniteDuration) extends IncomingMessage with Question[K]
 
-    case class Ok[K](correlationId: K) extends PublishMessageResult[K] with OkNullResult[K]
+    case class PublishOk[K](correlationId: K) extends PublishResult[K] with OkNullResult[K]
 
-    case class NotOk[K](correlationId: K, ex: Throwable) extends PublishMessageResult[K] with NotOkNullResult[K]
+    case class PublishNotOk[K](correlationId: K, ex: Throwable) extends PublishResult[K] with NotOkNullResult[K]
 
     case class Subscribe(messageId: String, ref: ActorRef) extends IncomingMessage with Question[String]
 
@@ -207,9 +207,9 @@ object MandatorySubsActor {
       def configurationChanged(msg: StateChanged[T])
                               (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender)
       : Future[StateChangedResult] = {
-        protocol.sendAsk(PublishMessage(msg.messageId, msg.value, msg.expDuration)).map {
-          case Ok(ver) => StateChangedOk(ver)
-          case NotOk(ver, ex) => StateChangedNotOk(ver, ex)
+        protocol.sendAsk(Publish(msg.messageId, msg.value, msg.expDuration)).map {
+          case PublishOk(ver) => StateChangedOk(ver)
+          case PublishNotOk(ver, ex) => StateChangedNotOk(ver, ex)
         }
       }
     }

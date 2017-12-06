@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import akka.actor.{Actor, ActorRef, Props}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{NotOk, Ok, PublishMessage, PublishMessageResult, Subscribe, SubscribeOk}
+import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{Publish, PublishNotOk, PublishOk, PublishResult, Subscribe, SubscribeOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.{MessageForwarder, MessageForwarderContext, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActorTest.EchoActor
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
@@ -59,10 +59,10 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello0", to))
+        subs.send(Publish("1", "hello0", to))
 
         Then("Ack arrives back")
-        testKit.expectMsg(Ok("1"))
+        testKit.expectMsg(PublishOk("1"))
         And("All subscribers got the message")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello0"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello0"))
@@ -83,10 +83,10 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeOk("one"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello2", to))
+        subs.send(Publish("1", "hello2", to))
 
         Then("Ack does not arrive back in 2*timeout time")
-        testKit.expectMsgClass(2 second, classOf[NotOk[String]])
+        testKit.expectMsgClass(2 second, classOf[PublishNotOk[String]])
         And("existing subscriber gets the message anyway")
         assert(MandatorySubsActorTest.queue.size() == 1)
         assert(MandatorySubsActorTest.queue.contains("ONE:hello2"))
@@ -111,10 +111,10 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("three", three)), 1 second) == SubscribeOk("three"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello3", to))
+        subs.send(Publish("1", "hello3", to))
 
         Then("Ack arrives back")
-        testKit.expectMsg(Ok("1"))
+        testKit.expectMsg(PublishOk("1"))
         And("All subscribers got the message together with not mandatory one")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello3"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello3"))
@@ -131,10 +131,10 @@ class MandatorySubsActorTest extends BgTestService {
         When("No subscribers register")
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello0", to))
+        subs.send(Publish("1", "hello0", to))
 
         Then("No Ack arrives back")
-        assert(testKit.expectMsgClass(classOf[NotOk[String]]).correlationId == "1")
+        assert(testKit.expectMsgClass(classOf[PublishNotOk[String]]).correlationId == "1")
 
       }
     }
@@ -149,10 +149,10 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("three", three)), 1 second) == SubscribeOk("three"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello5", to))
+        subs.send(Publish("1", "hello5", to))
 
         Then("No Ack arrives back")
-        assert(testKit.expectMsgClass(classOf[NotOk[String]]).correlationId == "1")
+        assert(testKit.expectMsgClass(classOf[PublishNotOk[String]]).correlationId == "1")
         And("All subscribers got the message")
         assert(MandatorySubsActorTest.queue.contains("THREE:hello5"))
         assert(MandatorySubsActorTest.queue.size() == 1)
@@ -173,11 +173,11 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello1", to))
+        subs.send(Publish("1", "hello1", to))
 
         Then("Ack does not arrive back in 2*timeout time")
 
-        assert(testKit.expectMsgClass(classOf[NotOk[String]]).correlationId == "1")
+        assert(testKit.expectMsgClass(classOf[PublishNotOk[String]]).correlationId == "1")
         And("both subscribers got the message anyway")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello1"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello1"))
@@ -188,12 +188,12 @@ class MandatorySubsActorTest extends BgTestService {
       new WithService(s) {
         Given("Mandatory subs actor with two required subscribers, and for one of them forwarder will return failure")
         private val failingProvider: MessageForwarder[String, String] = new MessageForwarder[String, String] {
-          override def forward(pm: PublishMessage[String, String], context: MessageForwarderContext[String, String])
-                              (implicit executionContext: ExecutionContext, sender: ActorRef)
-          : Future[PublishMessageResult[String]] = {
+          override def forwardAsk(pm: Publish[String, String], context: MessageForwarderContext[String, String])
+                                 (implicit executionContext: ExecutionContext, sender: ActorRef)
+          : Future[PublishResult[String]] = {
             if (context.subscriptionKey == "one")
               Future.failed(new Exception("ex"))
-            else MandatorySubsActor.defaultMessageForwarder.forward(pm, context)(executionContext, sender)
+            else MandatorySubsActor.defaultMessageForwarder.forwardAsk(pm, context)(executionContext, sender)
           }
         }
         private val subs = MandatorySubsActor.start(Settings("test7", List("one", "two"), failingProvider))
@@ -206,10 +206,10 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello1", to))
+        subs.send(Publish("1", "hello1", to))
 
         Then("Ack does not arrive back in 2*timeout time")
-        assert(testKit.expectMsgClass(classOf[NotOk[String]]).correlationId == "1")
+        assert(testKit.expectMsgClass(classOf[PublishNotOk[String]]).correlationId == "1")
         And("only one subscriber got the message")
         assert(MandatorySubsActorTest.queue.contains("TWO:hello1"))
         assert(MandatorySubsActorTest.queue.size() == 1)
@@ -234,10 +234,10 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello0", to))
+        subs.send(Publish("1", "hello0", to))
 
         Then("Ack arrives back")
-        testKit.expectMsg(Ok("1"))
+        testKit.expectMsg(PublishOk("1"))
         And("All subscribers got the message")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello0"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello0"))

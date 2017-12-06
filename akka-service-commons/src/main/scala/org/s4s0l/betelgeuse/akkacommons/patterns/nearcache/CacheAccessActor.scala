@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props, SupervisorStrategy}
 import akka.pattern.ask
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol._
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade.ValueOwnerResult
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade.OwnerValueResult
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor._
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 
@@ -69,39 +69,39 @@ class CacheAccessActor[G, K, R, V](settings: Settings[G, K, R, V]) extends Actor
           import context.dispatcher
           settings.valueOwnerFacade(getterMessage.asInstanceOf[G])
             .map {
-              case ValueOwnerFacade.Ok(_, value) => CreateValueActor(key, value)
-              case ValueOwnerFacade.NotOk(_, ex) => CreateValueActorFailed(key, getterMessage, ex)
+              case ValueOwnerFacade.OwnerValueOk(_, value) => InternalCreateValueActor(key, value)
+              case ValueOwnerFacade.OwnerValueNotOk(_, ex) => InternalCreateValueActorFailed(key, getterMessage, ex)
             }
-            .recover { case ex: Throwable => CreateValueActorFailed(key, getterMessage, ex) }
+            .recover { case ex: Throwable => InternalCreateValueActorFailed(key, getterMessage, ex) }
             .pipeTo(self)
         }
       }
 
-    case CreateValueActor(key, valueMessage) =>
+    case InternalCreateValueActor(key, valueMessage) =>
       val valueHolder = CacheValueActor.start(settings.name + "_" + key.toString, CacheValueActor.Settings(
         key.asInstanceOf[K],
         valueMessage.asInstanceOf[V],
         settings.valueEnricher,
         settings.timeoutTime))(context)
       cacheValueActors = cacheValueActors + (key.asInstanceOf[K] -> valueHolder)
-      valueHolder.watchWith(context, CreateValueActorTerminated(key))
+      valueHolder.watchWith(context, InternalCreateValueActorTerminated(key))
 
 
-    case CreateValueActorTerminated(key) =>
+    case InternalCreateValueActorTerminated(key) =>
       cacheValueActors = cacheValueActors - key.asInstanceOf[K]
       requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach { it =>
-        it._1 ! NotOk(it._2, new Exception("Value holder died"))
+        it._1 ! GetCacheValueNotOk(it._2, new Exception("Value holder died"))
       }
       requestingDuringCreation = requestingDuringCreation - key.asInstanceOf[K]
 
-    case CreateValueActorFailed(key, _, ex) =>
+    case InternalCreateValueActorFailed(key, _, ex) =>
       log.error(ex, s"Unable to get cache value for key $key")
-      requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach(it => it._1 ! NotOk(it._2, ex))
+      requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach(it => it._1 ! GetCacheValueNotOk(it._2, ex))
       requestingDuringCreation = requestingDuringCreation - key.asInstanceOf[K]
 
     case CacheValueDied(key, ex: Throwable) =>
       cacheValueActors = cacheValueActors - key.asInstanceOf[K]
-      requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach(it => it._1 ! NotOk(it._2, ex))
+      requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach(it => it._1 ! GetCacheValueNotOk(it._2, ex))
       requestingDuringCreation = requestingDuringCreation - key.asInstanceOf[K]
 
     case CacheValueOk(key) =>
@@ -140,8 +140,30 @@ object CacheAccessActor {
   trait ValueOwnerFacade[G, K, V] {
     def apply(getterMessage: G)
              (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[ValueOwnerResult[K, V]]
+    : Future[OwnerValueResult[K, V]]
   }
+
+  /**
+    *
+    * @tparam G type of 'GetValue' message
+    * @tparam K cache key type
+    * @tparam R type of enriched value
+    */
+  final class Protocol[G, K, R] private(actorRef: => ActorRef) {
+
+    import concurrent.duration._
+
+    /**
+      * gets a cache value.
+      *
+      * @param msg an message wrapping a 'GetValue' message
+      */
+    def apply(msg: GetCacheValue[G])
+             (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[GetCacheValueResult[R]] =
+      actorRef.ask(msg)(5 seconds).mapTo[GetCacheValueResult[R]]
+  }
+
 
   /**
     * The [[CacheAccessActor]] works like this:
@@ -172,42 +194,21 @@ object CacheAccessActor {
                                         valueOwnerFacade: ValueOwnerFacade[G, K, V],
                                         timeoutTime: FiniteDuration = 10 minutes)
 
-  /**
-    *
-    * @tparam G type of 'GetValue' message
-    * @tparam K cache key type
-    * @tparam R type of enriched value
-    */
-  final class Protocol[G, K, R] private(actorRef: => ActorRef) {
+  private case class InternalCreateValueActor[K, V](key: K, valueMessage: V)
 
-    import concurrent.duration._
+  private case class InternalCreateValueActorFailed[K, G](key: K, getterMessage: G, ex: Throwable)
 
-    /**
-      * gets a cache value.
-      *
-      * @param msg an message wrapping a 'GetValue' message
-      */
-    def apply(msg: GetCacheValue[G])
-             (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[CacheValueResult[R]] =
-      actorRef.ask(msg)(5 seconds).mapTo[CacheValueResult[R]]
-  }
-
-  private case class CreateValueActor[K, V](key: K, valueMessage: V)
-
-  private case class CreateValueActorFailed[K, G](key: K, getterMessage: G, ex: Throwable)
+  private case class InternalCreateValueActorTerminated[K](key: K)
 
   object ValueOwnerFacade {
 
-    sealed trait ValueOwnerResult[K, V] extends Result[K, V]
+    sealed trait OwnerValueResult[K, V] extends Result[K, V]
 
-    case class Ok[K, V](correlationId: K, value: V) extends ValueOwnerResult[K, V] with OkResult[K, V]
+    case class OwnerValueOk[K, V](correlationId: K, value: V) extends OwnerValueResult[K, V] with OkResult[K, V]
 
-    case class NotOk[K, V](correlationId: K, ex: Throwable) extends ValueOwnerResult[K, V] with NotOkResult[K, V]
+    case class OwnerValueNotOk[K, V](correlationId: K, ex: Throwable) extends OwnerValueResult[K, V] with NotOkResult[K, V]
 
   }
-
-  private case class CreateValueActorTerminated[K](key: K)
 
   object Protocol {
 
@@ -215,13 +216,13 @@ object CacheAccessActor {
 
     sealed trait IncomingMessage
 
-    sealed trait CacheValueResult[V] extends Result[Uuid, V]
+    sealed trait GetCacheValueResult[V] extends Result[Uuid, V]
 
     case class GetCacheValue[G](getterMessage: G) extends IncomingMessage with UuidQuestion
 
-    case class Ok[V](correlationId: Uuid, value: V) extends CacheValueResult[V] with OkResult[Uuid, V]
+    case class GetCacheValueOk[V](correlationId: Uuid, value: V) extends GetCacheValueResult[V] with OkResult[Uuid, V]
 
-    case class NotOk[V](correlationId: Uuid, ex: Throwable) extends CacheValueResult[V] with NotOkResult[Uuid, V]
+    case class GetCacheValueNotOk[V](correlationId: Uuid, ex: Throwable) extends GetCacheValueResult[V] with NotOkResult[Uuid, V]
 
     private[nearcache] case class CacheValueDied[K](key: K, ex: Throwable) extends IncomingMessage
 

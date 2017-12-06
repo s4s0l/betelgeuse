@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 import akka.actor.ActorRef
 import akka.pattern.pipe
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{GetCacheValue, NotOk, Ok}
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{GetCacheValue, GetCacheValueNotOk, GetCacheValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.{Settings, ValueOwnerFacade}
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActorTest.VOF
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
@@ -51,14 +51,14 @@ class CacheAccessActorTest extends BgTestService {
           },
           VOF((a: Int) => {
             valueAccess = valueAccess + 1
-            Future(ValueOwnerFacade.Ok(a, a.toFloat))
+            Future(ValueOwnerFacade.OwnerValueOk(a, a.toFloat))
           })
         ))
         When("We ask it for a value")
         private val value = GetCacheValue(10)
         accessor.apply(value).pipeTo(self)
         Then("We got enriched value")
-        testKit.expectMsg(to, Ok(value.messageId, "10.0"))
+        testKit.expectMsg(to, GetCacheValueOk(value.messageId, "10.0"))
         And("Value is build from owners data")
         assert(valueAccess == 1)
         And("is enriched")
@@ -68,7 +68,7 @@ class CacheAccessActorTest extends BgTestService {
         private val value1 = GetCacheValue(10)
         accessor.apply(value1).pipeTo(self)
         Then("We get the same result")
-        testKit.expectMsg(to, Ok(value1.messageId, "10.0"))
+        testKit.expectMsg(to, GetCacheValueOk(value1.messageId, "10.0"))
         And("Owner was not bothered again")
         assert(valueAccess == 1)
         And("Enrichment was not performed")
@@ -86,14 +86,14 @@ class CacheAccessActorTest extends BgTestService {
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t2",
           (a: Int) => a,
           (_: Float) => value,
-          VOF((a: Int) => Future(ValueOwnerFacade.Ok(a, a.toFloat))),
+          VOF((a: Int) => Future(ValueOwnerFacade.OwnerValueOk(a, a.toFloat))),
           1 second
         ))
         When("We get cache value")
         val get1 = GetCacheValue(10)
         accessor.apply(get1).pipeTo(self)
         Then("Cached value is 'a'")
-        testKit.expectMsg(to, Ok(get1.messageId, "a"))
+        testKit.expectMsg(to, GetCacheValueOk(get1.messageId, "a"))
 
         When("Current real value is changed to 'b'")
         value = "b"
@@ -101,7 +101,7 @@ class CacheAccessActorTest extends BgTestService {
         val get2 = GetCacheValue(10)
         accessor.apply(get2).pipeTo(self)
         Then("We still get cached value as 'a'")
-        testKit.expectMsg(to, Ok(get2.messageId, "a"))
+        testKit.expectMsg(to, GetCacheValueOk(get2.messageId, "a"))
 
         When("We wait 1100 ms")
         Thread.sleep(1100)
@@ -110,7 +110,7 @@ class CacheAccessActorTest extends BgTestService {
         accessor.apply(get3).pipeTo(self)
         Then("We see cached value as 'b'")
 
-        testKit.expectMsg(to, Ok(get3.messageId, "b"))
+        testKit.expectMsg(to, GetCacheValueOk(get3.messageId, "b"))
       }
     }
 
@@ -120,11 +120,11 @@ class CacheAccessActorTest extends BgTestService {
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t3",
           (a: Int) => a,
           (a: Float) => a.toString,
-          VOF((a: Int) => Future(ValueOwnerFacade.NotOk(a, new Exception("No Value"))))
+          VOF((a: Int) => Future(ValueOwnerFacade.OwnerValueNotOk(a, new Exception("No Value"))))
         ))
         private val value = GetCacheValue(10)
         accessor.apply(value).pipeTo(self)
-        assert(testKit.expectMsgClass(to, classOf[NotOk[Float]]).ex.getMessage == "No Value")
+        assert(testKit.expectMsgClass(to, classOf[GetCacheValueNotOk[Float]]).ex.getMessage == "No Value")
       }
     }
 
@@ -138,7 +138,7 @@ class CacheAccessActorTest extends BgTestService {
         ))
         private val value = GetCacheValue(10)
         accessor.apply(value).pipeTo(self)
-        testKit.expectMsg(to, NotOk(value.messageId, ex))
+        testKit.expectMsg(to, GetCacheValueNotOk(value.messageId, ex))
       }
     }
 
@@ -148,11 +148,11 @@ class CacheAccessActorTest extends BgTestService {
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t5",
           (a: Int) => a,
           (_: Float) => throw ex,
-          VOF((a: Int) => Future(ValueOwnerFacade.Ok(a, a.toFloat)))
+          VOF((a: Int) => Future(ValueOwnerFacade.OwnerValueOk(a, a.toFloat)))
         ))
         private val value = GetCacheValue(10)
         accessor.apply(value).pipeTo(self)
-        testKit.expectMsg(to, NotOk(value.messageId, ex))
+        testKit.expectMsg(to, GetCacheValueNotOk(value.messageId, ex))
       }
     }
 
@@ -174,7 +174,7 @@ class CacheAccessActorTest extends BgTestService {
           VOF((a: Int) => {
             valueAccess = valueAccess + 1
             Thread.sleep(1100)
-            Future(ValueOwnerFacade.Ok(a, a.toFloat))
+            Future(ValueOwnerFacade.OwnerValueOk(a, a.toFloat))
           })
         ))
         When("We ask it for a value")
@@ -188,9 +188,9 @@ class CacheAccessActorTest extends BgTestService {
         testKit.expectNoMsg(1 second)
 
         And("We do get answers finally")
-        testKit.expectMsg(to, Ok(value1.messageId, "10.0"))
-        testKit.expectMsg(to, Ok(value2.messageId, "10.0"))
-        testKit.expectMsg(to, Ok(value3.messageId, "10.0"))
+        testKit.expectMsg(to, GetCacheValueOk(value1.messageId, "10.0"))
+        testKit.expectMsg(to, GetCacheValueOk(value2.messageId, "10.0"))
+        testKit.expectMsg(to, GetCacheValueOk(value3.messageId, "10.0"))
 
 
         And("Value is build from owners data only once ")
@@ -207,10 +207,10 @@ class CacheAccessActorTest extends BgTestService {
 
 object CacheAccessActorTest {
 
-  case class VOF(x: Int => Future[ValueOwnerFacade.ValueOwnerResult[Int, Float]]) extends ValueOwnerFacade[Int, Int, Float] {
+  case class VOF(x: Int => Future[ValueOwnerFacade.OwnerValueResult[Int, Float]]) extends ValueOwnerFacade[Int, Int, Float] {
     override def apply(getterMessage: Int)
                       (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[ValueOwnerFacade.ValueOwnerResult[Int, Float]] = {
+    : Future[ValueOwnerFacade.OwnerValueResult[Int, Float]] = {
       x(getterMessage)
     }
   }

@@ -154,16 +154,16 @@ object DistributedSharedStateTest {
 
     def getPromisedValue(duration: FiniteDuration): (VersionedId, String) = Await.result(receivedPromise.future, duration)
 
-    override def newVersionPresent(versionedId: VersionedId, richValue: String)
-                                  (implicit executionContext: ExecutionContext, sender: ActorRef)
+    override def onNewVersionAsk(versionedId: VersionedId, richValue: String)
+                                (implicit executionContext: ExecutionContext, sender: ActorRef)
     : Future[NewVersionResult] = {
       synchronized {
         println("Got!!")
         receivedValues = (versionedId, richValue) :: receivedValues
         receivedPromise.complete(util.Success((versionedId, richValue)))
         next.map {
-          case Success(_) => NewVersionedValueListener.Ok(versionedId)
-          case Failure(ex) => NewVersionedValueListener.NotOk(versionedId, ex)
+          case Success(_) => NewVersionedValueListener.NewVersionOk(versionedId)
+          case Failure(ex) => NewVersionedValueListener.NewVersionNotOk(versionedId, ex)
         }
       }
     }

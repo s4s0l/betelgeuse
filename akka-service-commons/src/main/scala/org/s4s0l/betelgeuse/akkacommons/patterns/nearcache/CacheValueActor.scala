@@ -18,7 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 
 import akka.actor.{Actor, ActorContext, ActorLogging, ActorRef, ActorRefFactory, Props}
 import akka.pattern.pipe
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.Ok
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.GetCacheValueOk
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheValueActor.Protocol.GetCacheValue
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheValueActor.{Settings, ValueEnriched, ValueEnrichedFailure}
 import org.s4s0l.betelgeuse.akkacommons.utils.QA.{Question, Uuid}
@@ -66,7 +66,7 @@ private[nearcache] class CacheValueActor[K, R, V](settings: Settings[K, R, V]) e
 
   override def receive: Actor.Receive = {
     case req: GetCacheValue =>
-      sender() ! Ok(req.messageId, value)
+      sender() ! GetCacheValueOk(req.messageId, value)
   }
 
 

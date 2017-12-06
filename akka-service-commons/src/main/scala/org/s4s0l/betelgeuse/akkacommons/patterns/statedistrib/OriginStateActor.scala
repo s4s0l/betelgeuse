@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 import akka.actor.Props
 import akka.persistence.AtLeastOnceDelivery
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateActor.{Confirm, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateActor.{ConfirmEvent, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
@@ -37,18 +37,18 @@ class OriginStateActor[T](settings: Settings[T])
     with AtLeastOnceDelivery {
 
   override def receiveCommand: Receive = super.receiveCommand orElse {
-    case OriginStateDistributor.Protocol.ConfirmOk(deliveryId) =>
-      persist(Confirm(deliveryId))(processEvent(false))
-    case OriginStateDistributor.Protocol.ConfirmNotOk(_, ex) =>
+    case OriginStateDistributor.Protocol.OriginStateChangedOk(deliveryId) =>
+      persist(ConfirmEvent(deliveryId))(processEvent(false))
+    case OriginStateDistributor.Protocol.OriginStateChangedNotOk(_, ex) =>
       log.error(ex, "Undelivered state distribution")
   }
 
   override def processEvent(recover: Boolean): PartialFunction[Any, Unit] = super.processEvent(recover) orElse {
-    case Confirm(deliveryId) => confirmDelivery(deliveryId)
+    case ConfirmEvent(deliveryId) => confirmDelivery(deliveryId)
   }
 
   override protected def valueUpdated(versionedId: VersionedId, value: Any): Unit = {
-    settings.distributor.deliver(this)(versionedId, value.asInstanceOf[T], redeliverInterval)
+    settings.distributor.deliverStateChange(this)(versionedId, value.asInstanceOf[T], redeliverInterval)
   }
 
   override def redeliverInterval: FiniteDuration = settings.stateDistributionRetryInterval
@@ -74,7 +74,7 @@ object OriginStateActor {
 
   }
 
-  private case class Confirm(deliveryId: Long)
+  private case class ConfirmEvent(deliveryId: Long)
 
   object Protocol {
     /**
