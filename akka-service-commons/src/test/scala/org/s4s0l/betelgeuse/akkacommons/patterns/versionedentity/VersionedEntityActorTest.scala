@@ -24,6 +24,7 @@ import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCr
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 
+import scala.concurrent.duration._
 import scala.language.postfixOps
 
 /**
@@ -36,6 +37,9 @@ class VersionedEntityActorTest extends
   private val aService = testWith(new BgPersistenceJournalCrate
     with BgClusteringSharding {
   })
+  aService.to = 5 seconds
+
+  aService.timeout = 5 seconds
 
   feature("An utility actor is persistent and versioned, supports optimistic locking") {
     scenario("Can be queried for current version") {
