@@ -17,8 +17,9 @@
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import akka.actor.ActorRef
-import akka.actor.Status.{Failure, Status, Success}
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol._
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener.{StateChanged, StateChangedNotOk, StateChangedOk, StateChangedResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListener, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
@@ -36,16 +37,6 @@ class SatelliteStateActorTest extends
   BgTestCrate {
 
 
-  val successListener: SatelliteStateListener[String] = new SatelliteStateListener[String] {
-    override def configurationChanged(versionedId: VersionedId, value: String)
-                                     (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender): Future[Status] = {
-      Future {
-        listenerResponse = Some(value + "@" + versionedId)
-        Success(0)
-      }
-    }
-  }
-
   feature("Satellite State actor is an VersionedEntityActor with ability to confirm distribution") {
 
     scenario("Does not confirm distribution if value was not introduced before") {
@@ -55,36 +46,36 @@ class SatelliteStateActorTest extends
         private val idInTest = "id1"
 
         When(s"stateDistributed is performed without prior stateChanged about entity $idInTest version 1")
-        private val changeDistributed = service.successSatellite.stateDistributed(VersionedId(s"$idInTest", 1), "destination2")
+        private val changeDistributed = service.successSatellite.stateDistributed(DistributionComplete(VersionedId(s"$idInTest", 1), to))
 
         Then("Distribution confirmation is received and is a failure")
-        assert(Await.result(changeDistributed, to * 2).isInstanceOf[Failure])
+        assert(Await.result(changeDistributed, to * 2).isInstanceOf[DistributionNotOk])
 
         And("Notifier is not called")
         assert(listenerResponse.isEmpty)
 
 
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val changeStatus = service.successSatellite.stateChanged(VersionedId(s"$idInTest", 1), "valueOne", "destination1")
+        private val changeStatus = service.successSatellite.stateChanged(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to))
 
         Then("Version returned should have value == 0")
-        assert(Await.result(changeStatus, to).isInstanceOf[Success])
+        assert(Await.result(changeStatus, to).isInstanceOf[ChangeOk])
 
         When("Confirm Distribution is send")
-        private val changeDistributed1 = service.successSatellite.stateDistributed(VersionedId(s"$idInTest", 1), "destination2")
+        private val changeDistributed1 = service.successSatellite.stateDistributed(DistributionComplete(VersionedId(s"$idInTest", 1), to))
 
         Then("Distribution confirmation is received")
-        assert(Await.result(changeDistributed1, to).isInstanceOf[Success])
+        assert(Await.result(changeDistributed1, to).isInstanceOf[DistributionOk])
 
         And("Notifier is completed")
         assert(listenerResponse.contains(s"valueOne@$idInTest@1"))
         listenerResponse = None
 
         When(s"stateDistributed is performed without prior stateChanged about entity $idInTest version 2")
-        private val changeDistributed2 = service.successSatellite.stateDistributed(VersionedId(s"$idInTest", 2), "destination2")
+        private val changeDistributed2 = service.successSatellite.stateDistributed(DistributionComplete(VersionedId(s"$idInTest", 2), to))
 
         Then("Distribution confirmation is received and is a failure")
-        assert(Await.result(changeDistributed2, to).isInstanceOf[Failure])
+        assert(Await.result(changeDistributed2, to).isInstanceOf[DistributionNotOk])
 
 
         And("Notifier is not called")
@@ -99,16 +90,16 @@ class SatelliteStateActorTest extends
         Given("A new shard storing string values named test3 with always failing listener")
         private val idInTest = "id2"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val change1Status = service.failedSatellite.stateChanged(VersionedId(s"$idInTest", 1), "valueOne", "destination1")
+        private val change1Status = service.failedSatellite.stateChanged(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to))
 
         Then("Version returned should have value == 0")
-        assert(Await.result(change1Status, to * 2).isInstanceOf[Success])
+        assert(Await.result(change1Status, to * 2).isInstanceOf[ChangeOk])
 
         When("Confirm Distribution is send")
-        private val changeDistributed = service.failedSatellite.stateDistributed(VersionedId(s"$idInTest", 1), "destination2")
+        private val changeDistributed = service.failedSatellite.stateDistributed(DistributionComplete(VersionedId(s"$idInTest", 1), to))
 
         Then("Distribution confirmation is received and is a failure")
-        assert(Await.result(changeDistributed, to).isInstanceOf[Failure])
+        assert(Await.result(changeDistributed, to).isInstanceOf[DistributionNotOk])
 
         And("Notifier is completed")
         assert(listenerResponse.contains(s"valueOne@$idInTest@1"))
@@ -122,16 +113,16 @@ class SatelliteStateActorTest extends
         Given("A new shard storing string values named test3 with always timing out listener")
         private val idInTest = "id3"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val change1Status = service.timeoutSatellite.stateChanged(VersionedId(s"$idInTest", 1), "valueOne", "destination1")(to * 2, execContext)
+        private val change1Status = service.timeoutSatellite.stateChanged(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 2))
 
         Then("Version returned should have value == 0")
-        assert(Await.result(change1Status, to * 2).isInstanceOf[Success])
+        assert(Await.result(change1Status, to * 2).isInstanceOf[ChangeOk])
 
         When("Confirm Distribution is send")
-        private val changeDistributed = service.timeoutSatellite.stateDistributed(VersionedId(s"$idInTest", 1), "destination2")
+        private val changeDistributed = service.timeoutSatellite.stateDistributed(DistributionComplete(VersionedId(s"$idInTest", 1), to))
 
         Then("Distribution confirmation is received and is a failure")
-        assert(Await.result(changeDistributed, to * 2).isInstanceOf[Failure])
+        assert(Await.result(changeDistributed, to * 2).isInstanceOf[DistributionNotOk])
 
         And("Notifier is completed")
         assert(listenerResponse.contains(s"valueOne@$idInTest@1"))
@@ -146,16 +137,16 @@ class SatelliteStateActorTest extends
         Given("A new shard storing string values named test1")
         private val idInTest = "id4"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val change1Status = service.successSatellite.stateChanged(VersionedId(s"$idInTest", 1), "valueOne", "destination1")
+        private val change1Status = service.successSatellite.stateChanged(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to))
 
         Then("Version returned should have value == 0")
-        assert(Await.result(change1Status, to * 2).isInstanceOf[Success])
+        assert(Await.result(change1Status, to * 2).isInstanceOf[ChangeOk])
 
         When("Confirm Distribution is send")
-        private val changeDistributed = service.successSatellite.stateDistributed(VersionedId(s"$idInTest", 1), "destination2")
+        private val changeDistributed = service.successSatellite.stateDistributed(DistributionComplete(VersionedId(s"$idInTest", 1), to))
 
         Then("Distribution confirmation is received")
-        assert(Await.result(changeDistributed, to).isInstanceOf[Success])
+        assert(Await.result(changeDistributed, to).isInstanceOf[DistributionOk])
 
         And("Notifier is completed")
         assert(listenerResponse.contains(s"valueOne@$idInTest@1"))
@@ -165,16 +156,16 @@ class SatelliteStateActorTest extends
         When("We repeat messages")
 
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val change1Status1 = service.successSatellite.stateChanged(VersionedId(s"$idInTest", 1), "valueOne", "destination1")
+        private val change1Status1 = service.successSatellite.stateChanged(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to))
 
         Then("Version returned should have value == 0")
-        assert(Await.result(change1Status1, to).isInstanceOf[Success])
+        assert(Await.result(change1Status1, to).isInstanceOf[ChangeOk])
 
         When("Confirm Distribution is send")
-        private val changeDistributed1 = service.successSatellite.stateDistributed(VersionedId(s"$idInTest", 1), "destination2")
+        private val changeDistributed1 = service.successSatellite.stateDistributed(DistributionComplete(VersionedId(s"$idInTest", 1), to))
 
         Then("Distribution confirmation is received")
-        assert(Await.result(changeDistributed1, to).isInstanceOf[Success])
+        assert(Await.result(changeDistributed1, to).isInstanceOf[DistributionOk])
 
         And("Notifier is completed")
         assert(listenerResponse.contains(s"valueOne@$idInTest@1"))
@@ -196,19 +187,33 @@ class SatelliteStateActorTest extends
     }
   })
 
-  val failingListener: SatelliteStateListener[String] = new SatelliteStateListener[String] {
-    override def configurationChanged(versionedId: VersionedId, value: String)
-                                     (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender): Future[Status] = {
+
+  val successListener: SatelliteStateListener[String] = new SatelliteStateListener[String] {
+    override def configurationChanged(msg: StateChanged[String])
+                                     (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender)
+    : Future[StateChangedResult] = {
       Future {
-        listenerResponse = Some(value + "@" + versionedId)
-        Failure(new Exception("!"))
+        listenerResponse = Some(msg.value + "@" + msg.messageId)
+        StateChangedOk(msg.messageId)
+      }
+    }
+  }
+
+  val failingListener: SatelliteStateListener[String] = new SatelliteStateListener[String] {
+    override def configurationChanged(msg: StateChanged[String])
+                                     (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender)
+    : Future[StateChangedResult] = {
+      Future {
+        listenerResponse = Some(msg.value + "@" + msg.messageId)
+        StateChangedNotOk(msg.messageId, new Exception("!"))
       }
     }
   }
   val timeoutListener: SatelliteStateListener[String] = new SatelliteStateListener[String] {
-    override def configurationChanged(versionedId: VersionedId, value: String)
-                                     (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender): Future[Status] = {
-      listenerResponse = Some(value + "@" + versionedId)
+    override def configurationChanged(msg: StateChanged[String])
+                                     (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender)
+    : Future[StateChangedResult] = {
+      listenerResponse = Some(msg.value + "@" + msg.messageId)
       Future.never
     }
   }

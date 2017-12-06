@@ -30,7 +30,7 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Promise}
 import scala.language.postfixOps
-import scala.util.Success
+import scala.util.{Failure, Success}
 
 /**
   * @author Marcin Wielgus
@@ -86,6 +86,7 @@ class QuickAskActorTest extends BgTestService {
                 if (count.incrementAndGet() >= times) {
                   promise.complete(Success(true))
                 }
+              case Failure(ex) => promise.failure(ex)
             }
           }
         case ("ask", times: Int, p: Promise[_]) =>
@@ -97,6 +98,7 @@ class QuickAskActorTest extends BgTestService {
                 if (count.incrementAndGet() >= times) {
                   promise.complete(Success(true))
                 }
+              case Failure(ex) => promise.failure(ex)
             }
           }
         case ("pipe", times: Int, p: Promise[_]) =>

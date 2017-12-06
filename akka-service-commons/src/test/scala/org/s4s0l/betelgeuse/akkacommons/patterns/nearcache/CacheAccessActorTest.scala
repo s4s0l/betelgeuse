@@ -16,97 +16,203 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 
+import akka.actor.ActorRef
 import akka.pattern.pipe
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{CacheValue, GetCacheValue}
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Settings
-import org.s4s0l.betelgeuse.akkacommons.test.BgServiceSpecLike
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{GetCacheValue, NotOk, Ok}
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.{Settings, ValueOwnerFacade}
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActorTest.VOF
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 
-import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
 /**
   * @author Marcin Wielgus
   */
-class CacheAccessActorTest extends BgServiceSpecLike[BgService] {
-  override def createService(): BgService = new BgService {}
+class CacheAccessActorTest extends BgTestService {
+  private val aService = testWith(new BgService {})
 
   feature("Near cache holds and reference to some value calculated from some value produced from incoming message") {
-    scenario("Cached instance is removed") {
-      val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t1",
-        (a: Int) => a,
-        (a: Float) => a.toString,
-        (a: Int) => Future(Some(a.toFloat))
-      ))
-      accessor.apply(GetCacheValue(10)).pipeTo(self)
-      testKit.expectMsg(defaultTimeout.duration, CacheValue(10, Left(Some("10.0"))))
+    scenario("Cached instance is reachable and cached indeed") {
+      new WithService(aService) {
+        Given("Some cache")
+        @volatile
+        private var valueAccess = 0
+        @volatile
+        private var enrichmentCount = 0
+        private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t1",
+          (a: Int) => a,
+          (a: Float) => {
+            enrichmentCount = enrichmentCount + 1
+            a.toString
+          },
+          VOF((a: Int) => {
+            valueAccess = valueAccess + 1
+            Future(ValueOwnerFacade.Ok(a, a.toFloat))
+          })
+        ))
+        When("We ask it for a value")
+        private val value = GetCacheValue(10)
+        accessor.apply(value).pipeTo(self)
+        Then("We got enriched value")
+        testKit.expectMsg(to, Ok(value.messageId, "10.0"))
+        And("Value is build from owners data")
+        assert(valueAccess == 1)
+        And("is enriched")
+        assert(enrichmentCount == 1)
+
+        When("We access same value again")
+        private val value1 = GetCacheValue(10)
+        accessor.apply(value1).pipeTo(self)
+        Then("We get the same result")
+        testKit.expectMsg(to, Ok(value1.messageId, "10.0"))
+        And("Owner was not bothered again")
+        assert(valueAccess == 1)
+        And("Enrichment was not performed")
+        assert(enrichmentCount == 1)
+      }
     }
 
     scenario("Cache expires") {
-      Given("Current real value is 'a'")
-      var value = "a"
-      Given("Cache has timeout of 1 second")
-      import scala.concurrent.duration._
-      val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t2",
-        (a: Int) => a,
-        (_: Float) => value,
-        (a: Int) => Future(Some(a.toFloat)),
-        1 second
-      ))
-      When("We get cache value")
-      accessor.apply(GetCacheValue(10)).pipeTo(self)
-      Then("Cached value is 'a'")
-      testKit.expectMsg(defaultTimeout.duration, CacheValue(10, Left(Some("a"))))
+      new WithService(aService) {
+        Given("Current real value is 'a'")
+        private var value = "a"
+        Given("Cache has timeout of 1 second")
 
-      When("Current real value is changed to 'b'")
-      value = "b"
-      When("We get cached value instantaneously")
-      accessor.apply(GetCacheValue(10)).pipeTo(self)
-      Then("We still get cached value as 'a'")
-      testKit.expectMsg(defaultTimeout.duration, CacheValue(10, Left(Some("a"))))
 
-      When("We wait 1100 ms")
-      Thread.sleep(1100)
-      When("We get value again")
-      accessor.apply(GetCacheValue(10)).pipeTo(self)
-      Then("We see cached value as 'b'")
-      testKit.expectMsg(defaultTimeout.duration, CacheValue(10, Left(Some("b"))))
+        private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t2",
+          (a: Int) => a,
+          (_: Float) => value,
+          VOF((a: Int) => Future(ValueOwnerFacade.Ok(a, a.toFloat))),
+          1 second
+        ))
+        When("We get cache value")
+        val get1 = GetCacheValue(10)
+        accessor.apply(get1).pipeTo(self)
+        Then("Cached value is 'a'")
+        testKit.expectMsg(to, Ok(get1.messageId, "a"))
 
+        When("Current real value is changed to 'b'")
+        value = "b"
+        When("We get cached value instantaneously")
+        val get2 = GetCacheValue(10)
+        accessor.apply(get2).pipeTo(self)
+        Then("We still get cached value as 'a'")
+        testKit.expectMsg(to, Ok(get2.messageId, "a"))
+
+        When("We wait 1100 ms")
+        Thread.sleep(1100)
+        When("We get value again")
+        val get3 = GetCacheValue(10)
+        accessor.apply(get3).pipeTo(self)
+        Then("We see cached value as 'b'")
+
+        testKit.expectMsg(to, Ok(get3.messageId, "b"))
+      }
     }
 
 
-    scenario("Getting value results in no value to be cached") {
-      val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t3",
-        (a: Int) => a,
-        (a: Float) => a.toString,
-        (_: Int) => Future(None)
-      ))
-      accessor.apply(GetCacheValue(10)).pipeTo(self)
-      testKit.expectMsg(defaultTimeout.duration, CacheValue(10, Left(None)))
+    scenario("Getting value results when value is missing") {
+      new WithService(aService) {
+        private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t3",
+          (a: Int) => a,
+          (a: Float) => a.toString,
+          VOF((a: Int) => Future(ValueOwnerFacade.NotOk(a, new Exception("No Value"))))
+        ))
+        private val value = GetCacheValue(10)
+        accessor.apply(value).pipeTo(self)
+        assert(testKit.expectMsgClass(to, classOf[NotOk[Float]]).ex.getMessage == "No Value")
+      }
     }
 
     scenario("Getting a value throws exception") {
-      val ex = new Exception("ex!")
-      val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t4",
-        (a: Int) => a,
-        (a: Float) => a.toString,
-        (_: Int) => Future.failed(ex)
-      ))
-      accessor.apply(GetCacheValue(10)).pipeTo(self)
-      testKit.expectMsg(defaultTimeout.duration, CacheValue(10, Right(ex)))
+      new WithService(aService) {
+        private val ex = new Exception("ex!")
+        private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t4",
+          (a: Int) => a,
+          (a: Float) => a.toString,
+          VOF((_: Int) => Future.failed(ex))
+        ))
+        private val value = GetCacheValue(10)
+        accessor.apply(value).pipeTo(self)
+        testKit.expectMsg(to, NotOk(value.messageId, ex))
+      }
     }
 
     scenario("Enriching value throws exception") {
-      val ex = new Exception("ex!")
-      val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t5",
-        (a: Int) => a,
-        (_: Float) => throw ex,
-        (a: Int) => Future(Some(a.toFloat))
-      ))
-      accessor.apply(GetCacheValue(10)).pipeTo(self)
-      testKit.expectMsg(defaultTimeout.duration, CacheValue(10, Right(ex)))
+      new WithService(aService) {
+        val ex = new Exception("ex!")
+        private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t5",
+          (a: Int) => a,
+          (_: Float) => throw ex,
+          VOF((a: Int) => Future(ValueOwnerFacade.Ok(a, a.toFloat)))
+        ))
+        private val value = GetCacheValue(10)
+        accessor.apply(value).pipeTo(self)
+        testKit.expectMsg(to, NotOk(value.messageId, ex))
+      }
+    }
+
+    scenario("Messages requesting cache value are queued when value is not in the cache and needs to be retrieved from owner") {
+      new WithService(aService) {
+        @volatile
+        private var valueAccess = 0
+        @volatile
+        private var enrichmentCount = 0
+
+        Given("Slow owner facade")
+        private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t6",
+          (a: Int) => a,
+          (a: Float) => {
+
+            enrichmentCount = enrichmentCount + 1
+            a.toString
+          },
+          VOF((a: Int) => {
+            valueAccess = valueAccess + 1
+            Thread.sleep(1100)
+            Future(ValueOwnerFacade.Ok(a, a.toFloat))
+          })
+        ))
+        When("We ask it for a value")
+        private val value1 = GetCacheValue(10)
+        accessor.apply(value1).pipeTo(self)
+        private val value2 = GetCacheValue(10)
+        accessor.apply(value2).pipeTo(self)
+        private val value3 = GetCacheValue(10)
+        accessor.apply(value3).pipeTo(self)
+        Then("We no immediate response")
+        testKit.expectNoMsg(1 second)
+
+        And("We do get answers finally")
+        testKit.expectMsg(to, Ok(value1.messageId, "10.0"))
+        testKit.expectMsg(to, Ok(value2.messageId, "10.0"))
+        testKit.expectMsg(to, Ok(value3.messageId, "10.0"))
+
+
+        And("Value is build from owners data only once ")
+        assert(valueAccess == 1)
+        assert(enrichmentCount == 1)
+
+      }
     }
   }
 
+
+}
+
+
+object CacheAccessActorTest {
+
+  case class VOF(x: Int => Future[ValueOwnerFacade.ValueOwnerResult[Int, Float]]) extends ValueOwnerFacade[Int, Int, Float] {
+    override def apply(getterMessage: Int)
+                      (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[ValueOwnerFacade.ValueOwnerResult[Int, Float]] = {
+      x(getterMessage)
+    }
+  }
 
 }

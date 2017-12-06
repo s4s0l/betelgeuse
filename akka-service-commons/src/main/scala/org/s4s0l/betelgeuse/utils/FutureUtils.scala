@@ -16,9 +16,9 @@
 
 package org.s4s0l.betelgeuse.utils
 
-import akka.actor.Status
-import akka.actor.Status.Status
+import akka.actor.{Actor, ActorRef, Scheduler}
 
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.language.implicitConversions
 import scala.util.{Failure, Success, Try}
@@ -64,13 +64,16 @@ class RichFuture[T](wrappedFuture: Future[T]) {
   }
 
 
-  def recoverToAkkaStatus(implicit executionContext: ExecutionContext): Future[Status] = {
-    wrappedFuture
-      .map {
-        case status: Status => status.asInstanceOf[Status]
-        case x => Status.Success(x)
-      }
-      .recover { case ex: Throwable => Status.Failure(ex) }
+  def pipeToWithTimeout(recipient: ActorRef, timeout: FiniteDuration, timeoutMessage: => T, using: Scheduler)
+                       (implicit executionContext: ExecutionContext, sender: ActorRef = Actor.noSender):
+  Future[T] = {
+    import akka.pattern.after
+    val future: Future[T] = Future.successful(timeoutMessage)
+    val afterFuture: Future[T] = after(timeout, using)(future)(executionContext)
+    val eventualT = Future.firstCompletedOf(Seq(wrappedFuture, afterFuture))
+    import akka.pattern.pipe
+    eventualT.pipeTo(recipient)(sender)
+
   }
 
 }

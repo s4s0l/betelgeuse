@@ -18,11 +18,13 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props, SupervisorStrategy}
 import akka.pattern.ask
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{CacheValue, CacheValueDied, CacheValueOk, GetCacheValue}
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.{CreateValueActor, CreateValueActorFailed, CreateValueActorTerminated, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol._
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade.ValueOwnerResult
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor._
+import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
 /**
@@ -35,7 +37,7 @@ import scala.language.postfixOps
   * This actor can bring this value to vm where it is running and keep it in some
   * 'enriched' form which will be forgotten after some period of time.
   *
-  * This mechanizm can be applied only to immutable values, as there is no cache invalidation
+  * This mechanism can be applied only to immutable values, as there is no cache invalidation
   * in place.
   *
   * See [[org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol]] for how to use it
@@ -47,70 +49,68 @@ class CacheAccessActor[G, K, R, V](settings: Settings[G, K, R, V]) extends Actor
 
 
   var cacheValueActors: Map[K, CacheValueActor.Protocol] = Map()
-  //TODO: there is missing some kind of sheduled timer to clean it up!
-  var currentRequestors: Map[K, List[ActorRef]] = Map()
+  //TODO: there is missing some kind of scheduled timer to clean it up!
+  var requestingDuringCreation: Map[K, List[(ActorRef, Uuid)]] = Map()
 
   override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
 
   override def receive: Actor.Receive = {
-    case GetCacheValue(getterMessage) =>
+    case req@GetCacheValue(getterMessage) =>
       val key = settings.keyFactory(getterMessage.asInstanceOf[G])
-      currentRequestors = currentRequestors + (key -> (sender() :: currentRequestors.getOrElse(key, List())))
       val valueHolder = cacheValueActors.get(key)
       if (valueHolder.isDefined) {
-        valueHolder.get.apply(CacheValueActor.Protocol.GetCacheValue())(sender())
+        valueHolder.get.apply(CacheValueActor.Protocol.GetCacheValue(req.messageId))(context.dispatcher, sender())
       } else {
-        import akka.pattern.pipe
-        import context.dispatcher
-        val senderTmp = sender()
-        settings.valueOwnerFacade(getterMessage.asInstanceOf[G])
-          .map(it => CreateValueActor(key, it, senderTmp))
-          .recover { case ex: Throwable => CreateValueActorFailed(key, getterMessage, ex, senderTmp) }
-          .pipeTo(self)
+        val valueCreationInProgress = requestingDuringCreation.getOrElse(key, List()).nonEmpty
+        val newRequestingActors = (sender(), req.messageId) :: requestingDuringCreation.getOrElse(key, List())
+        requestingDuringCreation = requestingDuringCreation + (key -> newRequestingActors)
+        if (!valueCreationInProgress) {
+          import akka.pattern.pipe
+          import context.dispatcher
+          settings.valueOwnerFacade(getterMessage.asInstanceOf[G])
+            .map {
+              case ValueOwnerFacade.Ok(_, value) => CreateValueActor(key, value)
+              case ValueOwnerFacade.NotOk(_, ex) => CreateValueActorFailed(key, getterMessage, ex)
+            }
+            .recover { case ex: Throwable => CreateValueActorFailed(key, getterMessage, ex) }
+            .pipeTo(self)
+        }
       }
 
-    case CreateValueActor(key, None, senderTmp) =>
-      forgetSender(key.asInstanceOf[K], senderTmp, CacheValue(key.asInstanceOf[K], Left(None)))
+    case CreateValueActor(key, valueMessage) =>
+      val valueHolder = CacheValueActor.start(settings.name + "_" + key.toString, CacheValueActor.Settings(
+        key.asInstanceOf[K],
+        valueMessage.asInstanceOf[V],
+        settings.valueEnricher,
+        settings.timeoutTime))(context)
+      cacheValueActors = cacheValueActors + (key.asInstanceOf[K] -> valueHolder)
+      valueHolder.watchWith(context, CreateValueActorTerminated(key))
 
-    case CreateValueActor(key, Some(valueMessage), senderTmp) =>
-      val valueHolder = cacheValueActors.get(key.asInstanceOf[K])
-      if (valueHolder.isDefined) {
-        valueHolder.get.apply(CacheValueActor.Protocol.GetCacheValue())(senderTmp)
-      } else {
-        val valueHolder = CacheValueActor.start(settings.name + "_" + key.toString, CacheValueActor.Settings(
-          key.asInstanceOf[K],
-          valueMessage.asInstanceOf[V],
-          settings.valueEnricher,
-          settings.timeoutTime))(context)
-        valueHolder.apply(CacheValueActor.Protocol.GetCacheValue())(senderTmp)
-        cacheValueActors = cacheValueActors + (key.asInstanceOf[K] -> valueHolder)
-        valueHolder.watchWith(context, CreateValueActorTerminated(key))
-      }
 
     case CreateValueActorTerminated(key) =>
       cacheValueActors = cacheValueActors - key.asInstanceOf[K]
+      requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach { it =>
+        it._1 ! NotOk(it._2, new Exception("Value holder died"))
+      }
+      requestingDuringCreation = requestingDuringCreation - key.asInstanceOf[K]
 
-    case CreateValueActorFailed(key, _, ex, senderTmp) =>
+    case CreateValueActorFailed(key, _, ex) =>
       log.error(ex, s"Unable to get cache value for key $key")
-      forgetSender(key.asInstanceOf[K], senderTmp, CacheValue(key.asInstanceOf[K], Right(ex)))
+      requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach(it => it._1 ! NotOk(it._2, ex))
+      requestingDuringCreation = requestingDuringCreation - key.asInstanceOf[K]
 
     case CacheValueDied(key, ex: Throwable) =>
-      currentRequestors.getOrElse(key.asInstanceOf[K], List()).foreach(_ ! CacheValue(key.asInstanceOf[K], Right(ex)))
-      currentRequestors = currentRequestors - key.asInstanceOf[K]
+      cacheValueActors = cacheValueActors - key.asInstanceOf[K]
+      requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach(it => it._1 ! NotOk(it._2, ex))
+      requestingDuringCreation = requestingDuringCreation - key.asInstanceOf[K]
 
     case CacheValueOk(key) =>
-      currentRequestors = currentRequestors - key.asInstanceOf[K]
+      val holder = cacheValueActors(key.asInstanceOf[K])
+      requestingDuringCreation.getOrElse(key.asInstanceOf[K], List()).reverse.foreach(it =>
+        holder.apply(CacheValueActor.Protocol.GetCacheValue(it._2))(context.dispatcher, it._1))
+      requestingDuringCreation = requestingDuringCreation - key.asInstanceOf[K]
   }
 
-  private def forgetSender(key: K, sndr: ActorRef, message: Any): Unit = {
-    sndr ! message
-    val refs = currentRequestors.getOrElse(key, List()).filter(_ != sndr)
-    if (refs.isEmpty) {
-      currentRequestors = currentRequestors - key
-    } else {
-      currentRequestors = currentRequestors + (key -> refs)
-    }
-  }
 
 }
 
@@ -118,7 +118,7 @@ class CacheAccessActor[G, K, R, V](settings: Settings[G, K, R, V]) extends Actor
 object CacheAccessActor {
 
   /**
-    * Creates accesor with given settings
+    * Creates access with given settings
     *
     * @param propsMapper - function applied to created props before passing them
     *                    to actorRefFactory, gives ability to modify it before actor
@@ -135,6 +135,12 @@ object CacheAccessActor {
     val ref = actorSystem.actorOf(Props(new CacheAccessActor(settings)), settings.name)
     Protocol(ref)
 
+  }
+
+  trait ValueOwnerFacade[G, K, V] {
+    def apply(getterMessage: G)
+             (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[ValueOwnerResult[K, V]]
   }
 
   /**
@@ -154,7 +160,6 @@ object CacheAccessActor {
     * @param valueEnricher    function that creates value to be cached from value returned by valueOwnerFacade
     *                      function. Can be an identity function of course.
     * @param valueOwnerFacade function for getting value for given 'GetValue' message passed in [[GetCacheValue]]
-    *                         todo: replace Future and potential ask pattern with tell
     * @param timeoutTime      after what time of inactivity value for a given key should be forgotten.
     * @tparam G type of 'GetValue' message
     * @tparam K cache key type
@@ -164,7 +169,7 @@ object CacheAccessActor {
   final case class Settings[G, K, R, V](name: String,
                                         keyFactory: G => K,
                                         valueEnricher: V => R,
-                                        valueOwnerFacade: G => Future[Option[V]],
+                                        valueOwnerFacade: ValueOwnerFacade[G, K, V],
                                         timeoutTime: FiniteDuration = 10 minutes)
 
   /**
@@ -181,39 +186,42 @@ object CacheAccessActor {
       * gets a cache value.
       *
       * @param msg an message wrapping a 'GetValue' message
-      * @return see [[CacheValue]] docs
       */
-    def apply(msg: GetCacheValue[G]): Future[CacheValue[K, R]] =
-      actorRef.ask(msg)(5 seconds).mapTo[CacheValue[K, R]]
+    def apply(msg: GetCacheValue[G])
+             (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[CacheValueResult[R]] =
+      actorRef.ask(msg)(5 seconds).mapTo[CacheValueResult[R]]
   }
 
-  private case class CreateValueActor[K, V](key: K, valueMessage: Option[V], sender: ActorRef)
+  private case class CreateValueActor[K, V](key: K, valueMessage: V)
 
-  private case class CreateValueActorFailed[K, G](key: K, getterMessage: G, ex: Throwable, sender: ActorRef)
+  private case class CreateValueActorFailed[K, G](key: K, getterMessage: G, ex: Throwable)
+
+  object ValueOwnerFacade {
+
+    sealed trait ValueOwnerResult[K, V] extends Result[K, V]
+
+    case class Ok[K, V](correlationId: K, value: V) extends ValueOwnerResult[K, V] with OkResult[K, V]
+
+    case class NotOk[K, V](correlationId: K, ex: Throwable) extends ValueOwnerResult[K, V] with NotOkResult[K, V]
+
+  }
 
   private case class CreateValueActorTerminated[K](key: K)
 
   object Protocol {
 
-
     def apply[G, K, R](actorRef: => ActorRef): Protocol[G, K, R] = new Protocol(actorRef)
 
     sealed trait IncomingMessage
 
-    sealed trait OutgoingMessage
+    sealed trait CacheValueResult[V] extends Result[Uuid, V]
 
-    case class GetCacheValue[G](getterMessage: G) extends IncomingMessage
+    case class GetCacheValue[G](getterMessage: G) extends IncomingMessage with UuidQuestion
 
-    /**
-      * Returned cache value
-      *
-      * @param key   cache key
-      * @param value either throwable in case of any error or None if value is not found,
-      *              or value on the left.
-      * @tparam K cache key type
-      * @tparam R type of enriched value
-      **/
-    case class CacheValue[K, R](key: K, value: Either[Option[R], Throwable]) extends OutgoingMessage
+    case class Ok[V](correlationId: Uuid, value: V) extends CacheValueResult[V] with OkResult[Uuid, V]
+
+    case class NotOk[V](correlationId: Uuid, ex: Throwable) extends CacheValueResult[V] with NotOkResult[Uuid, V]
 
     private[nearcache] case class CacheValueDied[K](key: K, ex: Throwable) extends IncomingMessage
 

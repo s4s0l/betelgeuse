@@ -37,8 +37,10 @@ class OriginStateActor[T](settings: Settings[T])
     with AtLeastOnceDelivery {
 
   override def receiveCommand: Receive = super.receiveCommand orElse {
-    case OriginStateDistributor.Protocol.OriginStateChangedConfirm(deliveryId, _) =>
+    case OriginStateDistributor.Protocol.ConfirmOk(deliveryId) =>
       persist(Confirm(deliveryId))(processEvent(false))
+    case OriginStateDistributor.Protocol.ConfirmNotOk(_, ex) =>
+      log.error(ex, "Undelivered state distribution")
   }
 
   override def processEvent(recover: Boolean): PartialFunction[Any, Unit] = super.processEvent(recover) orElse {

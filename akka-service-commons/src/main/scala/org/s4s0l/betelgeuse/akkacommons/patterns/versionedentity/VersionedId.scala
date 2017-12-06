@@ -27,9 +27,9 @@ case class VersionedId(id: String, version: Int) {
 
 object VersionedId {
   def apply(string: String): VersionedId = {
-    val splited = string.split("@")
-    val id = splited(0)
-    val version = splited(1)
+    val split = string.split("@")
+    val id = split(0)
+    val version = split(1)
     new VersionedId(id, version.toInt)
   }
 

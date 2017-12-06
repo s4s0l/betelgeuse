@@ -16,15 +16,13 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs
 
-import akka.actor.Status.{Failure, Status, Success}
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
-import akka.pattern.{ask, pipe}
-import akka.util.Timeout
+import akka.pattern.ask
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{PublishMessage, _}
-import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.{ActorDead, InternalPublicationResult, MessageForwarderContext, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.{ActorDead, MessageForwarderContext, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener.{StateChanged, StateChangedNotOk, StateChangedOk, StateChangedResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.utils.QA
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 import org.s4s0l.betelgeuse.utils.AllUtils._
 
@@ -32,7 +30,6 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}
-import scala.util.Try
 
 /**
   * Actor that broadcasts any message to actors that subscribed to it.
@@ -50,48 +47,41 @@ class MandatorySubsActor[K, T](settings: Settings[K, T]) extends Actor with Acto
 
 
   override def receive: Actor.Receive = {
-    case Subscribe(ref, key) =>
+    case Subscribe(key, ref) =>
       subscriptions.put(key, ref)
       context.watchWith(ref, ActorDead(key, ref))
-      sender() ! Ok(key)
+      sender() ! SubscribeOk(key)
 
     case ActorDead(key, _) =>
       subscriptions.remove(key)
 
     case pm: PublishMessage[K, T] =>
-
       val originalSender = sender()
-      val receptionTime = System.currentTimeMillis()
       import context.dispatcher
-      listOfFuturesToFutureOfList(
+      val notificationFuture = listOfFuturesToFutureOfList(
         subscriptions
           .map { it =>
             settings.messageForwarder.forward(pm, MessageForwarderContext(it._1, it._2, settings))(context.dispatcher, self)
               .map(x => (it._1, x))
               .recover { case x: Throwable => (it._1, NotOk(pm.messageId, x)) }
           }.toSeq)
-        .map { seq =>  }
-        .recover { case it => InternalPublicationResult(pm, originalSender, receptionTime, scala.util.Failure(it)) }
-        .pipeTo(originalSender)(self)
+        .map { seq =>
+          val failedOnes = seq.filter(_._2.isNotOk).map(it => (it._1, it._2.asInstanceOf[NotOk[K]]))
+          failedOnes.foreach { it =>
+            log.error(it._2.ex, s"Unable to get state from subscriber ${it._1}")
+          }
+          val successOnes = seq.filter(_._2.isOk).map(_._1)
+          if (failedOnes.isEmpty && settings.mandatorySubscriptionKeys.forall(successOnes.contains(_))) {
+            Ok(pm.messageId)
+          } else {
+            NotOk(pm.messageId, new Exception(s"Unable to get results from ${failedOnes.map(_._1).mkString(",")}"))
+          }
+        }
+        .recover { case it: Throwable => NotOk(pm.messageId, it) }
 
-    case InternalPublicationResult(pm, originalSender, receptionTime, scala.util.Failure(ex)) =>
-      log.error(ex, "Unable to publish message of id {} from {} received at {}", pm.messageId, originalSender, receptionTime)
-
-    case InternalPublicationResult(pm, originalSender, receptionTime, scala.util.Success(_))
-      if receptionTime + settings.ackTimeout.duration.toMillis < System.currentTimeMillis() =>
-      log.error("Published message result received after timeout had id {} from {} received at {}", pm.messageId, originalSender, receptionTime)
-
-    case InternalPublicationResult(pm, originalSender, _, scala.util.Success(results))
-      if results.filter(_._2.isInstanceOf[Success]).map(_._1).filter(it => settings.mandatorySubscriptionKeys.contains(it)) != settings.mandatorySubscriptionKeys =>
-      val failedReceivers = results.filter(!_._2.isInstanceOf[Success]).map(_._1)
-      val allReceived = results.map(_._1)
-      val missingReceivers = settings.mandatorySubscriptionKeys.filter(!allReceived.contains(_))
-
-      log.error("Published message result does not contain all mandatory receivers, message had id {} from {}, failed receivers {}, missing receivers {}",
-        pm.messageId, originalSender, failedReceivers.mkString(","), missingReceivers.mkString(","))
-
-    case InternalPublicationResult(pm, originalSender, _, scala.util.Success(_)) =>
-      originalSender ! Ack(pm.messageId)
+      import org.s4s0l.betelgeuse.utils.AllUtils._
+      notificationFuture.pipeToWithTimeout(originalSender, pm.maxDuration,
+        NotOk(pm.messageId, new Exception(s"Timeout publishing ${pm.messageId}!")), context.system.scheduler)
 
 
   }
@@ -105,11 +95,13 @@ object MandatorySubsActor {
   /**
     * default forwarder. Forwards payload only treats any response as ack.
     */
-  def defaultMessageForwarder[T]: MessageForwarder[T] = new MessageForwarder[T] {
-    override def forward(publishMessage: PublishMessage[T], context: MessageForwarderContext[T])(implicit ec: ExecutionContext): Future[Status] = {
-      context.actorRef.ask(publishMessage.payload)(context.settings.ackTimeout)
-        .map(_ => Success(None))
-        .recover { case x: Throwable => Failure(x) }
+  def defaultMessageForwarder[K, T]: MessageForwarder[K, T] = new MessageForwarder[K, T] {
+    override def forward(pm: PublishMessage[K, T], context: MessageForwarderContext[K, T])
+                        (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[PublishMessageResult[K]] = {
+      context.actorRef.ask(pm.payload)(pm.maxDuration)
+        .map(_ => Ok(pm.messageId))
+        .recover { case x: Throwable => NotOk(pm.messageId, x) }
     }
   }
 
@@ -124,7 +116,7 @@ object MandatorySubsActor {
   }
 
   /**
-    * Message forwarder, from received message, subscription key, sunscribed actor to
+    * Message forwarder, from received message, subscription key, subscribed actor to
     * future containing status of forward. It should prepare message an interpret response
     * (ack vs nack)
     *
@@ -134,7 +126,7 @@ object MandatorySubsActor {
   trait MessageForwarder[K, T] {
     def forward(pm: PublishMessage[K, T], context: MessageForwarderContext[K, T])
                (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[SimpleResult[K]]
+    : Future[PublishMessageResult[K]]
   }
 
   case class MessageForwarderContext[K, T](subscriptionKey: String, actorRef: ActorRef, settings: Settings[K, T])
@@ -143,12 +135,10 @@ object MandatorySubsActor {
     *
     * @param mandatorySubscriptionKeys - list of mandatory subscriptions keys that are needed to confirm delivery
     * @param messageForwarder          tool used for sending messages to subscribers
-    * @param ackTimeout                how long will we wait for confirmation
     */
   final case class Settings[K, T](name: String,
                                   mandatorySubscriptionKeys: Seq[String],
-                                  messageForwarder: MessageForwarder[K, T],
-                                  ackTimeout: Timeout = 5 seconds)
+                                  messageForwarder: MessageForwarder[K, T])
 
   /**
     * An protocol for [[MandatorySubsActor]]
@@ -156,7 +146,7 @@ object MandatorySubsActor {
   final class Protocol[K, T] private(actorRef: => ActorRef, settings: Settings[K, T]) {
 
     /**
-      * emits event, sender have to expect [[SimpleResult[K]]] on successfull delivery to all mandatory subscribers
+      * emits event, sender have to expect [[PublishMessageResult[K]]] on successful delivery to all mandatory subscribers
       *
       */
     def send(msg: PublishMessage[K, T])
@@ -170,8 +160,8 @@ object MandatorySubsActor {
       */
     def sendAsk(msg: PublishMessage[K, T])
                (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[SimpleResult[K]] =
-      actorRef.ask(msg)(settings.ackTimeout).mapTo[SimpleResult[K]]
+    : Future[PublishMessageResult[K]] =
+      actorRef.ask(msg)(msg.maxDuration).mapTo[PublishMessageResult[K]]
 
     /**
       * subscribes actor on key
@@ -180,8 +170,8 @@ object MandatorySubsActor {
       */
     def subscribe(subs: Subscribe)
                  (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[SimpleResult[String]] =
-      actorRef.ask(subs)(3 seconds).mapTo[UuidSimpleResult]
+    : Future[SubscribeResult] =
+      actorRef.ask(subs)(3 seconds).mapTo[SubscribeResult]
 
 
   }
@@ -199,18 +189,27 @@ object MandatorySubsActor {
 
     sealed trait OutgoingMessage
 
-    case class PublishMessage[K, T](messageId: K, payload: T) extends IncomingMessage with Question[K]
+    sealed trait SubscribeResult extends NullResult[String]
 
-    case class Subscribe(ref: ActorRef, messageId: String) extends IncomingMessage with Question[String]
+    trait PublishMessageResult[K] extends NullResult[K]
 
+    case class PublishMessage[K, T](messageId: K, payload: T, maxDuration: FiniteDuration) extends IncomingMessage with Question[K]
+
+    case class Ok[K](correlationId: K) extends PublishMessageResult[K] with OkNullResult[K]
+
+    case class NotOk[K](correlationId: K, ex: Throwable) extends PublishMessageResult[K] with NotOkNullResult[K]
+
+    case class Subscribe(messageId: String, ref: ActorRef) extends IncomingMessage with Question[String]
+
+    case class SubscribeOk(correlationId: String) extends SubscribeResult with OkNullResult[String]
 
     implicit def asSatelliteStateListener[T](protocol: Protocol[VersionedId, T]): SatelliteStateListener[T] = new SatelliteStateListener[T] {
-      override def configurationChanged(versionedId: VersionedId, value: T)
-                                       (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender)
-      : Future[Status] = {
-        protocol.sendAsk(PublishMessage(versionedId, value)).map {
-          case Ok(ver, _) => Success(ver)
-          case NotOk(_, ex) => Failure(ex)
+      def configurationChanged(msg: StateChanged[T])
+                              (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender)
+      : Future[StateChangedResult] = {
+        protocol.sendAsk(PublishMessage(msg.messageId, msg.value, msg.expDuration)).map {
+          case Ok(ver) => StateChangedOk(ver)
+          case NotOk(ver, ex) => StateChangedNotOk(ver, ex)
         }
       }
     }

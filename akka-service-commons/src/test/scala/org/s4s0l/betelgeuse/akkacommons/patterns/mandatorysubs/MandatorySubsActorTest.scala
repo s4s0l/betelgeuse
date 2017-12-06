@@ -18,11 +18,10 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs
 
 import java.util.concurrent.ConcurrentLinkedQueue
 
-import akka.actor.Status.Status
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, ActorRef, Props}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{Ack, PublishMessage, Subscribe, SubscribeAck}
+import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{NotOk, Ok, PublishMessage, PublishMessageResult, Subscribe, SubscribeOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.{MessageForwarder, MessageForwarderContext, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActorTest.EchoActor
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
@@ -49,20 +48,21 @@ class MandatorySubsActorTest extends BgTestService {
       new WithService(s) {
 
         Given("Mandatory subs actor with two required subscribers")
-        private val subs = MandatorySubsActor.start(Settings("test0", List("one", "two"), MandatorySubsActor.defaultMessageForwarder[String]))
+        private val subs = MandatorySubsActor.start[String, String](Settings("test0", List("one", "two")
+          , MandatorySubsActor.defaultMessageForwarder[String, String]))
         When("Both of them subscribe")
         private val one = service.system.actorOf(Props(new EchoActor("ONE")))
         private val two = service.system.actorOf(Props(new EchoActor("TWO")))
 
         Then("Subscription is acknowledged for each of them")
-        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeAck("one", one))
-        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeAck("two", two))
+        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeOk("one"))
+        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello0"))(self)
+        subs.send(PublishMessage("1", "hello0", to))
 
         Then("Ack arrives back")
-        testKit.expectMsg(Ack("1"))
+        testKit.expectMsg(Ok("1"))
         And("All subscribers got the message")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello0"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello0"))
@@ -74,19 +74,19 @@ class MandatorySubsActorTest extends BgTestService {
       new WithService(s) {
 
         Given("Mandatory subs actor with two required subscribers")
-        private val subs = MandatorySubsActor.start(Settings("test2", List("one", "two"),
-          MandatorySubsActor.defaultMessageForwarder[String], 1 second))
+        private val subs = MandatorySubsActor.start(Settings("test2", List("one", "two")
+          , MandatorySubsActor.defaultMessageForwarder[String, String]))
         When("Only one subscribes")
         private val one = service.system.actorOf(Props(new EchoActor("ONE")))
 
         Then("Subscription is acknowledged.")
-        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeAck("one", one))
+        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeOk("one"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello2"))(self)
+        subs.send(PublishMessage("1", "hello2", to))
 
         Then("Ack does not arrive back in 2*timeout time")
-        testKit.expectNoMsg(2 second)
+        testKit.expectMsgClass(2 second, classOf[NotOk[String]])
         And("existing subscriber gets the message anyway")
         assert(MandatorySubsActorTest.queue.size() == 1)
         assert(MandatorySubsActorTest.queue.contains("ONE:hello2"))
@@ -97,7 +97,8 @@ class MandatorySubsActorTest extends BgTestService {
     scenario("Additional subscriber over mandatory ones") {
       new WithService(s) {
         Given("Mandatory subs actor with two required subscribers")
-        private val subs = MandatorySubsActor.start(Settings("test3", List("one", "two"), MandatorySubsActor.defaultMessageForwarder[String]))
+        private val subs = MandatorySubsActor.start(Settings("test3", List("one", "two"),
+          MandatorySubsActor.defaultMessageForwarder[String, String]))
         When("Both of them subscribe")
         private val one = service.system.actorOf(Props(new EchoActor("ONE")))
         private val two = service.system.actorOf(Props(new EchoActor("TWO")))
@@ -105,15 +106,15 @@ class MandatorySubsActorTest extends BgTestService {
         private val three = service.system.actorOf(Props(new EchoActor("THREE")))
 
         Then("Subscription is acknowledged for each of them")
-        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeAck("one", one))
-        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeAck("two", two))
-        assert(Await.result(subs.subscribe(Subscribe("three", three)), 1 second) == SubscribeAck("three", three))
+        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeOk("one"))
+        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
+        assert(Await.result(subs.subscribe(Subscribe("three", three)), 1 second) == SubscribeOk("three"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello3"))(self)
+        subs.send(PublishMessage("1", "hello3", to))
 
         Then("Ack arrives back")
-        testKit.expectMsg(Ack("1"))
+        testKit.expectMsg(Ok("1"))
         And("All subscribers got the message together with not mandatory one")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello3"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello3"))
@@ -125,30 +126,33 @@ class MandatorySubsActorTest extends BgTestService {
     scenario("No subscribers at all") {
       new WithService(s) {
         Given("Mandatory subs actor with two required subscribers")
-        private val subs = MandatorySubsActor.start(Settings("test4", List("one", "two"), MandatorySubsActor.defaultMessageForwarder[String], 1 second))
+        private val subs = MandatorySubsActor.start(Settings("test4", List("one", "two"),
+          MandatorySubsActor.defaultMessageForwarder[String, String]))
         When("No subscribers register")
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello0"))(self)
+        subs.send(PublishMessage("1", "hello0", to))
 
         Then("No Ack arrives back")
-        testKit.expectNoMsg(2 second)
+        assert(testKit.expectMsgClass(classOf[NotOk[String]]).correlationId == "1")
+
       }
     }
 
     scenario("No mandatory subscribers") {
       new WithService(s) {
         Given("Mandatory subs actor with two required subscribers")
-        private val subs = MandatorySubsActor.start(Settings("test5", List("one", "two"), MandatorySubsActor.defaultMessageForwarder[String], 1 second))
+        private val subs = MandatorySubsActor.start(Settings("test5", List("one", "two"),
+          MandatorySubsActor.defaultMessageForwarder[String, String]))
         When("None of them subscribe but some other")
         private val three = service.system.actorOf(Props(new EchoActor("THREE")))
-        assert(Await.result(subs.subscribe(Subscribe("three", three)), 1 second) == SubscribeAck("three", three))
+        assert(Await.result(subs.subscribe(Subscribe("three", three)), 1 second) == SubscribeOk("three"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello5"))(self)
+        subs.send(PublishMessage("1", "hello5", to))
 
         Then("No Ack arrives back")
-        testKit.expectNoMsg(2 second)
+        assert(testKit.expectMsgClass(classOf[NotOk[String]]).correlationId == "1")
         And("All subscribers got the message")
         assert(MandatorySubsActorTest.queue.contains("THREE:hello5"))
         assert(MandatorySubsActorTest.queue.size() == 1)
@@ -158,21 +162,23 @@ class MandatorySubsActorTest extends BgTestService {
     scenario("One subscriber does not respond") {
       new WithService(s) {
         Given("Mandatory subs actor with two required subscribers")
-        private val subs = MandatorySubsActor.start(Settings("test1", List("one", "two"), MandatorySubsActor.defaultMessageForwarder[String], 1 second))
+        private val subs = MandatorySubsActor.start(Settings("test1", List("one", "two"),
+          MandatorySubsActor.defaultMessageForwarder[String, String]))
         When("Both of them subscribe but one never responds")
         private val one = service.system.actorOf(Props(new EchoActor("ONE")))
         private val two = service.system.actorOf(Props(new EchoActor("TWO", false)))
 
         Then("Subscription is acknowledged for each of them")
-        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeAck("one", one))
-        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeAck("two", two))
+        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeOk("one"))
+        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello1"))(self)
+        subs.send(PublishMessage("1", "hello1", to))
 
         Then("Ack does not arrive back in 2*timeout time")
-        testKit.expectNoMsg(2 second)
-        And("both subsctibers got the message anyway")
+
+        assert(testKit.expectMsgClass(classOf[NotOk[String]]).correlationId == "1")
+        And("both subscribers got the message anyway")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello1"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello1"))
       }
@@ -181,27 +187,29 @@ class MandatorySubsActorTest extends BgTestService {
     scenario("Subscriber fails") {
       new WithService(s) {
         Given("Mandatory subs actor with two required subscribers, and for one of them forwarder will return failure")
-        private val failingProvider: MessageForwarder[String] = new MessageForwarder[String] {
-          override def forward(publishMessage: PublishMessage[String], context: MessageForwarderContext[String])(implicit ec: ExecutionContext): Future[Status] = {
-            if (context.key == "one")
+        private val failingProvider: MessageForwarder[String, String] = new MessageForwarder[String, String] {
+          override def forward(pm: PublishMessage[String, String], context: MessageForwarderContext[String, String])
+                              (implicit executionContext: ExecutionContext, sender: ActorRef)
+          : Future[PublishMessageResult[String]] = {
+            if (context.subscriptionKey == "one")
               Future.failed(new Exception("ex"))
-            else MandatorySubsActor.defaultMessageForwarder.forward(publishMessage, context)
+            else MandatorySubsActor.defaultMessageForwarder.forward(pm, context)(executionContext, sender)
           }
         }
-        private val subs = MandatorySubsActor.start(Settings("test7", List("one", "two"), failingProvider, 1 second))
+        private val subs = MandatorySubsActor.start(Settings("test7", List("one", "two"), failingProvider))
         When("Both of them subscribe but one never responds")
         private val one = service.system.actorOf(Props(new EchoActor("ONE")))
         private val two = service.system.actorOf(Props(new EchoActor("TWO", false)))
 
         Then("Subscription is acknowledged for each of them")
-        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeAck("one", one))
-        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeAck("two", two))
+        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeOk("one"))
+        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello1"))(self)
+        subs.send(PublishMessage("1", "hello1", to))
 
         Then("Ack does not arrive back in 2*timeout time")
-        testKit.expectNoMsg(2 second)
+        assert(testKit.expectMsgClass(classOf[NotOk[String]]).correlationId == "1")
         And("only one subscriber got the message")
         assert(MandatorySubsActorTest.queue.contains("TWO:hello1"))
         assert(MandatorySubsActorTest.queue.size() == 1)
@@ -211,28 +219,29 @@ class MandatorySubsActorTest extends BgTestService {
     scenario("Repeated subscription") {
       new WithService(s) {
         Given("Mandatory subs actor with two required subscribers")
-        private val subs = MandatorySubsActor.start(Settings("test6", List("one", "two"), MandatorySubsActor.defaultMessageForwarder[String]))
+        private val subs = MandatorySubsActor.start(Settings("test6", List("one", "two"),
+          MandatorySubsActor.defaultMessageForwarder[String, String]))
         When("Both of them subscribe")
         private val one = service.system.actorOf(Props(new EchoActor("ONE")))
         private val two = service.system.actorOf(Props(new EchoActor("TWO")))
 
 
         Then("Subscription is acknowledged for each of them")
-        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeAck("one", one))
-        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeAck("two", two))
+        assert(Await.result(subs.subscribe(Subscribe("one", one)), 1 second) == SubscribeOk("one"))
+        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         And("One of them registers twice")
-        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeAck("two", two))
+        assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(PublishMessage("1", "hello0"))(self)
+        subs.send(PublishMessage("1", "hello0", to))
 
         Then("Ack arrives back")
-        testKit.expectMsg(Ack("1"))
+        testKit.expectMsg(Ok("1"))
         And("All subscribers got the message")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello0"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello0"))
-        And("There was no duplicated acks")
+        And("There was no duplicated acknowledgements")
         assert(MandatorySubsActorTest.queue.size() == 2)
       }
     }

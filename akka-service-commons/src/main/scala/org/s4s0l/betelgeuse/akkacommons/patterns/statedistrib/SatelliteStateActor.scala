@@ -16,58 +16,63 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
-import akka.actor.Status.{Failure, Status, Success}
 import akka.actor.{ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
-import akka.pattern.pipe
-import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionistExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListenerResponse, Settings, StateDistributed, StateDistributedConfirm}
-import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{IncomingMessage, SetVersionedValue, ValueUpdateOptimisticError, ValueUpdated}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol._
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.Protocol.{NotOk, Ok, StateDistributed, StateDistributedConfirm}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener.{StateChanged, StateChangedNotOk, StateChangedOk, StateChangedResult}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor._
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
+import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
 /**
   * @author Marcin Wielgus
   */
-class SatelliteStateActor[T](settings: Settings[T]) extends VersionedEntityActor(VersionedEntityActor.Settings(settings.name)) {
+class SatelliteStateActor[T](settings: Settings[T])
+  extends VersionedEntityActor(VersionedEntityActor.Settings(settings.name)) {
 
   override def receiveCommand: Receive = super.receiveCommand orElse {
-    case msg@StateDistributed(versionedId, _) =>
+    case StateDistributed(uuid, versionedId, expDuration) =>
       val senderTmp = sender()
       val option = getValueAtVersion(versionedId)
       if (option.isDefined) {
         option.foreach { it =>
           import context.dispatcher
-          settings.listener.configurationChanged(versionedId, it.asInstanceOf[T])
-            .map(it => SatelliteStateListenerResponse(it, msg, senderTmp))
-            .recover { case it: Throwable => SatelliteStateListenerResponse(Failure(it), msg, senderTmp) }
-            .pipeTo(self)
+          import org.s4s0l.betelgeuse.utils.AllUtils._
+          settings.listener.configurationChanged(StateChanged(versionedId, it.asInstanceOf[T], expDuration))
+            .map {
+              case StateChangedOk(_) => Ok(uuid)
+              case StateChangedNotOk(_, ex) => NotOk(uuid, ex)
+            }
+            .recover { case it: Throwable =>
+              if (log.isDebugEnabled)
+                log.error(it, "Unable to confirm StateDistributed for SatelliteState {}, id={}", settings.name, versionedId)
+              NotOk(uuid, it)
+            }
+            .pipeToWithTimeout(senderTmp, expDuration,
+              NotOk(uuid, new Exception("Timeout!!!")), context.system.scheduler)
         }
       } else {
-        senderTmp ! StateDistributedConfirm(versionedId, msg.destination, ok = false)
+        senderTmp ! NotOk(uuid, new Exception(s"No value at version $versionedId  "))
       }
-
-
-    case SatelliteStateListenerResponse(Success(_), StateDistributed(versionedId, dest), originalSender) =>
-      originalSender ! StateDistributedConfirm(versionedId, dest, ok = true);
-
-    case SatelliteStateListenerResponse(Failure(ex), StateDistributed(versionedId, dest), originalSender) =>
-      if (log.isDebugEnabled)
-        log.error(ex, "Unable to confirm StateDistributed for SatelliteState {}, id={}", settings.name, versionedId)
-      originalSender ! StateDistributedConfirm(versionedId, dest, ok = false);
   }
 
 }
 
 object SatelliteStateActor {
 
-  def startSharded[T](settings: Settings[T], propsMapper: Props => Props = identity, receptionist: Option[BgClusteringReceptionistExtension] = None)
+  def startSharded[T](settings: Settings[T],
+                      propsMapper: Props => Props = identity,
+                      receptionist: Option[BgClusteringReceptionistExtension] = None)
                      (implicit shardingExt: BgClusteringShardingExtension)
   : Protocol[T] = {
     val ref = shardingExt.start(s"/user/satellite-state-${settings.name}", Props(new SatelliteStateActor[T](settings)), entityExtractor)
@@ -78,60 +83,69 @@ object SatelliteStateActor {
   def getRemoteName(name: String): String = s"/user/satellite-state-$name"
 
   private def entityExtractor: ShardRegion.ExtractEntityId = {
-    case a: IncomingMessage => (a.id, a)
+    case a: IncomingMessage => (a.entityId, a)
     case a: StateDistributed => (a.versionedId.id, a)
   }
 
   trait SatelliteStateListener[T] {
-    def configurationChanged(versionedId: VersionedId, value: T)
-                            (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender): Future[Status]
+    def configurationChanged(msg: StateChanged[T])
+                            (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender)
+    : Future[StateChangedResult]
   }
-
-  final case class Settings[T](name: String, listener: SatelliteStateListener[T])
 
   /**
     * An protocol for [[SatelliteStateActor]]
     */
-  final class Protocol[T] private(actorTarget: ActorTarget) extends VersionedEntityActor.Protocol[T](actorTarget)
-    with SatelliteProtocol[T] {
+  final class Protocol[T] private(actorTarget: ActorTarget)
+    extends VersionedEntityActor.Protocol[T](actorTarget)
+      with SatelliteProtocol[T] {
 
-    def registerByName(): Unit = {
-
-    }
 
     /**
       * distributes state change
       */
-    override def stateChanged(versionedId: VersionedId, value: T, destination: String)
-                             (implicit timeout: Timeout, executionContext: ExecutionContext): Future[Status] = {
-      setVersionedValue(SetVersionedValue(versionedId, value, Some(destination)))
+    def stateChanged(msg: StateChange[T])
+                    (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[StateChangeResult] = {
+      setVersionedValue(SetVersionedValue(msg.versionedId, msg.value))(executionContext, sender, msg.expectedConfirmIn)
         .map {
-          case ok: ValueUpdated => Success(ok)
-          case err: ValueUpdateOptimisticError => Failure(new Exception(err.toString))
+          case _: SetValueOk => ChangeOk(msg.messageId)
+          case err: SetValueNotOk => ChangeNotOk(msg.messageId, err.ex)
         }
         .recover {
-          case x: Throwable => Failure(x)
+          case x: Throwable => ChangeNotOk(msg.messageId, x)
         }
     }
 
     /**
       * informs that all destinations confirmed
       */
-    override def stateDistributed(versionedId: VersionedId, destination: String)
-                                 (implicit timeout: Timeout, executionContext: ExecutionContext): Future[Status] = {
-      actorTarget.?(StateDistributed(versionedId, destination))
+    def stateDistributed(msg: DistributionComplete)
+                        (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[DistributionResult] = {
+      actorTarget.?(StateDistributed(msg.messageId, msg.versionedId, msg.expectedConfirmIn))(msg.expectedConfirmIn, sender)
         .mapTo[StateDistributedConfirm]
         .map {
-          case msg@StateDistributedConfirm(_, _, true) => Success(msg)
-          case StateDistributedConfirm(_, _, false) => Failure(new Exception(s"Unable to distribute confirmation to destination $destination for version $versionedId"))
+          case Ok(_) => DistributionOk(msg.messageId)
+          case NotOk(_, ex) => DistributionNotOk(msg.messageId, ex)
         }
-        .recover { case ex: Throwable => Failure(ex) }
+        .recover { case ex: Throwable => DistributionNotOk(msg.messageId, ex) }
     }
-
-
   }
 
-  private case class SatelliteStateListenerResponse(status: Status, originalMessage: StateDistributed, originalSender: ActorRef)
+  final case class Settings[T](name: String, listener: SatelliteStateListener[T])
+
+  object SatelliteStateListener {
+
+    sealed trait StateChangedResult extends NullResult[VersionedId]
+
+    case class StateChanged[T](messageId: VersionedId, value: T, expDuration: FiniteDuration) extends Question[VersionedId]
+
+    case class StateChangedOk(correlationId: VersionedId) extends StateChangedResult with OkNullResult[VersionedId]
+
+    case class StateChangedNotOk(correlationId: VersionedId, ex: Throwable) extends StateChangedResult with NotOkNullResult[VersionedId]
+
+  }
 
   object Protocol {
     /**
@@ -139,11 +153,15 @@ object SatelliteStateActor {
       */
     def apply[T](actorTarget: ActorTarget): Protocol[T] = new Protocol(actorTarget)
 
+    sealed trait StateDistributedConfirm extends NullResult[Uuid]
+
+    case class StateDistributed(messageId: Uuid, versionedId: VersionedId, expectedConfirmIn: FiniteDuration) extends Question[Uuid]
+
+    case class Ok(correlationId: Uuid) extends StateDistributedConfirm with OkNullResult[Uuid]
+
+    case class NotOk(correlationId: Uuid, ex: Throwable) extends StateDistributedConfirm with NotOkNullResult[Uuid]
 
   }
 
-  private case class StateDistributed(versionedId: VersionedId, destination: String)
 
-  private case class StateDistributedConfirm(versionedId: VersionedId, destination: String, ok: Boolean)
-
-}    
+}
