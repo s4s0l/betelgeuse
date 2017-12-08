@@ -20,13 +20,13 @@
 
     <!--<weaver options="-verbose">-->
     <weaver options="-warn:none">
-        <include within="org.flywaydb.core.internal.dbsupport.DbSupportFactory"/>
+        <include within="org.flywaydb.core.internal.database.DatabaseFactory"/>
         <include within="org.flywaydb.core.internal.util.scanner.classpath.FileSystemClassPathLocationScanner"/>
-        <include within="org.s4s0l.betelgeuse.akkacommons.persistence.crate.FlywayAspects"/>
+        <include within="org.s4s0l.betelgeuse.akkacommons.persistence.FlywayAspects"/>
     </weaver>
 
     <aspects>
-        <aspect name="org.s4s0l.betelgeuse.akkacommons.persistence.crate.FlywayAspects"/>
+        <aspect name="org.s4s0l.betelgeuse.akkacommons.persistence.FlywayAspects"/>
     </aspects>
 
 </aspectj>

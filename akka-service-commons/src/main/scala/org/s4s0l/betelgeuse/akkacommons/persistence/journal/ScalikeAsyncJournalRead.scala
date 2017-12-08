@@ -28,8 +28,9 @@ import scalikejdbc.{DBSession, _}
 object ScalikeAsyncJournalRead {
 
 
-  def getAllAgregates(actorType: String): DBSession => List[PersistenceId] = implicit session => {
-    sql"select distinct id from crate_async_write_journal_entity where tag = $actorType"
+  def getAllAgregates(actorType: String, prefix: String): DBSession => List[PersistenceId] = implicit session => {
+    val table = SQLSyntax.createUnsafely(s"${prefix}_async_write_journal_entity")
+    sql"select distinct id from $table where tag = $actorType"
       .map(_.string(1))
       .list()
       .apply()
@@ -37,3 +38,4 @@ object ScalikeAsyncJournalRead {
   }
 
 }
+

@@ -83,10 +83,6 @@ abstract class ScalikeAsyncWriteJournal[T <: ScalikeAsyncWriteJournalEntity](imp
     }
   }
 
-  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
-    Future.failed(new UnsupportedOperationException("message deletion is not supported, in crate it could mess up consistency."))
-  }
-
   override def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)
                                   (recoveryCallback: (PersistentRepr) => Unit): Future[Unit] = {
 

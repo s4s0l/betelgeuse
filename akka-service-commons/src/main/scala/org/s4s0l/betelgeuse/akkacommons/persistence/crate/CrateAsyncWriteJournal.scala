@@ -23,6 +23,8 @@ import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
 import org.slf4j.LoggerFactory
 import scalikejdbc.DBSession
 
+import scala.concurrent.Future
+
 /**
   * @author Marcin Wielgus
   */
@@ -30,6 +32,9 @@ class CrateAsyncWriteJournal extends ScalikeAsyncWriteJournal[CrateAsyncWriteJou
   private val LOGGER = LoggerFactory.getLogger(getClass)
   override val dao: CrateAsyncWriteJournalDao = new CrateAsyncWriteJournalDao(JacksonJsonSerializer.get(serialization))
 
+  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
+    Future.failed(new UnsupportedOperationException("message deletion is not supported, it could mess up consistency."))
+  }
 
   override def mapExceptions(session: DBSession): PartialFunction[Exception, Exception] = {
     case sql: SQLException if sql.getMessage.contains("DuplicateKeyException") =>

@@ -20,15 +20,19 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfterAll, FeatureSpec}
+import scalikejdbc.interpolation.SQLSyntax
+
+
 
 /**
   * @author Marcin Wielgus
   */
-class BetelgeuseDbTest extends FeatureSpec with BeforeAndAfterAll {
+class BetelgeuseDbTestRoach extends FeatureSpec with BeforeAndAfterAll {
 
-  lazy val scalike = new BetelgeuseDb(ConfigFactory.load("BetelgeuseDbTest.conf"))
+  lazy val scalike = new BetelgeuseDb(ConfigFactory.load("BetelgeuseDbTestRoach.conf"))
+  lazy val TEST_TABLE_SCHEMA = SQLSyntax.createUnsafely("betelgeusedbtestroach")
 
-  feature("BetelgeuseDb allows use of dcalikeJdbc") {
+  feature("BetelgeuseDb allows use of salikeJdbc") {
     import scalikejdbc._
 
     scenario("Readonly interpolation queries") {
@@ -44,15 +48,15 @@ class BetelgeuseDbTest extends FeatureSpec with BeforeAndAfterAll {
       }
       assert(vals == List("1"))
     }
-    //    scenario("Direct usage of scalike api") {
-    //      val tablesInSchema = scalike.underlyingPureScalikeJdbcDb().readOnly { implicit session =>
-    //        sql"""SELECT TABLE_NAME FROM information_schema.tables
-    //           WHERE TABLE_NAME = 'test_schema_version' AND table_schema= 'betelgeusedbtest'"""
-    //          .map(_.string(1)).list.apply()
-    //      }
-    //
-    //      assert(tablesInSchema.size == 1)
-    //    }
+    scenario("Direct usage of scalike api") {
+      val tablesInSchema = scalike.readOnly { implicit session =>
+        sql"""SELECT TABLE_NAME FROM information_schema.tables
+               WHERE TABLE_NAME = 'test_schema_version' AND table_schema= '$TEST_TABLE_SCHEMA'"""
+          .map(_.string(1)).list.apply()
+      }
+
+      assert(tablesInSchema.size == 1)
+    }
   }
 
   override protected def beforeAll(): Unit = {
@@ -63,9 +67,8 @@ class BetelgeuseDbTest extends FeatureSpec with BeforeAndAfterAll {
   override protected def afterAll(): Unit = {
     import scalikejdbc._
     scalike.localTx { implicit session =>
-      sql"delete from locks.locks".execute().apply()
-      sql"drop table betelgeusedbtest.test_schema_version".execute().apply()
-      sql"drop table betelgeusedbtest.test_table".execute().apply()
+      sql"drop table $TEST_TABLE_SCHEMA.test_schema_version".execute().apply()
+      sql"drop table $TEST_TABLE_SCHEMA.test_table".execute().apply()
     }
     scalike.closeAll()
   }

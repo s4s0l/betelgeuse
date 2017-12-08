@@ -18,6 +18,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs
 
+import org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateAsyncWriteJournalEntity
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{PersistenceId, ScalikeAsyncJournalRead}
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbAccess
 
@@ -28,6 +29,6 @@ class GlobalConfigCrateQueryFacade(dbAccess: DbAccess) extends GlobalConfigQuery
 
 
   override def getGlobalConfigIds(actorType: String): List[PersistenceId] = {
-    dbAccess.query(ScalikeAsyncJournalRead.getAllAgregates(actorType))
+    dbAccess.query(ScalikeAsyncJournalRead.getAllAgregates(actorType, "crate"))
   }
 }

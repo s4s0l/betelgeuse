@@ -18,15 +18,16 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import org.flywaydb.core.internal.dbsupport.{JdbcTemplate, Schema, Table}
+import org.flywaydb.core.internal.database.{Schema, Table}
+import org.flywaydb.core.internal.util.jdbc.JdbcTemplate
 
 import scala.collection.JavaConverters._
 
 /**
   * @author Marcin Wielgus
   */
-class CrateDbSchema(jdbcTemplate: JdbcTemplate, dbSupport: CrateDbSupport, name: String)
-  extends Schema[CrateDbSupport](jdbcTemplate, dbSupport, name) {
+class CrateDbSchema(jdbcTemplate: JdbcTemplate, dbSupport: CrateDatabase, name: String)
+  extends Schema[CrateDatabase](jdbcTemplate, dbSupport, name) {
   override def doClean(): Unit = {
 
     doAllTables().foreach(it => it.drop())

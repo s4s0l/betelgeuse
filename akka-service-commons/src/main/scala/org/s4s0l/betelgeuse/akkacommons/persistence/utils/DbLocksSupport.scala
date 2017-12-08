@@ -16,6 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
+import com.typesafe.config.Config
+import org.slf4j.LoggerFactory
 import scalikejdbc.DBSession
 
 /**
@@ -35,4 +37,16 @@ object DbLocksSupport {
 
     override def runLocked(lockName: String, lockSettings: DbLocksSettings = DbLocksSettings())(code: => Unit)(implicit dBSession: DBSession): Unit = code
   }
+}
+
+class NoopLocker(config: Config) extends DbLocksSupport {
+  private val LOGGER = LoggerFactory.getLogger(getClass)
+
+  override def initLocks(implicit dBSession: DBSession): Unit = {}
+
+  override def runLocked(lockName: String, lockSettings: DbLocksSettings = DbLocksSettings())(code: => Unit)(implicit dBSession: DBSession): Unit = {
+    LOGGER.warn("You are using NoopLocker. This is very dangerous for consistency!")
+    code
+  }
+
 }

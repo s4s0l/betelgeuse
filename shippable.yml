@@ -24,7 +24,19 @@ build:
     - if docker node ls > /dev/null 2>&1; then echo "this is a swarm node"; else docker swarm init; fi
     - docker info
     - docker service ls
+    - docker service rm cockroachdb || true
     - docker service rm crate || true
+    - >
+      docker service create \
+          --name cockroachdb \
+          --mode global \
+          --hostname localhost \
+          --mount type=volume,source=roach-test-db,target=/data/cockroach-data \
+          --stop-grace-period 60s \
+          --publish 26257:26257 \
+          cockroachdb/cockroach:v1.1.3 start \
+          --logtostderr \
+          --insecure
     - >
       docker service create \
           --name crate \
@@ -37,7 +49,7 @@ build:
           --publish 4300:4300 \
           --publish 5432:5432 \
           --mount type=volume,source=crate-test-db,target=/data \
-        crate:latest \
+        crate:2.2.4 \
           crate \
           -Cpath.repo=/data/repos \
           -Cdiscovery.zen.ping.unicast.hosts=crate \
@@ -52,6 +64,8 @@ build:
     - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test jacocoTestReport jacocoFullReport --info --stacktrace
   post_ci:
   on_failure:
+    - docker service logs cockroachdb
+    - docker service rm cockroachdb
     - docker service logs crate
     - docker service rm crate
     - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
@@ -64,6 +78,7 @@ build:
       ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache
       -Pversion="$GIT_TAG_NAME" --info bintrayUpload
       ) || (echo "SKIPPED")
+    - docker service rm cockroachdb
     - docker service rm crate
     - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
     - cp build/reports/jacoco/jacocoFullReport/jacocoFullReport.xml shippable/codecoverage

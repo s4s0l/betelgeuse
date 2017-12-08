@@ -32,7 +32,7 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class GlobalConfigSupervisorActorTest extends BgTestWithCrateDb[BgPersistenceJournalCrate with BgClusteringPubSub] {
+class GlobalConfigSupervisorCrateActorTest extends BgTestWithCrateDb[BgPersistenceJournalCrate with BgClusteringPubSub] {
   //  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(getClass)
 
   override def createService(): BgPersistenceJournalCrate with BgClusteringPubSub
@@ -40,12 +40,11 @@ class GlobalConfigSupervisorActorTest extends BgTestWithCrateDb[BgPersistenceJou
 
   }
 
-  feature("Global config mechnizm for distributing changes in configuration, and fast access to it") {
+  feature("Global config mechanism for distributing changes in configuration, and fast access to it") {
     scenario("Starts global config stores sth in it and it is available on reboot") {
       initialRun
 
       restartService()
-      refreshTable("crate_async_write_journal_entity")
 
       secondRun
     }

@@ -27,3 +27,5 @@ CREATE TABLE "${schema}"."${table}" (
     "success" BOOLEAN NOT NULL,
     primary key (installed_rank)
 );
+
+refresh table "${schema}"."${table}";

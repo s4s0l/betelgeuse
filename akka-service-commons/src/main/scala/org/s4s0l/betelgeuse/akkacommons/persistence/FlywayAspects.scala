@@ -16,33 +16,34 @@
 
 
 
-package org.s4s0l.betelgeuse.akkacommons.persistence.crate
+package org.s4s0l.betelgeuse.akkacommons.persistence
 
 import java.sql.{Connection, Types}
 
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.{Around, Aspect}
 import org.flywaydb.core.api.FlywayException
-import org.flywaydb.core.internal.dbsupport.JdbcTemplate
+import org.flywaydb.core.api.configuration.FlywayConfiguration
+import org.flywaydb.core.internal.util.jdbc.{JdbcTemplate, JdbcUtils}
+import org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateDatabase
 
 /**
   * @author Marcin Wielgus
   */
 @Aspect
 class FlywayAspects {
-  @Around("execution(* org.flywaydb.core.internal.dbsupport.DbSupportFactory.createDbSupport(..)) && args(connection, printInfo)")
-  def onSingleRequest(pjp: ProceedingJoinPoint, connection: Connection, printInfo: Boolean): Any = {
+  @Around("execution(* org.flywaydb.core.internal.database.DatabaseFactory.createDatabase(..)) && args(configuration, printInfo)")
+  def onSingleRequest(pjp: ProceedingJoinPoint, configuration: FlywayConfiguration, printInfo: Boolean): Any = {
     try {
       pjp.proceed()
     } catch {
       case a: FlywayException if a.getMessage.startsWith("Unsupported Database: Crate") =>
-        new CrateDbSupport(new JdbcTemplate(connection, Types.NULL))
+        new CrateDatabase(new JdbcTemplate(JdbcUtils.openConnection(configuration.getDataSource)), configuration, Types.NULL)
     }
   }
 
   @Around("execution(* org.flywaydb.core.internal.util.scanner.classpath.FileSystemClassPathLocationScanner.findResourceNames(..)) && args(*, *)")
   def disableFileSystemClasspath(pjp: ProceedingJoinPoint): Any = {
       pjp.proceed()
-
   }
 }

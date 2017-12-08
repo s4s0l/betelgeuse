@@ -18,18 +18,25 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import org.flywaydb.core.internal.dbsupport.{JdbcTemplate, Table}
+import org.flywaydb.core.internal.database.{Database, Table}
+import org.flywaydb.core.internal.util.jdbc.JdbcTemplate
+
 
 /**
   * @author Marcin Wielgus
   */
-class CrateDbTable(jdbcTemplate: JdbcTemplate, dbSupport: CrateDbSupport, schema: CrateDbSchema, name: String)
+class CrateDbTable(jdbcTemplate: JdbcTemplate, dbSupport: Database[CrateDbConnection], schema: CrateDbSchema, name: String)
   extends Table(jdbcTemplate, dbSupport, schema, name) {
   override def doExists(): Boolean = {
     jdbcTemplate.queryForStringList("select table_name from information_schema.tables where table_schema = ? and table_name = ?", schema.getName, name).size() == 1
   }
 
+  /**
+    * This is a workaround for crate being eventually consistent.
+    * this is run before each migration DbMigrate.java:143
+    */
   override def doLock(): Unit = {
+    jdbcTemplate.update(s"refresh table ${schema.getName}.$name")
   }
 
   override def doDrop(): Unit = {

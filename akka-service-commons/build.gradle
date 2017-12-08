@@ -22,6 +22,21 @@ ext {
 
 
 
+/**
+ *  to create permanent alias add following line to ~/.bashrc
+ *
+ *      alias repl='gradle repl --console plain --no-daemon'
+ */
+task ('repl', type:JavaExec) {
+    description = "Scala repl with projects classpath run with: './gradlew repl --console plain --no-daemon'"
+    main = "scala.tools.nsc.MainGenericRunner"
+    classpath = sourceSets.main.runtimeClasspath
+    standardInput System.in
+    args '-usejavacp'
+}
+
+
+
 apply from: '../gradle/scala.gradle'
 apply from: '../gradle/akka.gradle'
 //apply from: '../gradle/kamon.gradle'
@@ -33,7 +48,8 @@ dependencies {
     compile 'ch.qos.logback:logback-classic:1.2.3'
     compile 'ch.qos.logback:logback-core:1.2.3'
     compile 'io.crate:crate-jdbc:2.2.0'
-    compile "org.flywaydb:flyway-core:4.2.0"
+    compile 'org.postgresql:postgresql:42.1.4'
+    compile "org.flywaydb:flyway-core:5.0.0-FlakMfix"
     compile "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
     compile "com.fasterxml.jackson.module:jackson-module-scala_${scalaBinaryVersion}:${jacksonVersion}"
     compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'

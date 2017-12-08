@@ -80,8 +80,8 @@ object DbTest {
   def runWithoutSchemaMigration(config: Config, databaseName: String, cleanUp: (Config, DBSession) => Unit): Unit = {
     val prepareConfig = ConfigFactory.parseString(
       s"""
-         |flyway.enabled = false
-         |db.$databaseName.flyway.enabled = false""".stripMargin)
+         |db.$databaseName.migrations.enabled = false
+         """.stripMargin)
     val usedConfig = prepareConfig.withFallback(config)
     val prepareConnection = new BetelgeuseDb(usedConfig)
     try {

@@ -21,8 +21,8 @@ package org.s4s0l.betelgeuse.akkacommons.utils
 import akka.actor.Props
 import akka.persistence.PersistentActor
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
-import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithCrateDb
+import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
+import org.s4s0l.betelgeuse.akkacommons.test.{BgTestWithRoachDb}
 import org.s4s0l.betelgeuse.akkacommons.utils.AsyncInitActorTest.SampleAsyncInitActor
 
 import scala.concurrent.duration._
@@ -31,13 +31,13 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class AsyncInitActorTest extends BgTestWithCrateDb[BgPersistenceJournalCrate with BgClusteringSharding] {
-  override def createService(): BgPersistenceJournalCrate with BgClusteringSharding = new BgPersistenceJournalCrate with BgClusteringSharding {
+class AsyncInitActorTest extends BgTestWithRoachDb[BgPersistenceJournalRoach with BgClusteringSharding] {
+  override def createService(): BgPersistenceJournalRoach with BgClusteringSharding = new BgPersistenceJournalRoach with BgClusteringSharding {
 
   }
 
 
-  feature("Journal crate provides journal configuration to be used by actors") {
+  feature("Journal roach provides journal configuration to be used by actors") {
     scenario("Actor persists itself ad responds") {
 
       val actor = system.actorOf(Props(new SampleAsyncInitActor))
@@ -46,7 +46,7 @@ class AsyncInitActorTest extends BgTestWithCrateDb[BgPersistenceJournalCrate wit
       actor ! "command"
 
       testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "receiveCommand"))
-      refreshTable("crate_async_write_journal_entity")
+
       val actor2 = system.actorOf(Props(new SampleAsyncInitActor))
       actor2 ! "init"
       testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))

@@ -82,15 +82,15 @@ class BetelgeuseDb(val config: Config) extends DBs
     }
     encounteredPoolLocks += (dbName.name -> locksSupport)
 
-    if (flywayConfig.hasPath("enabled") && flywayConfig.getBoolean("enabled")) {
-      localTx({
+    if (dbConfig.hasPath("migrations.enabled") && dbConfig.getBoolean("migrations.enabled")) {
+      localTx {
         implicit session =>
           import scala.concurrent.duration._
           locksSupport.initLocks(session)
           locksSupport.runLocked(s"MigrationOf${dbName.name}", DbLocksSettings(10 minutes, 35, 1 seconds)) {
             new FlyTrackPersistenceSchemaUpdater(flywayConfig).updateSchema(new DummyDataSource(dbName))
           }
-      }, name = dbName.name)
+      }
     }
   }
 
@@ -117,11 +117,8 @@ class BetelgeuseDb(val config: Config) extends DBs
 
   private def getFlywayConfig(dbName: Symbol, dbConfig: Config) = {
     import org.s4s0l.betelgeuse.utils.AllUtils._
-    val validationDefault = dbConfig.string("poolValidationQuery").map { it =>
-      ConfigFactory.parseString(s"connectionAcquireValidationQuery=$it")
-    }.getOrElse(ConfigFactory.empty())
 
-    val defaultConfig: Config = getFlywayDefaultConfig(dbName).withFallback(validationDefault)
+    val defaultConfig: Config = getFlywayDefaultConfig(dbName)
 
     dbConfig.config("flyway").map { it =>
       it.withFallback(defaultConfig)

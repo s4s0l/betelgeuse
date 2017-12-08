@@ -21,8 +21,8 @@ import akka.actor.Status.{Failure, Status, Success}
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.{SatelliteStateListener, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestCrate
+import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 import org.scalatest.Outcome
 
@@ -33,7 +33,7 @@ import scala.language.postfixOps
   * @author Marcin Wielgus
   */
 class SatelliteStateActorTest extends
-  BgTestCrate {
+  BgTestRoach {
 
 
   val successListener: SatelliteStateListener[String] = new SatelliteStateListener[String] {
@@ -183,7 +183,7 @@ class SatelliteStateActorTest extends
 
     }
   }
-  private val my = testWith(new BgPersistenceJournalCrate
+  private val my = testWith(new BgPersistenceJournalRoach
     with BgClusteringSharding {
     lazy val successSatellite: SatelliteStateActor.Protocol[String] = SatelliteStateActor.startSharded[String](Settings("SatelliteStateActorTestSuccess", successListener))
     lazy val failedSatellite: SatelliteStateActor.Protocol[String] = SatelliteStateActor.startSharded[String](Settings("SatelliteStateActorTestFailing", failingListener))

@@ -21,8 +21,8 @@ import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
-import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithCrateDb
+import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithRoachDb
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -31,14 +31,14 @@ import scala.language.postfixOps
   * @author Marcin Wielgus
   */
 class VersionedEntityActorTest extends
-  BgTestWithCrateDb[BgPersistenceJournalCrate with BgClusteringSharding] {
+  BgTestWithRoachDb[BgPersistenceJournalRoach with BgClusteringSharding] {
 
   val to: FiniteDuration = 5 second
   implicit val timeUnit: Timeout = to
 
-  override def createService(): BgPersistenceJournalCrate
+  override def createService(): BgPersistenceJournalRoach
     with BgClusteringSharding
-  = new BgPersistenceJournalCrate
+  = new BgPersistenceJournalRoach
     with BgClusteringSharding {
   }
 

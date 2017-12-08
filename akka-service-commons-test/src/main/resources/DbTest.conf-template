@@ -6,14 +6,16 @@ db.${testName} {
   poolValidationQuery = "select 1 as one"
   poolFactoryName = "commons-dbcp2"
 
+  migrations.enabled=true
+
   flyway {
+    user = "root"
     locations = db/migration/${testName}
     schemas="${schemaName}"
   }
 }
 
 flyway {
-    enabled = true
 }
 
 scalikejdbc.global {

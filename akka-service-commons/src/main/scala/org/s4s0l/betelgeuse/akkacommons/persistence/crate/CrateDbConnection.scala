@@ -15,30 +15,24 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import org.flywaydb.core.internal.dbsupport.{DbSupport, JdbcTemplate, SqlStatementBuilder}
+import java.sql.Types
+
+import org.flywaydb.core.api.configuration.FlywayConfiguration
+import org.flywaydb.core.internal.database.Connection
 import org.flywaydb.core.internal.util.StringUtils
-import org.slf4j.{Logger, LoggerFactory}
+import org.flywaydb.core.internal.util.jdbc.JdbcTemplate
+
 
 /**
-  * @author Marcin Wielgus
+  * @author Maciej Flak
   */
-class CrateDbSupport(jdbcTemplate: JdbcTemplate) extends DbSupport(jdbcTemplate) {
-
-  val LOGGER: Logger = LoggerFactory.getLogger(getClass)
-
-  override def getCurrentUserFunction: String = "'default_user'"
+class CrateDbConnection(conf: FlywayConfiguration, db: CrateDatabase, jdbcTemplate: JdbcTemplate, nullType: Int = Types.NULL)
+  extends Connection[CrateDatabase](conf, db, jdbcTemplate.getConnection, nullType) {
 
   override def doGetCurrentSchemaName(): String =
     jdbcTemplate.queryForString("SELECT CURRENT_SCHEMA")
-
-  override def supportsDdlTransactions(): Boolean = false
-
-  override def getBooleanTrue: String = "true"
-
-  override def getDbName: String = "crate"
 
   override def doChangeCurrentSchemaTo(schema: String): Unit = {
     if (!StringUtils.hasLength(schema))
@@ -48,16 +42,6 @@ class CrateDbSupport(jdbcTemplate: JdbcTemplate) extends DbSupport(jdbcTemplate)
   }
 
   override def getSchema(name: String): CrateDbSchema = {
-    new CrateDbSchema(jdbcTemplate, this, name)
+    new CrateDbSchema(jdbcTemplate, db, name)
   }
-
-  override def catalogIsSchema() = false
-
-  override def createSqlStatementBuilder() = new SqlStatementBuilder()
-
-  override def doQuote(identifier: String): String = "\"" + StringUtils.replaceAll(identifier, "\"", "\"\"") + "\""
-
-  override def getBooleanFalse = "false"
-
-  override def useSingleConnection() = true
 }

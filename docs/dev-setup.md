@@ -1,4 +1,4 @@
-# cratedbstartup
+# Databases setup for unit tests
 Swarm required: `docker swarm init`
 
 ```
@@ -25,6 +25,17 @@ docker service create \
     -Cgateway.recover_after_nodes=1 \
     -Cnetwork.host=_site_ \
     -Clicense.enterprise=false
+
+docker service create \
+    --name cockroachdb \
+    --mode global \
+    --hostname localhost \
+    --mount type=volume,source=roach-test-db,target=/data/cockroach-data \
+    --stop-grace-period 60s \
+    --publish 26257:26257 \
+    cockroachdb/cockroach:v1.1.3 start \
+    --logtostderr \
+    --insecure
 ```
 
 # copyright idea template

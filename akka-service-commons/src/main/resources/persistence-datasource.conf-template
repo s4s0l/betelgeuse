@@ -5,11 +5,13 @@ db.${datasource} {
   poolValidationQuery = "select 1 as one"
   poolFactoryName = "commons-dbcp2"
 
+  migrations.enabled=true
+
   flyway {
     #needed for internal mechanizms schema migration (versions < 1.0)
     outOfOrder = true
-    enabled = true
-    locations = "${locations}"
+    user = "root"
     schemas = "${schema}"
+    locations = "${locations}"
   }
 }

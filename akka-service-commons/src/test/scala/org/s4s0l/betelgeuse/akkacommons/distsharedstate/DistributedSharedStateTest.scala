@@ -19,6 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.distsharedstate
 import akka.actor.Status
 import akka.actor.Status.{Failure, Status, Success}
 import com.typesafe.config.Config
+import org.flywaydb.core.internal.util.StringUtils
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClient
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
@@ -27,9 +28,10 @@ import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedStateTe
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{SetValue, ValueUpdated}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestCrate
+import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
+import org.s4s0l.betelgeuse.akkacommons.test.{BgTestRoach, DbRoachTest}
 import org.s4s0l.betelgeuse.akkacommons.{BgService, BgServiceId}
+import scalikejdbc.DBSession
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, Promise}
@@ -38,11 +40,12 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class DistributedSharedStateTest extends BgTestCrate {
+class DistributedSharedStateTest extends BgTestRoach {
 
   concurentRun = true
 
-  private val origin = testWith(new BgService with BgPersistenceJournalCrate with BgClusteringReceptionist with BgClusteringSharding with BgClusteringClient {
+
+  private val origin = testWith(new BgService with BgPersistenceJournalRoach with BgClusteringReceptionist with BgClusteringSharding with BgClusteringClient {
     override protected def systemName: String = "origin"
 
     override protected def portBase: Int = 1
@@ -63,7 +66,7 @@ class DistributedSharedStateTest extends BgTestCrate {
     }
   })
 
-  private val satellite1 = testWith(new BgService with BgPersistenceJournalCrate with BgClusteringReceptionist with BgClusteringSharding with BgClusteringClient {
+  private val satellite1 = testWith(new BgService with BgPersistenceJournalRoach with BgClusteringReceptionist with BgClusteringSharding with BgClusteringClient {
     override protected def systemName: String = "satellite1"
 
     override protected def portBase: Int = 2
@@ -78,7 +81,7 @@ class DistributedSharedStateTest extends BgTestCrate {
     }
 
   })
-  private val satellite2 = testWith(new BgService with BgPersistenceJournalCrate with BgClusteringReceptionist with BgClusteringSharding with BgClusteringClient {
+  private val satellite2 = testWith(new BgService with BgPersistenceJournalRoach with BgClusteringReceptionist with BgClusteringSharding with BgClusteringClient {
     override protected def systemName: String = "satellite2"
 
     override protected def portBase: Int = 3

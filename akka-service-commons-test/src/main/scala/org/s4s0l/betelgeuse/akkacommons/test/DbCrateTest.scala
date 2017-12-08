@@ -74,6 +74,7 @@ object DbCrateTest {
         val schema = SQLSyntax.createUnsafely(schemaName)
         val table = SQLSyntax.createUnsafely(it)
         sql"delete from $schema.$table".update().apply()
+        sql"refresh table $schema.$table".update().apply()
       }
   }
 
