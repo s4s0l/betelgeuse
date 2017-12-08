@@ -60,7 +60,7 @@ class DistributedSharedStateTest extends BgTestCrate {
       super.onInitialized()
       val dist = DistributedSharedState.createStateDistributionToRemoteServices[String]("state",
         List(BgServiceId("satellite1", 2), BgServiceId("satellite2", 3)))
-      origin = OriginStateActor.startSharded(OriginStateActor.Settings("state", dist, 3 seconds))
+      origin = OriginStateActor.startSharded(OriginStateActor.Settings("state", dist, 4 seconds))
     }
   })
 
@@ -104,9 +104,9 @@ class DistributedSharedStateTest extends BgTestCrate {
       val value = SetValue("1", "valueOne")
       origin.service.origin.setValueMsg(value)(origin.execContext, origin.self)
       origin.testKit.expectMsg(SetValueOk(value.messageId, VersionedId("1", 1)))
-      assert(satellite1.service.consumer.consumer.getPromisedValue(2 second) == (VersionedId("1", 1), "enriched:valueOne"))
-      assert(Await.result(satellite1.service.consumer.cache.getVersion("1")(satellite1.execContext, satellite1.self), 1 second) == VersionedId("1", 1))
-      assert(Await.result(satellite1.service.consumer.cache.getVersion("2")(satellite1.execContext, satellite1.self), 1 second) == VersionedId("2", 0))
+      assert(satellite1.service.consumer.consumer.getPromisedValue(4 second) == (VersionedId("1", 1), "enriched:valueOne"))
+      assert(Await.result(satellite1.service.consumer.cache.getVersion("1")(satellite1.execContext, satellite1.self), 4 second) == VersionedId("1", 1))
+      assert(Await.result(satellite1.service.consumer.cache.getVersion("2")(satellite1.execContext, satellite1.self), 4 second) == VersionedId("2", 0))
       assert(Await.result(satellite1.service.consumer.cache.getValue(VersionedId("1", 1))(satellite1.execContext, satellite1.self), 1 second) == "enriched:valueOne")
       assertThrows[Exception](Await.result(satellite1.service.consumer.cache.getValue(VersionedId("2", 1))(satellite1.execContext, satellite1.self), 1 second))
       assert(satellite2.service.consumer.consumer.getPromisedValue(2 second) == (VersionedId("1", 1), "enriched:valueOne"))
@@ -118,19 +118,21 @@ class DistributedSharedStateTest extends BgTestCrate {
       satellite2.service.consumer.consumer.nextSuccess()
       satellite1.service.consumer.consumer.nextFail()
       When("new version is published")
-      val value = SetValue("2", "valueTwo")
+      val value = SetValue("1", "valueTwo")
       origin.service.origin.setValueMsg(value)(origin.execContext, origin.self)
       Then("We get confirmation from origin")
-      origin.testKit.expectMsg(SetValueOk(value.messageId, VersionedId("2", 1)))
+      origin.testKit.expectMsg(SetValueOk(value.messageId, VersionedId("1", 2)))
       And("All listeners were called")
-      assert(satellite1.service.consumer.consumer.getPromisedValue(2 second) == (VersionedId("2", 1), "enriched:valueTwo"))
-      //      assert(satellite2.service.consumer.consumer.getPromisedValue(1 second) == (VersionedId("2", 1), "enriched:valueTwo"))
+      assert(satellite1.service.consumer.consumer.getPromisedValue(4 second) == (VersionedId("1", 2), "enriched:valueTwo"))
+      assert(satellite2.service.consumer.consumer.getPromisedValue(1 second) == (VersionedId("1", 2), "enriched:valueTwo"))
       When("Next listener callback will be success")
       satellite1.service.consumer.consumer.nextSuccess()
       satellite2.service.consumer.consumer.nextSuccess()
+      //we wait till redelivery occurs
+      Thread.sleep(3000)
       Then("We expect one more call")
-      assert(satellite1.service.consumer.consumer.getPromisedValue(5 second) == (VersionedId("2", 1), "enriched:valueTwo"))
-      assert(satellite2.service.consumer.consumer.getPromisedValue(1 second) == (VersionedId("2", 1), "enriched:valueTwo"))
+      assert(satellite1.service.consumer.consumer.getPromisedValue(4 second) == (VersionedId("1", 2), "enriched:valueTwo"))
+      assert(satellite2.service.consumer.consumer.getPromisedValue(1 second) == (VersionedId("1", 2), "enriched:valueTwo"))
       satellite1.service.consumer.consumer.nextSuccess()
       satellite2.service.consumer.consumer.nextSuccess()
       And("After that no more calls")
@@ -147,6 +149,7 @@ object DistributedSharedStateTest {
 
   class ListeningLogger(val cache: VersionedCache[String]) extends NewVersionedValueListener[String] {
     var receivedValues: List[(VersionedId, String)] = List()
+    @volatile
     var receivedPromise: Promise[(VersionedId, String)] = Promise()
 
     private var next: Future[Status] = Future.successful(Success(1))
