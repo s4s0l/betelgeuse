@@ -18,12 +18,14 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 
 import akka.actor.{Actor, ActorContext, ActorLogging, ActorRef, ActorRefFactory, Props}
 import akka.pattern.pipe
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.GetCacheValueOk
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheValueActor.Protocol.GetCacheValue
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheValueActor.{Settings, ValueEnriched, ValueEnrichedFailure}
+import org.s4s0l.betelgeuse.akkacommons.utils.QA.{Question, Uuid}
 import org.s4s0l.betelgeuse.akkacommons.utils.{AsyncInitActor, TimeoutActor}
 
-import scala.concurrent.Future
 import scala.concurrent.duration.{FiniteDuration, _}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
 /**
@@ -63,8 +65,8 @@ private[nearcache] class CacheValueActor[K, R, V](settings: Settings[K, R, V]) e
   }
 
   override def receive: Actor.Receive = {
-    case _: GetCacheValue =>
-      sender() ! CacheAccessActor.Protocol.CacheValue(settings.key, Left(Some(value)))
+    case req: GetCacheValue =>
+      sender() ! GetCacheValueOk(req.messageId, value)
   }
 
 
@@ -85,12 +87,12 @@ private[nearcache] object CacheValueActor {
 
   final class Protocol private(actorRef: => ActorRef) {
 
-    def apply(msg: GetCacheValue)(implicit sender: ActorRef = Actor.noSender): Unit = actorRef ! msg
+    def apply(msg: GetCacheValue)
+             (implicit executionContext: ExecutionContext, sender: ActorRef): Unit = actorRef ! msg
 
     def watchWith(context: ActorContext, msg: Any): Unit = {
       context.watchWith(actorRef, msg)
     }
-
 
   }
 
@@ -104,9 +106,7 @@ private[nearcache] object CacheValueActor {
       */
     def apply(actorRef: => ActorRef): Protocol = new Protocol(actorRef)
 
-    sealed trait IncomingMessage
-
-    case class GetCacheValue() extends IncomingMessage
+    case class GetCacheValue(messageId: Uuid) extends Question[Uuid]
 
   }
 

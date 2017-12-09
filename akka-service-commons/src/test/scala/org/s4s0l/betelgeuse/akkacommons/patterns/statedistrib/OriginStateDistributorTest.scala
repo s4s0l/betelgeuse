@@ -18,15 +18,17 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import java.util.concurrent.ConcurrentLinkedQueue
 
-import akka.actor.Status.{Failure, Status, Success}
+import akka.actor.ActorRef
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedConfirm}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedNotOk, OriginStateChangedOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributorTest._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
+import org.s4s0l.betelgeuse.akkacommons.utils.QA.Uuid
 import org.scalatest.Outcome
 
 import scala.concurrent.duration._
@@ -51,15 +53,15 @@ class OriginStateDistributorTest
 
         Given("Two satellite states registered in state distributor")
         private val distributor = OriginStateDistributor.start(OriginStateDistributor.Settings("dist1", Map(
-          "one" -> MockSatellite("one", successFuture, successFuture),
-          "two" -> MockSatellite("two", successFuture, successFuture)
+          "one" -> MockSatellite("one", successFuture, successFutureDistribution),
+          "two" -> MockSatellite("two", successFuture, successFutureDistribution)
         )))
 
         When("Distribute change")
         distributor.stateChanged(OriginStateChanged(1, VersionedId("id1", 1), "value", to))(self)
 
         Then("Expect confirmation")
-        testKit.expectMsg(to, OriginStateChangedConfirm(1, VersionedId("id1", 1)))
+        testKit.expectMsg(to, OriginStateChangedOk(1))
 
         And("Change was delivered")
         private val emitted = queue.toArray(new Array[String](4))
@@ -79,22 +81,22 @@ class OriginStateDistributorTest
       ("stateChangeNotConfirmedFailureFuture", failureFuture, "Failure returned by listener"),
       ("stateChangeNotConfirmExceptionFuture", exceptionFuture, "Exception from listener"),
       ("stateChangeNotConfirmTimeoutFuture", timeoutFuture, "Timeout by one of listeners"),
-      ("stateChangeNotConfirmTakesTooLong", longFuture(1.1 second), "Takes too long"),
+      ("stateChangeNotConfirmTakesTooLong", longFutureChange(1.1 second), "Takes too long")
     ).foreach { case (name, ff, display) =>
       scenario(s"Does not confirm if stateChange is not confirmed by one of satellites due to $display") {
         new WithService(aService) {
 
           Given("Two satellite states registered in state distributor")
           private val distributor = OriginStateDistributor.start(OriginStateDistributor.Settings(name, Map(
-            "one" -> MockSatellite("one", ff, successFuture),
-            "two" -> MockSatellite("two", successFuture, successFuture)
+            "one" -> MockSatellite("one", ff, successFutureDistribution),
+            "two" -> MockSatellite("two", successFuture, successFutureDistribution)
           )))
 
           When("Distribute change")
           distributor.stateChanged(OriginStateChanged(2, VersionedId("id1", 1), "value", 1 second))(self)
 
           Then("Expect No confirmation")
-          testKit.expectNoMsg(2 seconds)
+          assert(testKit.expectMsgClass(2 seconds, classOf[OriginStateChangedNotOk]).correlationId == 2)
 
           And("Change was delivered")
           private val emitted = queue.toArray(new Array[String](4))
@@ -109,24 +111,25 @@ class OriginStateDistributorTest
       }
     }
     Seq(
-      ("stateDistributionNotConfirmedFailureFuture", failureFuture, "Failure returned by listener"),
-      ("stateDistributionNotConfirmExceptionFuture", exceptionFuture, "Exception from listener"),
-      ("stateDistributionNotConfirmTimeoutFuture", timeoutFuture, "Timeout by one of listeners"),
-      ("stateDistributionNotConfirmLongFuture", longFuture(1.1 second), "Takes too long"),
+      ("stateDistributionNotConfirmedFailureFuture", failureFutureDistribution, "Failure returned by listener"),
+      ("stateDistributionNotConfirmExceptionFuture", exceptionFutureDistribution, "Exception from listener"),
+      ("stateDistributionNotConfirmTimeoutFuture", timeoutFutureDistribution, "Timeout by one of listeners"),
+      ("stateDistributionNotConfirmLongFuture", longFutureDistribution(1.1 second), "Takes too long")
     ).foreach { case (name, ff, display) =>
       scenario(s"Does not confirm if stateDistribution is not confirmed by one of satellites due to $display") {
         new WithService(aService) {
           Given("Two satellite states registered in state distributor")
           private val distributor = OriginStateDistributor.start(OriginStateDistributor.Settings(name, Map(
             "one" -> MockSatellite("one", successFuture, ff),
-            "two" -> MockSatellite("two", successFuture, successFuture)
+            "two" -> MockSatellite("two", successFuture, successFutureDistribution)
           )))
 
           When("Distribute change")
           distributor.stateChanged(OriginStateChanged(3, VersionedId("id1", 1), "value", 1 second))(self)
 
           Then("Expect No confirmation")
-          testKit.expectNoMsg(2 second)
+          assert(testKit.expectMsgClass(2 seconds, classOf[OriginStateChangedNotOk]).correlationId == 3)
+
 
           And("Change was delivered")
           private val emitted = queue.toArray(new Array[String](4))
@@ -154,40 +157,49 @@ class OriginStateDistributorTest
 
 object OriginStateDistributorTest {
 
-  type FutureFactory = (ExecutionContext) => Future[Status]
+  type FutureFactoryChange = (Uuid, ExecutionContext) => Future[StateChangeResult]
+  type FutureFactoryDistribution = (Uuid, ExecutionContext) => Future[DistributionCompleteResult]
   val queue: ConcurrentLinkedQueue[String] = new ConcurrentLinkedQueue[String]
-  val successFuture: FutureFactory = (executionContext: ExecutionContext) => Future(Success(0))(executionContext)
-  val failureFuture: FutureFactory = (executionContext: ExecutionContext) => Future(Failure(new Exception("?")))(executionContext)
-  val exceptionFuture: FutureFactory = (_: ExecutionContext) => Future.failed(new Exception("?"))
-  val timeoutFuture: FutureFactory = (_: ExecutionContext) => Future.never
+  val successFuture: FutureFactoryChange = (uuid: Uuid, executionContext: ExecutionContext) => Future(StateChangeOk(uuid))(executionContext)
+  val failureFuture: FutureFactoryChange = (uuid: Uuid, executionContext: ExecutionContext) => Future(StateChangeNotOk(uuid, new Exception("?")))(executionContext)
+  val exceptionFuture: FutureFactoryChange = (_: Uuid, _: ExecutionContext) => Future.failed(new Exception("?"))
+  val timeoutFuture: FutureFactoryChange = (_: Uuid, _: ExecutionContext) => Future.never
 
-  def longFuture(finiteDuration: FiniteDuration): FutureFactory = (exec: ExecutionContext) => Future {
+  val successFutureDistribution: FutureFactoryDistribution = (uuid: Uuid, executionContext: ExecutionContext) => Future(DistributionCompleteOk(uuid))(executionContext)
+  val failureFutureDistribution: FutureFactoryDistribution = (uuid: Uuid, executionContext: ExecutionContext) => Future(DistributionCompleteNotOk(uuid, new Exception("?")))(executionContext)
+  val exceptionFutureDistribution: FutureFactoryDistribution = (_: Uuid, _: ExecutionContext) => Future.failed(new Exception("?"))
+  val timeoutFutureDistribution: FutureFactoryDistribution = (_: Uuid, _: ExecutionContext) => Future.never
+
+  def longFutureChange(finiteDuration: FiniteDuration): FutureFactoryChange = (uuid: Uuid, exec: ExecutionContext) => Future {
     Thread.sleep(finiteDuration.toMillis)
-    Success(0)
+    StateChangeOk(uuid)
   }(exec)
 
 
-  case class MockSatellite(name: String, stateChanged: FutureFactory, stateDistributed: FutureFactory) extends SatelliteProtocol[String] {
+  def longFutureDistribution(finiteDuration: FiniteDuration): FutureFactoryDistribution = (uuid: Uuid, exec: ExecutionContext) => Future {
+    Thread.sleep(finiteDuration.toMillis)
+    DistributionCompleteOk(uuid)
+  }(exec)
+
+  case class MockSatellite(name: String, stateChanged: FutureFactoryChange, stateDistributed: FutureFactoryDistribution) extends SatelliteProtocol[String] {
     /**
       * distributes state change
       */
-    override def stateChanged(versionedId: VersionedId, value: String, destination: String)
-                             (implicit timeout: Timeout, executionContext: ExecutionContext)
-    : Future[Status] = {
-      assert(destination == name)
-      queue.add(s"$name:SC:$value:$versionedId")
-      stateChanged(executionContext)
+    override def stateChange(msg: StateChange[String])
+                            (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[StateChangeResult] = {
+      queue.add(s"$name:SC:${msg.value}:${msg.versionedId}")
+      stateChanged(msg.messageId, executionContext)
     }
 
     /**
       * informs that all destinations confirmed
       */
-    override def stateDistributed(versionedId: VersionedId, destination: String)
-                                 (implicit timeout: Timeout, executionContext: ExecutionContext)
-    : Future[Status] = {
-      assert(destination == name)
-      queue.add(s"$name:SD:$versionedId")
-      stateDistributed(executionContext)
+    override def distributionComplete(msg: DistributionComplete)
+                                     (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[DistributionCompleteResult] = {
+      queue.add(s"$name:SD:${msg.versionedId}")
+      stateDistributed(msg.messageId, executionContext)
     }
   }
 

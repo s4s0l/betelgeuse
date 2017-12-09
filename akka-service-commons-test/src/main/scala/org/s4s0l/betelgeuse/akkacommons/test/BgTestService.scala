@@ -124,8 +124,8 @@ object BgTestService {
 
   class TestedService[T <: BgService](bgServiceFactory: => T) {
 
-    val to: FiniteDuration = 2 seconds
-    val timeout: Timeout = Timeout(to)
+    var to: FiniteDuration = 2 seconds
+    var timeout: Timeout = Timeout(to)
     var service: T = _
     var system: ActorSystem = _
     var testKit: TestKit with ImplicitSender = _

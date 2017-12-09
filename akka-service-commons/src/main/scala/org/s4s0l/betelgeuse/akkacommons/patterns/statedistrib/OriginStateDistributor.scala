@@ -16,13 +16,14 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
-import akka.actor.Status.{Failure, Status}
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props}
 import akka.persistence.AtLeastOnceDelivery
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedConfirm}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedNotOk, OriginStateChangedOk}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
+import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 import org.s4s0l.betelgeuse.utils.AllUtils.{listOfFuturesToFutureOfList, _}
 
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -46,14 +47,13 @@ class OriginStateDistributor[T](settings: Settings[T]) extends Actor with ActorL
       val start = System.currentTimeMillis()
       implicit val timeout: Timeout = duration
       val stateChangeResult: Future[String] = listOfFuturesToFutureOfList(
-        settings.satelliteStates.map { case (satellite, api) =>
-          api.stateChanged(versionedId, value.asInstanceOf[T], satellite)
-            .recoverToAkkaStatus
+        settings.satelliteStates.map { case (_, api) =>
+          val stateChangeRequest = StateChange(versionedId, value.asInstanceOf[T], duration)
+          api.stateChange(stateChangeRequest)
+            .recover { case ex: Throwable => StateChangeNotOk(stateChangeRequest.messageId, ex) }
         }.toSeq)
-        .filter(seq => !seq.exists(_.isInstanceOf[Failure]))
+        .filter(seq => !seq.exists(_.isNotOk))
         .map(_ => "ok")
-
-
       stateChangeResult.flatMap { _ =>
         val timeSpentSoFar = System.currentTimeMillis() - start
         if (timeSpentSoFar > duration.toMillis) {
@@ -61,24 +61,20 @@ class OriginStateDistributor[T](settings: Settings[T]) extends Actor with ActorL
         } else {
           implicit val timeout: Timeout = duration - (timeSpentSoFar millisecond)
           listOfFuturesToFutureOfList(
-            settings.satelliteStates.map { case (satellite, api) =>
-              api.stateDistributed(versionedId, satellite)
-                .recoverToAkkaStatus
+            settings.satelliteStates.map { case (_, api) =>
+              val distributionComplete = DistributionComplete(versionedId, timeout.duration)
+              api.distributionComplete(distributionComplete)
+                .recover { case ex: Throwable => DistributionCompleteNotOk(distributionComplete.messageId, ex) }
             }.toSeq)
-            .filter(seq => !seq.exists(_.isInstanceOf[Failure]))
+            .filter(seq => !seq.exists(_.isNotOk))
         }
       }
-        .map(_ => OriginStateChangedConfirm(deliveryId, versionedId))
-        .andThen {
-          case scala.util.Success(r) ⇒
-            val timeSpentSoFar = System.currentTimeMillis() - start
-            if (timeSpentSoFar <= duration.toMillis) {
-              originalSender ! r
-            }
-          case scala.util.Failure(_) ⇒
+        .map(_ => OriginStateChangedOk(deliveryId))
+        .recover {
+          case _: NoSuchElementException => OriginStateChangedNotOk(deliveryId, new Exception("Some distributions failed"))
+          case ex: Throwable => OriginStateChangedNotOk(deliveryId, ex)
         }
-
-
+        .pipeToWithTimeout(originalSender, duration, OriginStateChangedNotOk(deliveryId, new Exception("Timeout...")), context.system.scheduler)
   }
 }
 
@@ -88,27 +84,29 @@ object OriginStateDistributor {
     * creates props for actor
     */
   def start[T](settings: Settings[T], propsMapper: Props => Props = identity)
-              (implicit actorSystem: ActorRefFactory): Protocol[T] = {
+              (implicit actorSystem: ActorRefFactory)
+  : Protocol[T] = {
     val ref = actorSystem.actorOf(Props(new OriginStateDistributor(settings)))
     Protocol(ref)
   }
 
   /**
-    * TODO: rewrite to not use asks so it could be faster
     */
   trait SatelliteProtocol[T] {
     /**
       * distributes state change
       */
-    def stateChanged(versionedId: VersionedId, value: T, destination: String)
-                    (implicit timeouted: Timeout, executionContext: ExecutionContext): Future[Status]
+    def stateChange(msg: StateChange[T])
+                   (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[StateChangeResult]
 
     /**
       * informs that all destinations confirmed
       */
 
-    def stateDistributed(versionedId: VersionedId, destination: String)
-                        (implicit timeouted: Timeout, executionContext: ExecutionContext): Future[Status]
+    def distributionComplete(msg: DistributionComplete)
+                            (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[DistributionCompleteResult]
   }
 
   final case class Settings[T](name: String, satelliteStates: Map[String, SatelliteProtocol[T]])
@@ -120,7 +118,7 @@ object OriginStateDistributor {
 
     /**
       * Emits state change. Sender should expect
-      * [[org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.OriginStateChangedConfirm]]
+      * [[org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.OriginStateChangedResult]]
       */
     def stateChanged(msg: OriginStateChanged[T])
                     (implicit sender: ActorRef = Actor.noSender)
@@ -132,9 +130,31 @@ object OriginStateDistributor {
       * Works like [[Protocol.stateChanged]].
       * Utility to hide actor ref from user of this protocol
       */
-    def deliver(from: AtLeastOnceDelivery)(versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration): Unit = {
+    def deliverStateChange(from: AtLeastOnceDelivery)
+                          (versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
+    : Unit = {
       from.deliver(actorRef.path)(deliveryId => OriginStateChanged(deliveryId, versionedId, value, expectedConfirmIn))
     }
+
+  }
+
+  object SatelliteProtocol {
+
+    sealed trait StateChangeResult extends Result[Uuid, Null]
+
+    sealed trait DistributionCompleteResult extends Result[Uuid, Null]
+
+    case class StateChange[T](versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration) extends UuidQuestion
+
+    case class StateChangeOk(correlationId: Uuid) extends StateChangeResult with OkNullResult[Uuid]
+
+    case class StateChangeNotOk(correlationId: Uuid, ex: Throwable) extends StateChangeResult with NotOkNullResult[Uuid]
+
+    case class DistributionComplete(versionedId: VersionedId, expectedConfirmIn: FiniteDuration) extends UuidQuestion
+
+    case class DistributionCompleteOk(correlationId: Uuid) extends DistributionCompleteResult with OkNullResult[Uuid]
+
+    case class DistributionCompleteNotOk(correlationId: Uuid, ex: Throwable) extends DistributionCompleteResult with NotOkNullResult[Uuid]
 
   }
 
@@ -142,13 +162,20 @@ object OriginStateDistributor {
     /**
       * Wraps actor ref factory with protocol interface
       */
-    def apply[T](actorRef: => ActorRef): Protocol[T] = new Protocol(actorRef)
+    def apply[T](actorRef: => ActorRef)
+    : Protocol[T] =
+      new Protocol(actorRef)
 
-    case class OriginStateChanged[T](deliveryId: Long, versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
+    case class OriginStateChanged[T](messageId: Long, versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
+      extends Question[Long]
 
-    case class OriginStateChangedConfirm(deliveryId: Long, versionedId: VersionedId)
+    sealed trait OriginStateChangedResult extends NullResult[Long]
+
+    case class OriginStateChangedOk(correlationId: Long) extends OriginStateChangedResult with OkNullResult[Long]
+
+    case class OriginStateChangedNotOk(correlationId: Long, ex: Throwable) extends OriginStateChangedResult with NotOkNullResult[Long]
 
   }
 
 
-}    
+}
