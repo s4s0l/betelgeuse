@@ -19,7 +19,6 @@ package org.s4s0l.betelgeuse.akkacommons.distsharedstate
 import akka.actor.ActorRef
 import akka.actor.Status.{Failure, Status, Success}
 import com.typesafe.config.Config
-import org.flywaydb.core.internal.util.StringUtils
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClient
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
@@ -30,9 +29,8 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{SetValue, SetValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
-import org.s4s0l.betelgeuse.akkacommons.test.{BgTestRoach, DbRoachTest}
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 import org.s4s0l.betelgeuse.akkacommons.{BgService, BgServiceId}
-import scalikejdbc.DBSession
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
@@ -43,7 +41,7 @@ import scala.language.postfixOps
   */
 class DistributedSharedStateTest extends BgTestRoach {
 
-  concurentRun = true
+  concurentRun = false
 
 
   private val origin = testWith(new BgService with BgPersistenceJournalRoach with BgClusteringReceptionist with BgClusteringSharding with BgClusteringClient {
