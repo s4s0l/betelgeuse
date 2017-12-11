@@ -75,9 +75,9 @@ trait BgTestService extends FeatureSpecLike
 
   def validateServices(): Unit = {
     assert(servicesUnderTest.map(_.service.asInstanceOf[BgService].serviceId.portBase)
-      .distinct.size == servicesUnderTest.size, "each service in test should have different portBase!")
+      .distinct.lengthCompare(servicesUnderTest.size) == 0, "each service in test should have different portBase!")
     assert(servicesUnderTest.map(_.service.asInstanceOf[BgService].serviceId.systemName)
-      .distinct.size == servicesUnderTest.size, "each service in test should have different systemName!")
+      .distinct.lengthCompare(servicesUnderTest.size) == 0, "each service in test should have different systemName!")
 
   }
 
@@ -111,15 +111,15 @@ trait BgTestService extends FeatureSpecLike
 object BgTestService {
 
 
-  class WithService[T <: BgService](ts: TestedService[T]) {
-    implicit val timeout: Timeout = ts.timeout
-    implicit val to: FiniteDuration = ts.to
-    implicit val service: T = ts.service
-    implicit val system: ActorSystem = ts.system
-    implicit val testKit: TestKit with ImplicitSender = ts.testKit
-    implicit val actorMaterializer: ActorMaterializer = ts.actorMaterializer
-    implicit val self: ActorRef = ts.self
-    implicit val execContext: ExecutionContextExecutor = ts.execContext
+  class WithService[T <: BgService](private[test] val testedService: TestedService[T]) {
+    implicit val timeout: Timeout = testedService.timeout
+    implicit val to: FiniteDuration = testedService.to
+    implicit val service: T = testedService.service
+    implicit val system: ActorSystem = testedService.system
+    implicit val testKit: TestKit with ImplicitSender = testedService.testKit
+    implicit val actorMaterializer: ActorMaterializer = testedService.actorMaterializer
+    implicit val self: ActorRef = testedService.self
+    implicit val execContext: ExecutionContextExecutor = testedService.execContext
   }
 
   class TestedService[T <: BgService](bgServiceFactory: => T) {

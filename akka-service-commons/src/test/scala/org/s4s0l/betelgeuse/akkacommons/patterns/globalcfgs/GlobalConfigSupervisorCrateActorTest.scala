@@ -15,15 +15,14 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs
 
 import akka.pattern._
-import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.pubsub.BgClusteringPubSub
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigSupervisorActor.ConfigurationChangedAck
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithCrateDb
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestCrate
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -32,52 +31,55 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class GlobalConfigSupervisorCrateActorTest extends BgTestWithCrateDb[BgPersistenceJournalCrate with BgClusteringPubSub] {
-  //  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(getClass)
+class GlobalConfigSupervisorCrateActorTest extends BgTestCrate {
 
-  override def createService(): BgPersistenceJournalCrate with BgClusteringPubSub
-  = new BgPersistenceJournalCrate with BgClusteringPubSub {
+  private val testedService = testWith(new BgPersistenceJournalCrate with BgClusteringPubSub {
 
-  }
+  })
 
   feature("Global config mechanism for distributing changes in configuration, and fast access to it") {
     scenario("Starts global config stores sth in it and it is available on reboot") {
       initialRun
 
-      restartService()
-
+      restartServices()
+      new WithService(testedService) {
+        this.refreshTable("crate_async_write_journal_entity")
+      }
       secondRun
     }
   }
 
   private def initialRun = {
-    implicit val to: Timeout = defaultTimeout
-    val mediator = service.clusteringPubSubExtension.asPubSubWithDefaultMediator
-    val access = service.persistenceExtension.dbAccess
+    new WithService(testedService) {
+      private val mediator = service.clusteringPubSubExtension.asPubSubWithDefaultMediator
+      private val access = service.persistenceExtension.dbAccess
 
-    val coordinator = GlobalConfigsFactory.createGlobalConfig[String, String]("testConfig",
-      new GlobalConfigCrateQueryFacade(access),
-      mediator)
-    coordinator.awaitInit()
-    assert(Await.result(coordinator.apply("avalue"), 10 seconds).isEmpty)
+      private val coordinator = GlobalConfigsFactory.createGlobalConfig[String, String]("testConfig",
+        new GlobalConfigCrateQueryFacade(access),
+        mediator)
+      coordinator.awaitInit()
+      assert(Await.result(coordinator.apply("avalue"), 10 seconds).isEmpty)
 
-    GlobalConfigsFactory.eventPublisher(mediator, "testConfig").emitChange("avalue", "THE VALUE").pipeTo(self)
-    GlobalConfigsFactory.eventPublisher(mediator, "testConfig").emitChange("avalue2", "THE VALE2").pipeTo(self)
-    testKit.expectMsgType[ConfigurationChangedAck](20 seconds)
-    assert(Await.result(coordinator.apply("avalue"), 10 seconds).isDefined)
-
+      GlobalConfigsFactory.eventPublisher(mediator, "testConfig").emitChange("avalue", "THE VALUE").pipeTo(self)
+      GlobalConfigsFactory.eventPublisher(mediator, "testConfig").emitChange("avalue2", "THE VALE2").pipeTo(self)
+      testKit.expectMsgType[ConfigurationChangedAck](20 seconds)
+      assert(Await.result(coordinator.apply("avalue"), 10 seconds).isDefined)
+    }
   }
 
   private def secondRun = {
-    implicit val to: Timeout = defaultTimeout
-    val mediator = service.clusteringPubSubExtension.asPubSubWithDefaultMediator
-    val access = service.persistenceExtension.dbAccess
+    new WithService(testedService) {
+      private val mediator = service.clusteringPubSubExtension.asPubSubWithDefaultMediator
+      private val access = service.persistenceExtension.dbAccess
 
-    val coordinator = GlobalConfigsFactory.createGlobalConfig[String, String]("testConfig",
-      new GlobalConfigCrateQueryFacade(access),
-      mediator)
-    coordinator.awaitInit()
+      private val coordinator = GlobalConfigsFactory.createGlobalConfig[String, String]("testConfig",
+        new GlobalConfigCrateQueryFacade(access),
+        mediator)
+      coordinator.awaitInit()
 
-    assert(Await.result(coordinator.apply("avalue"), 10 seconds).get == "THE VALUE")
+      assert(Await.result(coordinator.apply("avalue"), 10 seconds).get == "THE VALUE")
+    }
   }
 }
+
+

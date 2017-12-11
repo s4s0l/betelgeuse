@@ -18,9 +18,10 @@ package org.s4s0l.betelgeuse.akkacommons.test
 
 import com.typesafe.config.Config
 import org.flywaydb.core.internal.util.StringUtils
+import org.s4s0l.betelgeuse.akkacommons.BgService
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestCrate.CrateMethods
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.TestedService
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestCrate.{CrateMethods, CrateWithService}
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.{TestedService, WithService}
 import scalikejdbc.DBSession
 
 import scala.language.implicitConversions
@@ -41,11 +42,20 @@ trait BgTestCrate extends BgTestPersistence {
     }
   }
 
-  implicit def toCrateMethods(ts: TestedService[_]): CrateMethods = new CrateMethods(ts)
+  implicit def toCrateMethodsInService(ts: TestedService[_]): CrateMethods = new CrateMethods(ts)
+
+  implicit def toCrateMethodsWithService[T <: BgService](ws: WithService[T]): CrateWithService[T] = new CrateWithService(ws)
 
 }
 
 object BgTestCrate {
+
+
+  class CrateWithService[T <: BgService](ws: WithService[T]) {
+    def refreshTable(tableName: String): Unit = {
+      new CrateMethods(ws.testedService).refreshTable(tableName)
+    }
+  }
 
   class CrateMethods(ts: TestedService[_]) {
     def refreshTable(tableName: String): Unit = {

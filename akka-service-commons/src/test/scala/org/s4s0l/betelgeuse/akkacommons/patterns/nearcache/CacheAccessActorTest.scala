@@ -19,12 +19,13 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 import akka.actor.ActorRef
 import akka.pattern.pipe
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{GetCacheValue, GetCacheValueNotOk, GetCacheValueOk}
+import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.{GetCacheValue, GetCacheValueNotOk, GetCacheValueOk, GetCacheValueResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.{Settings, ValueOwnerFacade}
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActorTest.VOF
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 
+import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
@@ -188,9 +189,16 @@ class CacheAccessActorTest extends BgTestService {
         testKit.expectNoMsg(1 second)
 
         And("We do get answers finally")
-        testKit.expectMsg(to, GetCacheValueOk(value1.messageId, "10.0"))
-        testKit.expectMsg(to, GetCacheValueOk(value2.messageId, "10.0"))
-        testKit.expectMsg(to, GetCacheValueOk(value3.messageId, "10.0"))
+        private val valuesCollected = mutable.Set[GetCacheValueResult[String]]()
+
+        valuesCollected.add(testKit.expectMsgClass(to, classOf[GetCacheValueOk[String]]))
+        valuesCollected.add(testKit.expectMsgClass(to, classOf[GetCacheValueOk[String]]))
+        valuesCollected.add(testKit.expectMsgClass(to, classOf[GetCacheValueOk[String]]))
+
+
+        assert(valuesCollected.contains(GetCacheValueOk(value1.messageId, "10.0")))
+        assert(valuesCollected.contains(GetCacheValueOk(value2.messageId, "10.0")))
+        assert(valuesCollected.contains(GetCacheValueOk(value3.messageId, "10.0")))
 
 
         And("Value is build from owners data only once ")
