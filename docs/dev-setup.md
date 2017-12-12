@@ -33,6 +33,7 @@ docker service create \
     --mount type=volume,source=roach-test-db,target=/data/cockroach-data \
     --stop-grace-period 60s \
     --publish 26257:26257 \
+    --publish 18080:8080 \
     cockroachdb/cockroach:v1.1.3 start \
     --logtostderr \
     --insecure

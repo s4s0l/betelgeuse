@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 
@@ -25,6 +25,7 @@ import scalikejdbc.config._
 import scalikejdbc.{DBSession, GlobalSettings, NamedDB, SettingsProvider}
 
 import scala.collection.mutable
+import scala.concurrent.duration._
 import scala.language.postfixOps
 
 /**
@@ -83,10 +84,16 @@ class BetelgeuseDb(val config: Config) extends DBs
     encounteredPoolLocks += (dbName.name -> locksSupport)
 
     if (dbConfig.hasPath("migrations.enabled") && dbConfig.getBoolean("migrations.enabled")) {
+      // these two transactions need to be separated due to potential schema dead lock
+      // in cockroach create database causes lock on information schema which is released
+      // on transaction commit. This can cause a deadlock as flyway is reading from these
+      // tables in its own connection during run locked below
       localTx {
         implicit session =>
-          import scala.concurrent.duration._
           locksSupport.initLocks(session)
+      }
+      localTx {
+        implicit session =>
           locksSupport.runLocked(s"MigrationOf${dbName.name}", DbLocksSettings(10 minutes, 35, 1 seconds)) {
             new FlyTrackPersistenceSchemaUpdater(flywayConfig).updateSchema(new DummyDataSource(dbName))
           }
@@ -167,7 +174,7 @@ class BetelgeuseDb(val config: Config) extends DBs
     encounteredPoolsAndSchemas.synchronized {
       Some(poolName)
         .map(it => encounteredPoolsAndSchemas(it))
-        .filter(it => it.size == 1)
+        .filter(it => it.lengthCompare(1) == 0)
         .map(it => it.head)
         .orElse {
           LOGGER.warn(s"Multiple pool names/schemas found ($encounteredPoolsAndSchemas), unable to reasonably select default schema - override schemaName in table classes")
