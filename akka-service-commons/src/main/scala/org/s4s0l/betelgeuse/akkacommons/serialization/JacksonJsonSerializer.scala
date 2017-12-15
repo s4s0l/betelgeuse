@@ -74,19 +74,10 @@ class JacksonJsonSerializerException(errorMsg: String, cause: Throwable) extends
 
 class JacksonJsonSerializerVerificationFailed(errorMsg: String) extends JacksonJsonSerializerException(errorMsg, null)
 
-class JacksonJsonSerializer extends Serializer with SimpleSerializer {
+class JacksonJsonSerializer extends Serializer {
   private val logger = LoggerFactory.getLogger(getClass)
 
   import JacksonJsonSerializer._
-
-
-  override def fromString[T](bytes: String, manifest: Class[T]):T = {
-    fromBinary(bytes.getBytes("UTF8"), Some(manifest)).asInstanceOf[T]
-  }
-
-  override def toString(obj: AnyRef): String = {
-    new String(toBinary(obj), "UTF8")
-  }
 
   // The serializer id has to have this exact value to be equal to the old original implementation
   override def identifier: Int = JacksonJsonSerializer.identifier

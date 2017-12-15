@@ -34,7 +34,7 @@ class HttpMarshalling(val serializer: SimpleSerializer) {
 
   def unmarshaller[T <: AnyRef](implicit classTag: ClassTag[T]): FromEntityUnmarshaller[T] =
     PredefinedFromEntityUnmarshallers.byteArrayUnmarshaller.map { it =>
-      serializer.fromBinary(it, Some(classTag.runtimeClass)).asInstanceOf[T]
+      serializer.fromBinary(it).asInstanceOf[T]
     }
 
 }

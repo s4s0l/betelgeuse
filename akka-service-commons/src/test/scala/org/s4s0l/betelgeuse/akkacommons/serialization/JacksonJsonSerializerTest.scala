@@ -20,7 +20,9 @@ package org.s4s0l.betelgeuse.akkacommons.serialization
 
 import akka.actor.ActorSystem
 import akka.serialization.SerializationExtension
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.typesafe.config.ConfigFactory
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializerTest._
 import org.scalatest.{FeatureSpec, Matchers}
 
 class JacksonJsonSerializerTest extends FeatureSpec with Matchers {
@@ -89,4 +91,25 @@ class JacksonJsonSerializerTest extends FeatureSpec with Matchers {
 
 
   }
+}
+
+object JacksonJsonSerializerTest {
+
+  case class Animal(name: String, age: Int, t: Cat) extends JacksonJsonSerializable
+
+  case class Cat(color: String, tail: Boolean)
+
+  case class OldType(s: String) extends DepricatedTypeWithMigrationInfo {
+    override def convertToMigratedType(): AnyRef = NewType(s.toInt)
+  }
+
+  case class NewType(i: Int)
+
+
+  case class ObjectWrapperWithTypeInfo(@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@any_class") any: AnyRef)
+
+  case class ObjectWrapperWithoutTypeInfo(any: AnyRef)
+
+  case class ObjectWrapperWithoutTypeInfoOverrided(any: AnyRef) extends JacksonJsonSerializableButNotDeserializable
+
 }

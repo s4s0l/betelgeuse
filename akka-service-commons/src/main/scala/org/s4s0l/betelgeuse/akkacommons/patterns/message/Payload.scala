@@ -1,27 +1,29 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.message
 
-import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.charset.StandardCharsets
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.util.ByteString
+import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
 
 import scala.language.implicitConversions
+import scala.reflect.ClassTag
 
 /**
   * Payload for messages. Could be just ByteString, but bs is copying string.
@@ -37,15 +39,26 @@ class Payload private(val contents: Either[ByteString, String]) {
 
   def asString: String = _asString
 
+  private lazy val _asArray: Array[Byte] = {
+    contents.left.map(_.toArray[Byte]).left
+      .getOrElse(contents.right.get.getBytes(StandardCharsets.UTF_8))
+  }
+
+  def asArray: Array[Byte] = _asArray
+
   private lazy val _asBytes: ByteString = {
     contents.left.getOrElse(ByteString(contents.right.get, StandardCharsets.UTF_8))
+  }
+
+  def asObject[T <: AnyRef](implicit classTag: ClassTag[T], serializer: SimpleSerializer): T = {
+    Payload.asObject(this)
   }
 
   private lazy val _asString: String = {
     contents.right.getOrElse(contents.left.get.decodeString(StandardCharsets.UTF_8))
   }
 
-  def isEmpty:Boolean = if(contents.isLeft) {
+  def isEmpty: Boolean = if (contents.isLeft) {
     contents.left.get.isEmpty
   } else {
     contents.right.get.isEmpty
@@ -68,7 +81,10 @@ class Payload private(val contents: Either[ByteString, String]) {
 
 object Payload {
 
-  def empty:Payload = new Payload(Right(""))
+  implicit def apply[T <: AnyRef](value: T)
+                                 (implicit serializer: SimpleSerializer): Payload = {
+    Payload(serializer.toBinary(value))
+  }
 
   implicit def apply(bytes: ByteString): Payload = new Payload(Left(bytes))
 
@@ -76,11 +92,22 @@ object Payload {
 
   implicit def apply(string: String): Payload = new Payload(Right(string))
 
-  implicit def asBytes(p:Payload): ByteString = p.asBytes
+  implicit def asBytes(p: Payload): ByteString = p.asBytes
 
-  implicit def asString(p:Payload): String = p.asString
+  implicit def asArray(p: Payload): Array[Byte] = p.asArray
 
-  implicit def toResponseMarshallable(p:Payload):ToResponseMarshallable =
-    if(p.contents.isLeft) p.contents.left.get else p.contents.right.get
+  implicit def asString(p: Payload): String = p.asString
+
+  implicit def toResponseMarshallable(p: Payload): ToResponseMarshallable =
+    if (p.contents.isLeft) p.contents.left.get else p.contents.right.get
+
+  def empty: Payload = new Payload(Right(""))
+
+  //TODO: how to make it implicit?
+  def asObject[T <: AnyRef](p: Payload)
+                           (implicit classTag: ClassTag[T], serializer: SimpleSerializer)
+  : T = {
+    serializer.fromBinary(p.asArray).asInstanceOf[T]
+  }
 
 }
