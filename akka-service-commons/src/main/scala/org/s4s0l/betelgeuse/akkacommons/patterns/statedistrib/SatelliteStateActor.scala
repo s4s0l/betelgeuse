@@ -1,25 +1,28 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import akka.actor.{ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
+import akka.pattern.pipe
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionistExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
+import org.s4s0l.betelgeuse.akkacommons.patterns.message.Message
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.Protocol.{StateDistributed, StateDistributedNotOk, StateDistributedOk, StateDistributedResult}
@@ -27,20 +30,69 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActo
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
+import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
+import scala.reflect.ClassTag
 
 /**
   * @author Marcin Wielgus
   */
-class SatelliteStateActor[T](settings: Settings[T])
+class SatelliteStateActor[T](settings: Settings[T])(implicit classTag: ClassTag[T])
   extends VersionedEntityActor(VersionedEntityActor.Settings(settings.name)) {
 
+  private lazy val serializer = SimpleSerializer(context.system)
+
+  implicit val messageForward: Message.ForwardHeaderProvider = Message.defaultForward
+
   override def receiveCommand: Receive = super.receiveCommand orElse {
+
+    case msg@Message("state-change", _, _, _) =>
+      implicit val executionContext: ExecutionContext = context.dispatcher
+      val objectValue = msg.payload.asObject[T](classTag, serializer)
+      val versionedId = VersionedId(msg.get("versionedId").get)
+      val time: Timeout = msg.ttlAsDurationLeft
+      Protocol(self).setVersionedValue(SetVersionedValue(versionedId, objectValue))(executionContext, self, time)
+        .map {
+          case _: SetValueOk => msg.response("state-change-ok", "")
+          case err: SetValueNotOk => msg.response("state-change-not-ok", err.ex.getMessage).withFailed()
+        }
+        .recover {
+          case x: Throwable =>
+            log.error(x, "Error adapting message to self")
+            msg.response("state-change-not-ok", x.getMessage).withFailed()
+        }.pipeTo(sender())
+
+    case msg@Message("distribution-complete", _, _, _) =>
+      implicit val executionContext: ExecutionContext = context.dispatcher
+      val senderTmp = sender()
+      val versionedId = VersionedId(msg.get("versionedId").get)
+      val option = getValueAtVersion(versionedId)
+      if (option.isDefined) {
+        option.foreach { it =>
+          import org.s4s0l.betelgeuse.utils.AllUtils._
+          settings.listener.configurationChanged(StateChanged(versionedId, it.asInstanceOf[T], msg.ttlAsDurationLeft))
+            .map {
+              case StateChangedOk(_) => msg.response("distribution-complete-ok", "")
+              case StateChangedNotOk(_, ex) => msg.response("distribution-complete-not-ok", ex.getMessage).withFailed()
+            }
+            .recover { case it: Throwable =>
+              if (log.isDebugEnabled)
+                log.error(it, "Unable to confirm StateDistributed for SatelliteState {}, id={}", settings.name, versionedId)
+              msg.response("distribution-complete-not-ok", it.getMessage).withFailed()
+            }
+            .pipeToWithTimeout(senderTmp, msg.ttlAsDurationLeft,
+              msg.response("distribution-complete-not-ok", "Timeout!").withFailed(), context.system.scheduler)
+        }
+      } else {
+        senderTmp ! msg.response("distribution-complete-not-ok", s"No value at version $versionedId  ").withFailed()
+      }
+
+
     case StateDistributed(uuid, versionedId, expDuration) =>
       val senderTmp = sender()
       val option = getValueAtVersion(versionedId)
@@ -73,7 +125,7 @@ object SatelliteStateActor {
   def startSharded[T](settings: Settings[T],
                       propsMapper: Props => Props = identity,
                       receptionist: Option[BgClusteringReceptionistExtension] = None)
-                     (implicit shardingExt: BgClusteringShardingExtension)
+                     (implicit shardingExt: BgClusteringShardingExtension, classTag: ClassTag[T])
   : Protocol[T] = {
     val ref = shardingExt.start(s"/user/satellite-state-${settings.name}", Props(new SatelliteStateActor[T](settings)), entityExtractor)
     receptionist.foreach(_.registerByName(getRemoteName(settings.name), ref))
@@ -91,6 +143,7 @@ object SatelliteStateActor {
   private def entityExtractor: ShardRegion.ExtractEntityId = {
     case a: IncomingMessage => (a.entityId, a)
     case a: StateDistributed => (a.versionedId.id, a)
+    case a@Message("distribution-complete" | "state-change", _, _, _) if a.get("versionedId").isDefined => (VersionedId(a("versionedId")).id, a)
   }
 
   final case class Settings[T](name: String, listener: SatelliteStateListener[T])
@@ -98,7 +151,7 @@ object SatelliteStateActor {
   /**
     * An protocol for [[SatelliteStateActor]]
     */
-  final class Protocol[T] private(actorTarget: ActorTarget)
+  final class Protocol[T] private[statedistrib](private[statedistrib] val actorTarget: ActorTarget)
     extends VersionedEntityActor.Protocol[T](actorTarget)
       with SatelliteProtocol[T] {
 
@@ -162,8 +215,6 @@ object SatelliteStateActor {
     case class StateChangedNotOk(correlationId: VersionedId, ex: Throwable) extends StateChangedResult with NotOkNullResult[VersionedId]
 
   }
-
-
 
 
 }

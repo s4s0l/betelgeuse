@@ -33,7 +33,8 @@ import scala.reflect.ClassTag
   *
   * @author Marcin Wielgus
   */
-class Payload private(val contents: Either[ByteString, String]) {
+@SerialVersionUID(2L)
+class Payload private(val contents: Either[ByteString, String]) extends Serializable {
 
   def asBytes: ByteString = _asBytes
 
@@ -50,8 +51,8 @@ class Payload private(val contents: Either[ByteString, String]) {
     contents.left.getOrElse(ByteString(contents.right.get, StandardCharsets.UTF_8))
   }
 
-  def asObject[T <: AnyRef](implicit classTag: ClassTag[T], serializer: SimpleSerializer): T = {
-    Payload.asObject(this)
+  def asObject[T](implicit classTag: ClassTag[T], serializer: SimpleSerializer): T = {
+    Payload.asObject(this)(classTag, serializer)
   }
 
   private lazy val _asString: String = {
@@ -81,8 +82,8 @@ class Payload private(val contents: Either[ByteString, String]) {
 
 object Payload {
 
-  implicit def apply[T <: AnyRef](value: T)
-                                 (implicit serializer: SimpleSerializer): Payload = {
+  implicit def apply(value: AnyRef)
+                    (implicit serializer: SimpleSerializer): Payload = {
     Payload(serializer.toBinary(value))
   }
 
@@ -104,10 +105,10 @@ object Payload {
   def empty: Payload = new Payload(Right(""))
 
   //TODO: how to make it implicit?
-  def asObject[T <: AnyRef](p: Payload)
-                           (implicit classTag: ClassTag[T], serializer: SimpleSerializer)
+  def asObject[T](p: Payload)
+                 (implicit classTag: ClassTag[T], serializer: SimpleSerializer)
   : T = {
-    serializer.fromBinary(p.asArray).asInstanceOf[T]
+    serializer.fromBinary[AnyRef](p.asArray)(classTag.asInstanceOf[ClassTag[AnyRef]]).asInstanceOf[T]
   }
 
 }

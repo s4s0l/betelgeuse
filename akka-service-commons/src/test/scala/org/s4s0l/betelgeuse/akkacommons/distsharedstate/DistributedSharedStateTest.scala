@@ -29,6 +29,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{SetValue, SetValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
+import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerialization
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 import org.s4s0l.betelgeuse.akkacommons.{BgService, BgServiceId}
 
@@ -44,7 +45,12 @@ class DistributedSharedStateTest extends BgTestRoach {
   concurentRun = true
 
 
-  private val origin = testWith(new BgService with BgPersistenceJournalRoach with BgClusteringReceptionist with BgClusteringSharding with BgClusteringClient {
+  private val origin = testWith(new BgService
+    with BgPersistenceJournalRoach
+    with BgClusteringReceptionist
+    with BgClusteringSharding
+    with BgClusteringClient
+    with BgSerialization {
     override protected def systemName: String = "origin"
 
     override protected def portBase: Int = 1

@@ -88,7 +88,9 @@ object MessageHeaders {
 
     def userId: String = headers(HEADER_USER_ID)
 
-    def ttl: Deadline = Deadline.now + Duration(headers(HEADER_TTL).toLong + timestamp - System.currentTimeMillis(), duration.MILLISECONDS)
+    def ttl: Deadline = Deadline.now + ttlAsDurationLeft
+
+    def ttlAsDurationLeft: FiniteDuration = Duration(headers(HEADER_TTL).toLong + timestamp - System.currentTimeMillis(), duration.MILLISECONDS)
 
     def correlationIdOpt: Option[String] = headers.get(HEADER_CORRELATION_ID)
 

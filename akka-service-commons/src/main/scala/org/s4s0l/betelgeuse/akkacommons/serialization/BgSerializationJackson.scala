@@ -20,12 +20,11 @@ package org.s4s0l.betelgeuse.akkacommons.serialization
 
 import akka.serialization.SerializationExtension
 import com.typesafe.config.{Config, ConfigFactory}
-import org.s4s0l.betelgeuse.akkacommons.BgService
 
 /**
   * @author Marcin Wielgus
   */
-trait BgSerializationJackson extends BgService {
+trait BgSerializationJackson extends BgSerialization {
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgSerializationJackson])
 
