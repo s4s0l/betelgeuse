@@ -94,7 +94,7 @@ class BetelgeuseDb(val config: Config) extends DBs
       }
       localTx {
         implicit session =>
-          locksSupport.runLocked(s"MigrationOf${dbName.name}", DbLocksSettings(10 minutes, 35, 1 seconds)) {
+          locksSupport.runLocked(s"FlywayMigration", DbLocksSettings(10 minutes, 35, 1 seconds)) {
             new FlyTrackPersistenceSchemaUpdater(flywayConfig).updateSchema(new DummyDataSource(dbName))
           }
       }
