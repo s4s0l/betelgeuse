@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
@@ -32,9 +32,9 @@ import scala.collection.{immutable, mutable}
   */
 class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with DbRoachTest with MockFactory with ScalaFutures {
 
-  feature("Akka journal can be savedin roach db") {
+  feature("Akka journal can be saved in roach db") {
     scenario("Regular Events are saved and retrieved") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
         val dao = new RoachAsyncWriteJournalDao(None)
         And("Some regular event")
@@ -68,7 +68,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         }
 
         Then("We get the one created earlier")
-        assert(replayedMessages.size == 1)
+        assert(replayedMessages.lengthCompare(1) == 0)
         assert(replayedMessages.head.tag == "tag")
         assert(replayedMessages.head.id == "123")
         assert(replayedMessages.head.seq == 1)
@@ -83,7 +83,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
 
     scenario("Json serializable Events are saved and retrieved") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
 
         val jjs = mock[JacksonJsonSerializer]
@@ -121,7 +121,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         }
 
         Then("We get the one created earlier")
-        assert(replayedMessages.size == 1)
+        assert(replayedMessages.lengthCompare(1) == 0)
         assert(replayedMessages.head.tag == "tag2")
         assert(replayedMessages.head.id == "123")
         assert(replayedMessages.head.seq == 1)
@@ -136,7 +136,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
 
     scenario("Roach serializable Events are passed but not saved and they don't trip") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
 
         val jjs = mock[JacksonJsonSerializer]
@@ -174,7 +174,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         }
 
         Then("We get the one created earlier but without event")
-        assert(replayedMessages.size == 1)
+        assert(replayedMessages.lengthCompare(1) == 0)
         assert(replayedMessages.head.tag == "tag3")
         assert(replayedMessages.head.id == "123")
         assert(replayedMessages.head.seq == 1)
@@ -192,7 +192,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
   feature("Akka journal can delete messages up to sequence id") {
     scenario("All events up to newest are deleted") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
 
         Given("Crate async writer dao with no serializer")
         val dao = new RoachAsyncWriteJournalDao(None)
@@ -212,7 +212,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         }
 
         Then("Only last message is returned")
-        assert(replayedMessagesAfterCleaning.size == 1)
+        assert(replayedMessagesAfterCleaning.lengthCompare(1) == 0)
         assert(replayedMessagesAfterCleaning.head.tag == "tag")
         assert(replayedMessagesAfterCleaning.head.id == "5")
         assert(replayedMessagesAfterCleaning.head.seq == 3)
@@ -225,17 +225,17 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     }
 
     scenario("Deleting upTo sequence number > max throws") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
         val dao = new RoachAsyncWriteJournalDao(None)
         And("3 events are setup")
         setup3Events(dao, "4")
 
-        When("We delete messages upto sequence higher then max (3)")
+        When("We delete messages up to sequence higher then max (3)")
         Then("It throws")
         assertThrows[Exception](dao.deleteUpTo("tag", "4", 4))
 
-        When("We chack the state of events")
+        When("We check the state of events")
         val replayedMessagesAfterCleaning = mutable.Buffer[RoachAsyncWriteJournalEntity]()
 
         dao.replayMessages("tag", "4", -1, 100, 100) { e =>
@@ -243,7 +243,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         }
 
         Then("None were deleted")
-        assert(replayedMessagesAfterCleaning.size == 3)
+        assert(replayedMessagesAfterCleaning.lengthCompare(3) == 0)
 
       }
     }
@@ -285,7 +285,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     }
 
     Then("We get all messages and last is what we expected")
-    assert(replayedMessages.size == 3)
+    assert(replayedMessages.lengthCompare(3) == 0)
     assert(replayedMessages.last.tag == "tag")
     assert(replayedMessages.last.id == id)
     assert(replayedMessages.last.seq == 3)

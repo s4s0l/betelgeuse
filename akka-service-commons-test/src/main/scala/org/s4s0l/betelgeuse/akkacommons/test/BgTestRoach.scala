@@ -1,26 +1,23 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.test
 
-import com.typesafe.config.Config
 import org.flywaydb.core.internal.util.StringUtils
-import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.TestedService
-import scalikejdbc.DBSession
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
 
 import scala.language.implicitConversions
 
@@ -32,11 +29,11 @@ trait BgTestRoach extends BgTestPersistence {
 
   override def isCleanupOn: Boolean = true
 
-  override def cleanUp(dbName: String, cfg: Config)(implicit session: DBSession): Unit = {
-    val schemasString = cfg.getString(s"db.$dbName.flyway.schemas")
+  override def cleanUp(db: BetelgeuseDb): Unit = {
+    val schemasString = db.config.getString(s"db.${db.getDefaultPoolName.get}.flyway.schemas")
     val schemas = StringUtils.tokenizeToStringArray(schemasString, ",")
     schemas.foreach { it =>
-      DbRoachTest.cleanUp(it)(session)
+      DbRoachTest.cleanUp(it)(db)
     }
   }
 

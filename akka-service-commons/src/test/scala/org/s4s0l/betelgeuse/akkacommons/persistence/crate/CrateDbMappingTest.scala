@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 
@@ -44,7 +44,7 @@ class CrateDbMappingTest extends FeatureSpec with DbCrateTest {
 
   feature("BetelgeuseDbs make it easy to use scalike") {
     scenario("Basic sql dsl syntax check") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         withSQL {
           insert.into(MappingTable).namedValues(
             column.i -> 1,
@@ -65,7 +65,7 @@ class CrateDbMappingTest extends FeatureSpec with DbCrateTest {
     }
 
     scenario("Basic sql syntax check") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
 
         val (i, s) = (2, "value2")
         sql"""insert into ${MappingTable.table} (${MappingTable.column.i},${MappingTable.column.s}) values ($i, $s)""".update.apply()
@@ -99,7 +99,7 @@ class CrateDbMappingTest extends FeatureSpec with DbCrateTest {
 
   feature("BetelgeuseDB for crate allows for storing nested objects as objects in crate") {
     scenario("Sql nesting check") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         val o4 = new NestedObject(11, "11", new O(new Date), Array("1", "1"), List("a", "x"), List(new OA(10, "10"), new OA(20, "20")), null, null)
         val (i4, s4, a4, oa4) = (4, "value4", Array("a", "b"), Array(new OA(1, "1"), new OA(2, "2")))
         val (la, loa, ms, moa) = (List("x", "y"), List(new OA(1, "x1"), OA(2, "x2")), Map("key" -> "value"), Map("oa1" -> new OA(9, "9")))

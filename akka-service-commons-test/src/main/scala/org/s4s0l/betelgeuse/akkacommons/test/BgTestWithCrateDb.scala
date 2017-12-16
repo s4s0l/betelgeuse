@@ -16,11 +16,10 @@
 
 package org.s4s0l.betelgeuse.akkacommons.test
 
-import com.typesafe.config.Config
 import org.flywaydb.core.internal.util.StringUtils
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceCrate
-import scalikejdbc.DBSession
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
 
 /**
   * @author Marcin Wielgus
@@ -30,11 +29,13 @@ trait BgTestWithCrateDb[T <: BgPersistenceCrate] extends BgTestWithPersistence[T
 
   override def isCleanupOn: Boolean = true
 
-  override def cleanUp(dbName: String, cfg: Config)(implicit session: DBSession): Unit = {
-    val schemasString = cfg.getString(s"db.$dbName.flyway.schemas")
+  override def cleanUp(db: BetelgeuseDb): Unit = {
+    val schemasString = db.config.getString(s"db.${db.getDefaultPoolName.get}.flyway.schemas")
     val schemas = StringUtils.tokenizeToStringArray(schemasString, ",")
     schemas.foreach { it =>
-      DbCrateTest.cleanUp(it)(session)
+      db.localTx { session =>
+        DbCrateTest.cleanUp(it)(session)
+      }
     }
   }
 

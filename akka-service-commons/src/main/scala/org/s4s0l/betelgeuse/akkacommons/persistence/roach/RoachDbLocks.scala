@@ -54,7 +54,13 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
   private val unsafeLocksTable = SQLSyntax.createUnsafely(locksTable)
 
   override def initLocks(txExecutor: TxExecutor): Unit = {
-    tryNTimes(5, Set(classOf[org.postgresql.util.PSQLException]),
+    tryNTimes(10, Set(classOf[org.postgresql.util.PSQLException]),
+      tryNTimesExceptionFactory(s"Lock mechanism initiation failed. Holder $uuid")) {
+      txExecutor.doInTx { implicit DBSession =>
+        ensureLocksDatabaseExists
+      }
+    }
+    tryNTimes(10, Set(classOf[org.postgresql.util.PSQLException]),
       tryNTimesExceptionFactory(s"Lock mechanism initiation failed. Holder $uuid")) {
       txExecutor.doInTx { implicit DBSession =>
         ensureLocksTableExists
@@ -206,13 +212,17 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
       .map(x => (x._1, x._2))
   }
 
+  private def ensureLocksDatabaseExists(implicit dbSession: DBSession): Boolean = {
+    if (!isLocksDatabasePresent)
+      dbSession.execute(s"CREATE DATABASE IF NOT EXISTS $schema")
+    true
+  }
 
   private def ensureLocksTableExists(implicit dbSession: DBSession): Boolean = {
     val exists: Boolean = isLocksTablePresent
     if (!exists) {
-      dbSession.execute(s"CREATE DATABASE IF NOT EXISTS locks")
       dbSession.execute(
-        s"""create table $schema.$locksTable(
+        s"""create table IF NOT EXISTS $schema.$locksTable(
                 name string PRIMARY KEY,
                 when_locked TIMESTAMP WITH TIME ZONE not null,
                 when_overdue TIMESTAMP WITH TIME ZONE not null,
@@ -228,15 +238,30 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
   }
 
   def dropLocksTable(implicit dbSession: DBSession): Boolean = {
-    dbSession.execute(s"drop table $schema.$locksTable")
+    if (isLocksTablePresent)
+      dbSession.execute(s"drop table $schema.$locksTable")
     true
   }
 
-  def isLocksTablePresent(implicit dbSession: DBSession): Boolean = {
+  def isLocksDatabasePresent(implicit dbSession: DBSession): Boolean = {
     val foundTables: immutable.Seq[String] =
-      sql"""SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_NAME = $locksTable AND table_schema= $schema"""
+      sql"""show databases"""
         .map(_.string(1)).list.apply()
-    val exists = foundTables.lengthCompare(1) == 0
+    val exists = foundTables.contains(schema)
     exists
+  }
+
+  def isLocksTablePresent(implicit dbSession: DBSession): Boolean = {
+    if (isLocksDatabasePresent) {
+      val foundTables: immutable.Seq[String] =
+        sql"""show tables from $unsafeSchema"""
+          .map(_.string(1)).list.apply()
+      val exists = foundTables.contains(locksTable)
+      println("AAAAAAAA " + foundTables.mkString("|"))
+      exists
+    } else {
+      false
+    }
+
   }
 }

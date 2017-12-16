@@ -26,12 +26,15 @@ build:
     - docker service ls
     - docker service rm cockroachdb || true
     - docker service rm crate || true
+    - docker volume rm roach-test-db || true
+    - docker volume rm roach-test-db2 || true
+    - docker volume rm crate-test-db || true
     - >
       docker service create \
           --name cockroachdb \
           --mode global \
           --hostname localhost \
-          --mount type=volume,source=roach-test-db,target=/data/cockroach-data \
+          --mount type=volume,source=roach-test-db2,target=/data/cockroach-data \
           --stop-grace-period 60s \
           --publish 26257:26257 \
           cockroachdb/cockroach:v1.1.3 start \

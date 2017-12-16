@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
@@ -33,9 +33,9 @@ import scala.reflect.ClassTag
   */
 class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with DbCrateTest with MockFactory {
 
-  feature("Akka journal can be savedin crate db") {
+  feature("Akka journal can be saved in crate db") {
     scenario("Regular Events are saved and retrieved") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
         val dao = new CrateAsyncWriteJournalDao(None)
         And("Some regular event")
@@ -70,7 +70,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         }
 
         Then("We get the one created earlier")
-        assert(replayedMessages.size == 1)
+        assert(replayedMessages.lengthCompare(1) == 0)
         assert(replayedMessages.head.tag == "tag")
         assert(replayedMessages.head.id == "123")
         assert(replayedMessages.head.seq == 1)
@@ -85,7 +85,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
 
     scenario("Json serializable Events are saved and retrieved") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
 
         val jjs = mock[JacksonJsonSerializer]
@@ -124,7 +124,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         }
 
         Then("We get the one created earlier")
-        assert(replayedMessages.size == 1)
+        assert(replayedMessages.lengthCompare(1) == 0)
         assert(replayedMessages.head.tag == "tag2")
         assert(replayedMessages.head.id == "123")
         assert(replayedMessages.head.seq == 1)
@@ -139,7 +139,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
 
     scenario("Crate serializable Events are saved and retrieved") {
-      sqlExecution { implicit session =>
+      localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
 
         val jjs = mock[JacksonJsonSerializer]
@@ -178,7 +178,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         }
 
         Then("We get the one created earlier")
-        assert(replayedMessages.size == 1)
+        assert(replayedMessages.lengthCompare(1) == 0)
         assert(replayedMessages.head.tag == "tag3")
         assert(replayedMessages.head.id == "123")
         assert(replayedMessages.head.seq == 1)

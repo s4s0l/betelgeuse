@@ -56,7 +56,7 @@ class BetelgeuseDb(val config: Config) extends DBs
     }
   }
 
-  private val txExecutor: TxExecutor = new TxExecutor {
+  val localTxExecutor: TxExecutor = new TxExecutor {
     override def doInTx[T](code: DBSession => T): T = {
       localTx { implicit session =>
         code(session)
@@ -64,7 +64,7 @@ class BetelgeuseDb(val config: Config) extends DBs
     }
   }
 
-  def getLocks(name: String = getDefaultPoolName.get): DbLocks = new DbLocks(encounteredPoolLocks(name), txExecutor)
+  def getLocks(name: String = getDefaultPoolName.get): DbLocks = new DbLocks(encounteredPoolLocks(name), localTxExecutor)
 
   override def setup(dbName: Symbol): Unit = {
     super.setup(dbName)
@@ -89,10 +89,13 @@ class BetelgeuseDb(val config: Config) extends DBs
       DbLocksSupport.noOpLocker
     }
     encounteredPoolLocks += (dbName.name -> locksSupport)
-    locksSupport.initLocks(txExecutor)
+    locksSupport.initLocks(localTxExecutor)
 
-    if (dbConfig.hasPath("migrations.enabled") && dbConfig.getBoolean("migrations.enabled")) {
-      locksSupport.runLocked(s"FlywayMigration", txExecutor, DbLocksSettings(10 minutes, 35, 1 seconds)) { implicit session =>
+
+    val migrationsEnabled = dbConfig.hasPath("migrations.enabled") && dbConfig.getBoolean("migrations.enabled")
+    val locksEnabled = dbConfig.hasPath("locks.enabled") && dbConfig.getBoolean("locks.enabled")
+    if (migrationsEnabled) {
+      locksSupport.runLocked(s"FlywayMigration", localTxExecutor, DbLocksSettings(10 minutes, 35, 1 seconds)) { implicit session =>
         new FlyTrackPersistenceSchemaUpdater(flywayConfig).updateSchema(new DummyDataSource(dbName))
       }
 

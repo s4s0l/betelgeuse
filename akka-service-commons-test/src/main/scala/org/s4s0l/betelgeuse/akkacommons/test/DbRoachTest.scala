@@ -17,6 +17,7 @@
 package org.s4s0l.betelgeuse.akkacommons.test
 
 import com.typesafe.config.Config
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
 import org.s4s0l.betelgeuse.utils
 import org.s4s0l.betelgeuse.utils.AllUtils
 import org.scalatest.Suite
@@ -35,8 +36,8 @@ trait DbRoachTest extends DbTest {
     )).withFallback(super.loadFallbackConfig())
   }
 
-  override def cleanUp(configUsed:Config)(implicit session: DBSession): Unit =
-    DbRoachTest.cleanUp(SchemaName)(session)
+  override def cleanUp(db: BetelgeuseDb): Unit =
+    DbRoachTest.cleanUp(SchemaName)(db)
 
   override def isCleanupOn: Boolean = true
 
@@ -49,32 +50,47 @@ trait DbRoachTest extends DbTest {
 
 object DbRoachTest {
 
-  def cleanUp(schemaName:String)(implicit session: DBSession): Unit = {
-    deleteAllTablesInSchema(schemaName)(session)
+  def cleanUp(schemaName: String)(db: BetelgeuseDb): Unit = {
     AllUtils.tryNTimes(2) {
-      //see https://github.com/crate/crate-jdbc/issues/237
-      deleteAllRecords( "locks", "locks")(session)
+      db.localTx { implicit session =>
+        deleteAllRecords("locks", "locks")(session)
+      }
+    }
+    AllUtils.tryNTimes(2) {
+      db.localTx { implicit session =>
+        dropDatabase(schemaName)(session)
+      }
     }
   }
 
 
   final def deleteAllRecords(tableName: String, schemaName: String)(implicit session: DBSession): Unit = {
-    sql"select TABLE_NAME from information_schema.tables where table_schema=$schemaName and table_name=$tableName"
-      .map(_.string(1)).first().apply()
-      .foreach { it =>
-        val schema = SQLSyntax.createUnsafely(schemaName)
-        val table = SQLSyntax.createUnsafely(it)
-        sql"delete from $schema.$table".update().apply()
+    val unsafeSchema = SQLSyntax.createUnsafely(schemaName)
+    val unsafeTable = SQLSyntax.createUnsafely(tableName)
+    if (
+      sql"""show databases""".map(_.string(1)).list.apply().contains(schemaName)) {
+      if (sql"show tables from $unsafeSchema".map(_.string(1)).list.apply().contains(tableName)) {
+        sql"delete from $unsafeSchema.$unsafeTable".update().apply()
       }
+    }
+  }
+
+  final def dropDatabase(schemaName: String)(implicit session: DBSession): Unit = {
+    val schema = SQLSyntax.createUnsafely(schemaName)
+    sql"drop database if EXISTS $schema".execute().apply()
   }
 
   final def deleteAllTablesInSchema(schemaName: String)(implicit session: DBSession): Unit = {
-    val tablesToDelete = sql"select TABLE_NAME from information_schema.tables where table_schema=$schemaName"
-      .map(_.string(1)).list().apply()
-    val schema = SQLSyntax.createUnsafely(schemaName)
-    tablesToDelete.foreach { it =>
-      val table = SQLSyntax.createUnsafely(it)
-      sql"drop table $schema.$table".execute().apply()
+    if (
+      sql"""show databases""".map(_.string(1)).list.apply().contains(schemaName)) {
+      val unsafeSchema = SQLSyntax.createUnsafely(schemaName)
+      val tablesToDelete = sql"show tables from $unsafeSchema"
+        .map(_.string(1)).list().apply()
+      val schema = SQLSyntax.createUnsafely(schemaName)
+      tablesToDelete.foreach { it =>
+        val table = SQLSyntax.createUnsafely(it)
+        sql"drop table $schema.$table".execute().apply()
+      }
     }
   }
 }

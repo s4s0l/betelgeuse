@@ -17,6 +17,7 @@
 package org.s4s0l.betelgeuse.akkacommons.test
 
 import com.typesafe.config.Config
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
 import org.s4s0l.betelgeuse.utils
 import org.s4s0l.betelgeuse.utils.AllUtils
 import org.scalatest.Suite
@@ -38,8 +39,10 @@ trait DbCrateTest extends DbTest {
   def refreshTable(tableName: String, schemaName: String = SchemaName)(implicit session: DBSession): Unit =
     DbCrateTest.refreshTable(tableName, schemaName)(session)
 
-  override def cleanUp(configUsed:Config)(implicit session: DBSession): Unit =
-    DbCrateTest.cleanUp(SchemaName)(session)
+  override def cleanUp(db: BetelgeuseDb): Unit =
+    db.localTx { implicit session =>
+      DbCrateTest.cleanUp(SchemaName)(session)
+    }
 
   override def isCleanupOn: Boolean = true
 
@@ -58,11 +61,11 @@ object DbCrateTest {
     sql"refresh table $schema.$table".execute().apply()
   }
 
-  def cleanUp(schemaName:String)(implicit session: DBSession): Unit = {
+  def cleanUp(schemaName: String)(implicit session: DBSession): Unit = {
     deleteAllTablesInSchema(schemaName)(session)
     AllUtils.tryNTimes(2) {
       //see https://github.com/crate/crate-jdbc/issues/237
-      deleteAllRecords( "locks", "locks")(session)
+      deleteAllRecords("locks", "locks")(session)
     }
   }
 

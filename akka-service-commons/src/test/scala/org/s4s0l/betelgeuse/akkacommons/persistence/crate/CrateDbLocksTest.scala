@@ -16,11 +16,9 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import com.typesafe.config.Config
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelgeuseDb, DbLocksSettings}
 import org.s4s0l.betelgeuse.akkacommons.test.DbCrateTest
 import org.scalatest.{FeatureSpec, GivenWhenThen}
-import scalikejdbc._
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -51,16 +49,16 @@ class CrateDbLocksTest extends FeatureSpec
       When("Both start in the same time")
 
       val future = Future {
-        dbLocks.initLocks(sqlExecutionTxSessionFactory)
+        dbLocks.initLocks(localTxExecutor)
       }
 
       Then("The first process finishes with no error")
-      sqlExecution(implicit session => {
-        dbLocks.initLocks(sqlExecutionTxSessionFactory)
+      localTx(implicit session => {
+        dbLocks.initLocks(localTxExecutor)
       })
       And("Second process finishes with no error")
       Await.ready(future, 1 minute)
-      sqlExecution(implicit session => {
+      localTx(implicit session => {
         And("Lock table is present")
         assert(dbLocks.isLocksTablePresent)
         And("'LOCK' is not locked")
@@ -71,7 +69,7 @@ class CrateDbLocksTest extends FeatureSpec
         assert(dbLocks.getLockingParty("LOCK").isEmpty)
 
         When("dbLocks lock 'LOCK'")
-        dbLocks.lock("LOCK", sqlExecutionTxSessionFactory)
+        dbLocks.lock("LOCK", localTxExecutor)
 
         Then("dbLocks sees 'LOCK' as locked")
         assert(dbLocks.isLocked("LOCK"))
@@ -90,7 +88,7 @@ class CrateDbLocksTest extends FeatureSpec
 
 
         When("other locks LOCK2")
-        other.lock("LOCK2", sqlExecutionTxSessionFactory)
+        other.lock("LOCK2", localTxExecutor)
 
         Then("other sees LOCK2 as locked by itself")
         assert(other.isLocked("LOCK2"))
@@ -104,12 +102,12 @@ class CrateDbLocksTest extends FeatureSpec
 
 
         When("other locks LOCK2 while it is locked by itself")
-        other.lock("LOCK2", sqlExecutionTxSessionFactory)
+        other.lock("LOCK2", localTxExecutor)
         Then("lock succeeds")
 
         When("other tries to lock 'LOCK'")
         Then("Exception is raised")
-        assertThrows[RuntimeException](other.lock("LOCK", sqlExecutionTxSessionFactory, DbLocksSettings(lockAttemptCount = 2)))
+        assertThrows[RuntimeException](other.lock("LOCK", localTxExecutor, DbLocksSettings(lockAttemptCount = 2)))
 
 
         When("other unlocks 'LOCK'")
@@ -137,7 +135,7 @@ class CrateDbLocksTest extends FeatureSpec
 
         When("dbLock performs block code in lock 'LOCK'")
         var x = false
-        dbLocks.runLocked("LOCK", sqlExecutionTxSessionFactory) { _ =>
+        dbLocks.runLocked("LOCK", localTxExecutor) { _ =>
           x = true
         }
         Then("Code block is performed")
@@ -152,10 +150,13 @@ class CrateDbLocksTest extends FeatureSpec
   }
 
 
-  override def cleanUp(cfg: Config)(implicit session: DBSession): Unit = {
-    if (dbLocks.isLocksTablePresent) {
-      dbLocks.deleteAllLocks
-      dbLocks.dropLocksTable
+  override def cleanUp(db: BetelgeuseDb): Unit = {
+    db.localTx { implicit session =>
+      if (dbLocks.isLocksTablePresent) {
+        dbLocks.deleteAllLocks
+        dbLocks.dropLocksTable
+      }
     }
+    super.cleanUp(db)
   }
 }
