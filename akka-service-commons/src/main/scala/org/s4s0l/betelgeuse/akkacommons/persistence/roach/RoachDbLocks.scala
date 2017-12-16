@@ -54,7 +54,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
   private val unsafeLocksTable = SQLSyntax.createUnsafely(locksTable)
 
   override def initLocks(txExecutor: TxExecutor): Unit = {
-    tryNTimes(5, Set(classOf[org.postgresql.util.PSQLException]),
+    tryNTimes(10, Set(classOf[org.postgresql.util.PSQLException]),
       tryNTimesExceptionFactory(s"Lock mechanism initiation failed. Holder $uuid")) {
       txExecutor.doInTx { implicit DBSession =>
         ensureLocksTableExists
@@ -234,7 +234,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
 
   def isLocksTablePresent(implicit dbSession: DBSession): Boolean = {
     val foundTables: immutable.Seq[String] =
-      sql"""SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_NAME = $locksTable AND table_schema= $schema"""
+      sql"""SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_NAME = $locksTable AND table_schema = $schema"""
         .map(_.string(1)).list.apply()
     val exists = foundTables.lengthCompare(1) == 0
     exists
