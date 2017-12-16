@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
-import org.scalatest.{FeatureSpec, GivenWhenThen}
+import org.scalatest.{FeatureSpec, GivenWhenThen, Outcome}
 import scalikejdbc._
 
 import scala.concurrent.duration._
@@ -45,7 +45,6 @@ class RoachDbLocksTest extends FeatureSpec
       Given("Two processes try to initialize locking mechanism")
       And("One of them is called 'dbLocks'")
       And("The other is 'other'")
-
       val other = new RoachDbLocks()
 
       When("Both start in the same time")
@@ -150,55 +149,65 @@ class RoachDbLocksTest extends FeatureSpec
       })
     }
 
-  }
-  scenario("Locking is really locking") {
-    val other = new RoachDbLocks()
-    dbLocks.initLocks(sqlExecutionTxSessionFactory)
-    @volatile
-    var execOneRunning: Boolean = false
-    @volatile
-    var execTwoRunning: Boolean = false
 
-    val future1: Future[String] = Future {
-      sqlExecution { implicit session =>
-        dbLocks.runLocked("lock", sqlExecutionTxSessionFactory, DbLocksSettings()) { implicit session =>
-          try {
-            execOneRunning = true
-            assert(execOneRunning != execTwoRunning)
-            Thread.sleep(1000)
-          } finally {
-            execOneRunning = false
+    scenario("Locking is really locking") {
+      val other = new RoachDbLocks()
+      dbLocks.initLocks(sqlExecutionTxSessionFactory)
+      @volatile
+      var execOneRunning: Boolean = false
+      @volatile
+      var execTwoRunning: Boolean = false
+
+      val future1: Future[String] = Future {
+        sqlExecution { implicit session =>
+          dbLocks.runLocked("lock", sqlExecutionTxSessionFactory, DbLocksSettings()) { implicit session =>
+            try {
+              execOneRunning = true
+              assert(execOneRunning != execTwoRunning)
+              Thread.sleep(1000)
+            } finally {
+              execOneRunning = false
+            }
+            "ok"
           }
-          "ok"
         }
       }
-    }
 
-    val future2 = Future {
-      sqlExecution { implicit session =>
-        other.runLocked("lock", sqlExecutionTxSessionFactory, DbLocksSettings()) { implicit session =>
-          try {
-            execTwoRunning = true
-            assert(execOneRunning != execTwoRunning)
-            Thread.sleep(1000)
-          } finally {
-            execTwoRunning = false
+      val future2 = Future {
+        sqlExecution { implicit session =>
+          other.runLocked("lock", sqlExecutionTxSessionFactory, DbLocksSettings()) { implicit session =>
+            try {
+              execTwoRunning = true
+              assert(execOneRunning != execTwoRunning)
+              Thread.sleep(1000)
+            } finally {
+              execTwoRunning = false
+            }
+            "ok"
           }
-          "ok"
         }
       }
+
+      assert(Await.result(future1, 5 second) == "ok")
+      assert(Await.result(future2, 5 second) == "ok")
+
     }
-
-    assert(Await.result(future1, 5 second) == "ok")
-    assert(Await.result(future2, 5 second) == "ok")
-
   }
-
 
   override def cleanUp(cfg: Config)(implicit session: DBSession): Unit = {
     if (dbLocks.isLocksTablePresent) {
       //      dbLocks.deleteAllLocks
       dbLocks.dropLocksTable
     }
+  }
+
+  override protected def withFixture(test: NoArgTest): Outcome = {
+    sqlExecution { implicit session =>
+      if (dbLocks.isLocksTablePresent) {
+        //        dbLocks.deleteAllLocks
+        dbLocks.dropLocksTable
+      }
+    }
+    super.withFixture(test)
   }
 }
