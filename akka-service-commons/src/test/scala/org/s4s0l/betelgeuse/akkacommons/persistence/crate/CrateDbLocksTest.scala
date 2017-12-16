@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
@@ -31,8 +31,7 @@ import scala.language.postfixOps
   */
 class CrateDbLocksTest extends FeatureSpec
   with GivenWhenThen
-  with DbCrateTest
-{
+  with DbCrateTest {
 
   val dbLocks = new CrateDbLocks()
 
@@ -52,14 +51,12 @@ class CrateDbLocksTest extends FeatureSpec
       When("Both start in the same time")
 
       val future = Future {
-        sqlExecution(implicit session => {
-          dbLocks.initLocks
-        })
+        dbLocks.initLocks(sqlExecutionTxSessionFactory)
       }
 
       Then("The first process finishes with no error")
       sqlExecution(implicit session => {
-        other.initLocks
+        dbLocks.initLocks(sqlExecutionTxSessionFactory)
       })
       And("Second process finishes with no error")
       Await.ready(future, 1 minute)
@@ -74,7 +71,7 @@ class CrateDbLocksTest extends FeatureSpec
         assert(dbLocks.getLockingParty("LOCK").isEmpty)
 
         When("dbLocks lock 'LOCK'")
-        dbLocks.lock("LOCK")
+        dbLocks.lock("LOCK", sqlExecutionTxSessionFactory)
 
         Then("dbLocks sees 'LOCK' as locked")
         assert(dbLocks.isLocked("LOCK"))
@@ -93,7 +90,7 @@ class CrateDbLocksTest extends FeatureSpec
 
 
         When("other locks LOCK2")
-        other.lock("LOCK2")
+        other.lock("LOCK2", sqlExecutionTxSessionFactory)
 
         Then("other sees LOCK2 as locked by itself")
         assert(other.isLocked("LOCK2"))
@@ -107,12 +104,12 @@ class CrateDbLocksTest extends FeatureSpec
 
 
         When("other locks LOCK2 while it is locked by itself")
-        other.lock("LOCK2")
+        other.lock("LOCK2", sqlExecutionTxSessionFactory)
         Then("lock succeeds")
 
         When("other tries to lock 'LOCK'")
         Then("Exception is raised")
-        assertThrows[RuntimeException](other.lock("LOCK", DbLocksSettings(lockAttemptCount = 2)))
+        assertThrows[RuntimeException](other.lock("LOCK", sqlExecutionTxSessionFactory, DbLocksSettings(lockAttemptCount = 2)))
 
 
         When("other unlocks 'LOCK'")
@@ -140,7 +137,7 @@ class CrateDbLocksTest extends FeatureSpec
 
         When("dbLock performs block code in lock 'LOCK'")
         var x = false
-        dbLocks.runLocked("LOCK") {
+        dbLocks.runLocked("LOCK", sqlExecutionTxSessionFactory) { _ =>
           x = true
         }
         Then("Code block is performed")
@@ -155,7 +152,7 @@ class CrateDbLocksTest extends FeatureSpec
   }
 
 
-  override def cleanUp(cfg:Config)(implicit session: DBSession): Unit = {
+  override def cleanUp(cfg: Config)(implicit session: DBSession): Unit = {
     if (dbLocks.isLocksTablePresent) {
       dbLocks.deleteAllLocks
       dbLocks.dropLocksTable

@@ -52,28 +52,23 @@ class BgPersistenceRoachTest extends BgTestRoach {
     }
   }
 
-  feature("Provides working locking mechanizm") {
-    scenario("Locking and unlcking") {
+  feature("Provides working locking mechanism") {
+    scenario("Locking and unlocking") {
       new WithService(aService) {
         private val extension = BgPersistenceExtension.apply(system)
         When("Asked for lock")
-        extension.dbAccess.update { implicit session =>
-          extension.dbAccess.locksSupport().asInstanceOf[RoachDbLocks].lock("SOME_LOCK_123")
-        }
-        Then("Lock holds")
-        extension.dbAccess.update { implicit session =>
-          assert(extension.dbAccess.locksSupport().asInstanceOf[RoachDbLocks].isLockOurs("SOME_LOCK_123"))
-        }
-        When("Asked to release")
-        extension.dbAccess.update { implicit session =>
-          extension.dbAccess.locksSupport().asInstanceOf[RoachDbLocks].unlock("SOME_LOCK_123")
+        extension.dbAccess.locksSupport().runLocked("SOME_LOCK_123") { implicit session =>
+          Then("Lock holds")
+          extension.dbAccess.locksSupport().support.asInstanceOf[RoachDbLocks].isLockOurs("SOME_LOCK_123")
+          When("Asked to release")
         }
         Then("Lock is released")
         extension.dbAccess.update { implicit session =>
-          assert(!extension.dbAccess.locksSupport().asInstanceOf[RoachDbLocks].isLockOurs("SOME_LOCK_123"))
+          assert(!extension.dbAccess.locksSupport().support.asInstanceOf[RoachDbLocks].isLockOurs("SOME_LOCK_123"))
         }
       }
     }
+
   }
 
 }

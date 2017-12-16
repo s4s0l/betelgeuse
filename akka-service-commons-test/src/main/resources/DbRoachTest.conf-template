@@ -2,5 +2,5 @@ db.${testName} {
     driver = "org.postgresql.Driver"
     url = "jdbc:postgresql://127.0.0.1:26257/?sslmode=disable"
     user = "root"
-    locksProvider = "org.s4s0l.betelgeuse.akkacommons.persistence.utils.NoopLocker"
+    locksProvider = "org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachDbLocks"
 }

@@ -14,29 +14,17 @@
  *  limitations under the License.
  */
 
-
-
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
 import scalikejdbc.DBSession
 
-import scala.concurrent.{ExecutionContext, Future}
-
 /**
   * @author Marcin Wielgus
   */
-trait DbAccess {
+class DbLocks(val support: DbLocksSupport, val executor: DbLocksSupport.TxExecutor) {
 
-  def query[A](execution: DBSession => A): A
-
-  def locksSupport(): DbLocks
-
-  def update[A](execution: DBSession => A): A
-
-  def dbDispatcher: ExecutionContext
-
-  def queryAsync[A](execution: DBSession => A, ec: ExecutionContext = dbDispatcher): Future[A]
-
-  def updateAsync[A](execution: DBSession => A, ec: ExecutionContext = dbDispatcher): Future[A]
-
+  def runLocked[T](lockName: String, settings: DbLocksSettings = DbLocksSettings())
+                  (code: DBSession => T): T = {
+    support.runLocked(lockName, executor, settings)(code)
+  }
 }

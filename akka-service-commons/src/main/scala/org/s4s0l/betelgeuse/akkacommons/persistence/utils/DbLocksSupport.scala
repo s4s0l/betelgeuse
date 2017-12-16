@@ -17,6 +17,7 @@
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
 import com.typesafe.config.Config
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
 import org.slf4j.LoggerFactory
 import scalikejdbc.DBSession
 
@@ -25,28 +26,43 @@ import scalikejdbc.DBSession
   */
 trait DbLocksSupport {
 
-  def initLocks(implicit dBSession: DBSession)
+  def initLocks(txExecutor: TxExecutor): Unit
 
-  def runLocked(lockName: String, lockSettings: DbLocksSettings = DbLocksSettings())(code: => Unit)(implicit dBSession: DBSession): Unit
+  def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
+                  (code: DBSession => T): T
 }
 
 object DbLocksSupport {
-  def noopLocker:DbLocksSupport = new DbLocksSupport {
 
-    override def initLocks(implicit dBSession: DBSession): Unit = {}
+  private val LOGGER = LoggerFactory.getLogger(getClass)
 
-    override def runLocked(lockName: String, lockSettings: DbLocksSettings = DbLocksSettings())(code: => Unit)(implicit dBSession: DBSession): Unit = code
+  def noOpLocker: DbLocksSupport = new DbLocksSupport {
+
+    override def initLocks(txExecutor: TxExecutor): Unit = {
+      LOGGER.warn("You are using NoOpLocker. This is very dangerous for consistency!")
+    }
+
+    override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
+                             (code: DBSession => T): T = {
+      throw new Exception("You are using NoOpLocker. This is very dangerous for consistency!")
+    }
+  }
+
+  trait TxExecutor {
+    def doInTx[T](code: DBSession => T): T
   }
 }
 
-class NoopLocker(config: Config) extends DbLocksSupport {
+class NoOpLocker(config: Config) extends DbLocksSupport {
   private val LOGGER = LoggerFactory.getLogger(getClass)
 
-  override def initLocks(implicit dBSession: DBSession): Unit = {}
+  override def initLocks(txExecutor: TxExecutor): Unit = {
+    LOGGER.warn("You are using NoOpLocker. This is very dangerous for consistency!")
+  }
 
-  override def runLocked(lockName: String, lockSettings: DbLocksSettings = DbLocksSettings())(code: => Unit)(implicit dBSession: DBSession): Unit = {
-    LOGGER.warn("You are using NoopLocker. This is very dangerous for consistency!")
-    code
+  override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
+                           (code: DBSession => T): T = {
+    throw new Exception("You are using NoOpLocker. This is very dangerous for consistency!")
   }
 
 }

@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence
 
 import akka.actor.{ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
 import akka.dispatch.MessageDispatcher
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelgeuseDb, DbAccess, DbLocksSupport}
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelgeuseDb, DbAccess, DbLocks}
 import scalikejdbc.DBSession
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -32,7 +32,7 @@ class BgPersistenceExtension(private val system: ExtendedActorSystem) extends Ex
   val dbAccess: DbAccess = new DbAccess {
     override def query[A](execution: (DBSession) => A): A = BgPersistenceExtension.this.query(execution)
 
-    override def locksSupport(): DbLocksSupport = BgPersistenceExtension.this.locksSupport()
+    override def locksSupport(): DbLocks = BgPersistenceExtension.this.locksSupport()
 
     override def update[A](execution: (DBSession) => A): A = BgPersistenceExtension.this.update(execution)
 
@@ -67,7 +67,7 @@ class BgPersistenceExtension(private val system: ExtendedActorSystem) extends Ex
     betelgeuseDb.readOnly(execution, name = name)
   }
 
-  private def locksSupport(name: String = defaultPoolName): DbLocksSupport = betelgeuseDb.getLocks(name)
+  private def locksSupport(name: String = defaultPoolName): DbLocks = betelgeuseDb.getLocks(name)
 
   private def update[A](execution: DBSession => A, name: String = defaultPoolName): A = {
     betelgeuseDb.localTx(execution, name = name)

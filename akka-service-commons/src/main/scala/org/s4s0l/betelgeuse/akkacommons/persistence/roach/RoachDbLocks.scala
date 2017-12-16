@@ -20,7 +20,7 @@ import java.sql.Timestamp
 import java.util.{Calendar, Date, UUID}
 
 import com.typesafe.config.Config
-import io.crate.shade.org.postgresql.util.PSQLException
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{DbLocksSettings, DbLocksSupport}
 import org.s4s0l.betelgeuse.akkacommons.utils.DnsUtils
 import org.s4s0l.betelgeuse.utils.AllUtils
@@ -38,8 +38,6 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
   extends DbLocksSupport {
 
 
-
-
   def this(config: Config) = {
     this(AllUtils.toConfigOptionApi(config).string("roach.locks.schema").getOrElse("locks"),
       AllUtils.toConfigOptionApi(config).string("roach.locks.table").getOrElse("locks"))
@@ -55,14 +53,14 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
 
   private val unsafeLocksTable = SQLSyntax.createUnsafely(locksTable)
 
-  override def initLocks(implicit session: DBSession): Unit = {
-    tryNTimes(5, Set(classOf[PSQLException]),
-      tryNTimesExceptionFactory(s"Lock mechanizm initiation failed. Holder $uuid")) {
-      ensureLocksTableExists
+  override def initLocks(txExecutor: TxExecutor): Unit = {
+    tryNTimes(5, Set(classOf[org.postgresql.util.PSQLException]),
+      tryNTimesExceptionFactory(s"Lock mechanism initiation failed. Holder $uuid")) {
+      txExecutor.doInTx { implicit DBSession =>
+        ensureLocksTableExists
+      }
     }
   }
-
-
 
 
   def isLocked(lockName: String)(implicit session: DBSession): Boolean = {
@@ -73,13 +71,28 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
     getLockingParty(lockName).exists(_._1 == uuid)
   }
 
+  override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
+                           (code: DBSession => T): T = {
+    try {
+      lock(lockName, txExecutor, settings)
+      txExecutor.doInTx { implicit session =>
+        code(session)
+      }
+    } finally {
+      txExecutor.doInTx { implicit session =>
+        unlock(lockName)
+      }
+    }
+  }
 
-  def lock(lockName: String, lockSettings: DbLocksSettings = DbLocksSettings())(implicit session: DBSession): Date = {
+  def lock(lockName: String, txExecutor: TxExecutor, lockSettings: DbLocksSettings = DbLocksSettings()): Date = {
     tryNTimes(lockSettings.lockAttemptCount,
       Set(classOf[Exception]),
       tryNTimesExceptionFactory(s"Taking lock failed. Holder $uuid"),
       (lockSettings.lockAttemptInterval / 2).toMillis) {
-      lockAttempt(lockName, lockSettings)(session)
+      txExecutor.doInTx { implicit session =>
+        lockAttempt(lockName, lockSettings)(session)
+      }
     }
   }
 
@@ -119,7 +132,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
           throw new Exception(s"Optimistic lock exception")
         }
         LOGGER.debug(s"Lock $lockName updated as was overdue. Holder $uuid.")
-      case Some((_, by_who_id, version))
+      case Some((_, by_who_id, _))
         if by_who_id == uuid =>
         val updated =
           sql"""UPDATE $unsafeSchema.$unsafeLocksTable
@@ -139,7 +152,6 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
     }
     new Date(willBeOverdue.getTime)
   }
-
 
   def unlock(lockName: String)(implicit session: DBSession): Unit = {
 
@@ -161,8 +173,8 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
        """.map(r => (r.string(1), r.timestamp(2), r.long(3))).first().apply() match {
       case None =>
         LOGGER.warn(s"Requested lock release, but no lock was found for lockName = $lockName! Holder $uuid.")
-      case Some((_, whneOverdue, version))
-        if whneOverdue.getTime < now.getTime =>
+      case Some((_, whenOverdue, version))
+        if whenOverdue.getTime < now.getTime =>
         if (deleteCmd(version) != 1) {
           LOGGER.warn(s"Tried to delete overdue lock for $lockName, but was not found, or modified by someone in the process. Holder $uuid.")
         }
@@ -175,15 +187,6 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
         LOGGER.warn(s"Tried to delete my lock for $lockName, lock is owned by $by_who. Holder $uuid.")
     }
 
-  }
-
-  override def runLocked(lockName: String, lockSettings: DbLocksSettings = DbLocksSettings())(code: => Unit)(implicit session: DBSession): Unit = {
-    try {
-      lock(lockName, lockSettings)
-      code
-    } finally {
-      unlock(lockName)
-    }
   }
 
   /**
@@ -233,7 +236,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
     val foundTables: immutable.Seq[String] =
       sql"""SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_NAME = $locksTable AND table_schema= $schema"""
         .map(_.string(1)).list.apply()
-    val exists = foundTables.size == 1
+    val exists = foundTables.lengthCompare(1) == 0
     exists
   }
 }

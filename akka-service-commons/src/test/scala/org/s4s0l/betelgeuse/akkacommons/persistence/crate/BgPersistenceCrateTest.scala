@@ -53,25 +53,19 @@ class BgPersistenceCrateTest extends BgTestCrate {
     }
   }
 
-  feature("Provides working locking mechanizm") {
-    scenario("Locking and unlcking") {
+  feature("Provides working locking mechanism") {
+    scenario("Locking and unlocking") {
       new WithService(aService) {
         private val extension = BgPersistenceExtension.apply(system)
         When("Asked for lock")
-        extension.dbAccess.update { implicit session =>
-          extension.dbAccess.locksSupport().asInstanceOf[CrateDbLocks].lock("SOME_LOCK_123")
-        }
-        Then("Lock holds")
-        extension.dbAccess.update { implicit session =>
-          assert(extension.dbAccess.locksSupport().asInstanceOf[CrateDbLocks].isLockOurs("SOME_LOCK_123"))
-        }
-        When("Asked to release")
-        extension.dbAccess.update { implicit session =>
-          extension.dbAccess.locksSupport().asInstanceOf[CrateDbLocks].unlock("SOME_LOCK_123")
+        extension.dbAccess.locksSupport().runLocked("SOME_LOCK_123") { implicit session =>
+          Then("Lock holds")
+          extension.dbAccess.locksSupport().support.asInstanceOf[CrateDbLocks].isLockOurs("SOME_LOCK_123")
+          When("Asked to release")
         }
         Then("Lock is released")
         extension.dbAccess.update { implicit session =>
-          assert(!extension.dbAccess.locksSupport().asInstanceOf[CrateDbLocks].isLockOurs("SOME_LOCK_123"))
+          assert(!extension.dbAccess.locksSupport().support.asInstanceOf[CrateDbLocks].isLockOurs("SOME_LOCK_123"))
         }
       }
     }

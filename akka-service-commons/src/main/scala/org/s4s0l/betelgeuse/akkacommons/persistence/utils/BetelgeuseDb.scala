@@ -19,6 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.flywaydb.core.internal.util.StringUtils
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
 import org.s4s0l.betelgeuse.akkacommons.persistence.versioning.FlyTrackPersistenceSchemaUpdater
 import org.slf4j.LoggerFactory
 import scalikejdbc.config._
@@ -55,9 +56,15 @@ class BetelgeuseDb(val config: Config) extends DBs
     }
   }
 
-  def getLocks(name: String = getDefaultPoolName.get): DbLocksSupport = {
-    encounteredPoolLocks(name)
+  private val txExecutor: TxExecutor = new TxExecutor {
+    override def doInTx[T](code: DBSession => T): T = {
+      localTx { implicit session =>
+        code(session)
+      }
+    }
   }
+
+  def getLocks(name: String = getDefaultPoolName.get): DbLocks = new DbLocks(encounteredPoolLocks(name), txExecutor)
 
   override def setup(dbName: Symbol): Unit = {
     super.setup(dbName)
@@ -79,25 +86,16 @@ class BetelgeuseDb(val config: Config) extends DBs
         Class.forName(locksProviderClassName).getConstructor(classOf[Config]).newInstance(config).asInstanceOf[DbLocksSupport]
       }.getOrElse {
       LOGGER.warn(s"No locks provided for database ${dbName.name}!")
-      DbLocksSupport.noopLocker
+      DbLocksSupport.noOpLocker
     }
     encounteredPoolLocks += (dbName.name -> locksSupport)
+    locksSupport.initLocks(txExecutor)
 
     if (dbConfig.hasPath("migrations.enabled") && dbConfig.getBoolean("migrations.enabled")) {
-      // these two transactions need to be separated due to potential schema dead lock
-      // in cockroach create database causes lock on information schema which is released
-      // on transaction commit. This can cause a deadlock as flyway is reading from these
-      // tables in its own connection during run locked below
-      localTx {
-        implicit session =>
-          locksSupport.initLocks(session)
+      locksSupport.runLocked(s"FlywayMigration", txExecutor, DbLocksSettings(10 minutes, 35, 1 seconds)) { implicit session =>
+        new FlyTrackPersistenceSchemaUpdater(flywayConfig).updateSchema(new DummyDataSource(dbName))
       }
-      localTx {
-        implicit session =>
-          locksSupport.runLocked(s"FlywayMigration", DbLocksSettings(10 minutes, 35, 1 seconds)) {
-            new FlyTrackPersistenceSchemaUpdater(flywayConfig).updateSchema(new DummyDataSource(dbName))
-          }
-      }
+
     }
   }
 
