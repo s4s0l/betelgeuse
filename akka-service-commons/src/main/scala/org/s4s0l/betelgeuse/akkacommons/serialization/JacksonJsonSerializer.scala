@@ -15,7 +15,6 @@
  */
 
 
-
 //THEaboe is a lie!!!! taken from https://github.com/NextGenTel/akka-tools
 package org.s4s0l.betelgeuse.akkacommons.serialization
 
@@ -50,6 +49,16 @@ object JacksonJsonSerializer {
 
   def setObjectMapper(preConfiguredObjectMapper: ObjectMapper): Unit = {
     _objectMapper = Some(preConfiguredObjectMapper)
+  }
+
+  def verifySerialization[T](code: => T): T = {
+    val orig = verifySerialization
+    setVerifySerialization(true)
+    try {
+      code
+    } finally {
+      setVerifySerialization(orig)
+    }
   }
 
   def setVerifySerialization(verifySerialization: Boolean): Unit = {
@@ -121,7 +130,7 @@ class JacksonJsonSerializer extends Serializer {
       }
       return
     }
-    val deserializedObject: AnyRef = fromBinary(bytes, originalObject.getClass)
+    val deserializedObject: AnyRef = objectMapper().readValue(bytes, originalObject.getClass)
     if (!(originalObject == deserializedObject)) {
       throw new JacksonJsonSerializerVerificationFailed("Serialization-verification failed.\n" + "original:     " + originalObject.toString + "\n" + "deserialized: " + deserializedObject.toString)
     }

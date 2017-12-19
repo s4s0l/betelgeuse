@@ -27,7 +27,7 @@ import org.scalatest.{FeatureSpec, Matchers}
 
 class JacksonJsonSerializerTest extends FeatureSpec with Matchers {
 
-//
+  //
 
   feature("Akka serialzation to json with jackson") {
     scenario("serializer") {
@@ -58,35 +58,40 @@ class JacksonJsonSerializerTest extends FeatureSpec with Matchers {
     }
 
     scenario("DepricatedTypeWithMigrationInfo") {
-      val serializer = new JacksonJsonSerializer()
-      val bytes = serializer.toBinary(OldType("12"))
-      assert(NewType(12) == serializer.fromBinary(bytes, classOf[OldType]))
+      JacksonJsonSerializer.verifySerialization {
+        val serializer = new JacksonJsonSerializer()
+        val bytes = serializer.toBinary(OldType("12"))
+        assert(NewType(12) == serializer.fromBinary(bytes, classOf[OldType]))
+      }
     }
 
     scenario("verifySerialization - no error") {
-      JacksonJsonSerializer.setVerifySerialization(true)
-      val serializer = new JacksonJsonSerializer()
-      val a = Animal("our cat", 12, Cat("black", tail = true))
-      val ow = ObjectWrapperWithTypeInfo(a)
-      serializer.toBinary(ow)
-    }
-
-    scenario("verifySerialization - with error") {
-      JacksonJsonSerializer.setVerifySerialization(true)
-      val serializer = new JacksonJsonSerializer()
-      val a = Animal("our cat", 12, Cat("black", tail = true))
-      val ow = ObjectWrapperWithoutTypeInfo(a)
-      intercept[JacksonJsonSerializerVerificationFailed] {
+      JacksonJsonSerializer.verifySerialization {
+        val serializer = new JacksonJsonSerializer()
+        val a = Animal("our cat", 12, Cat("black", tail = true))
+        val ow = ObjectWrapperWithTypeInfo(a)
         serializer.toBinary(ow)
       }
     }
 
+    scenario("verifySerialization - with error") {
+      JacksonJsonSerializer.verifySerialization {
+        val serializer = new JacksonJsonSerializer()
+        val a = Animal("our cat", 12, Cat("black", tail = true))
+        val ow = ObjectWrapperWithoutTypeInfo(a)
+        intercept[JacksonJsonSerializerVerificationFailed] {
+          serializer.toBinary(ow)
+        }
+      }
+    }
+
     scenario("verifySerialization - disabled") {
-      JacksonJsonSerializer.setVerifySerialization(true)
-      val serializer = new JacksonJsonSerializer()
-      val a = Animal("our cat", 12, Cat("black", tail = true))
-      val ow = ObjectWrapperWithoutTypeInfoOverrided(a)
-      serializer.toBinary(ow)
+      JacksonJsonSerializer.verifySerialization {
+        val serializer = new JacksonJsonSerializer()
+        val a = Animal("our cat", 12, Cat("black", tail = true))
+        val ow = ObjectWrapperWithoutTypeInfoOverrided(a)
+        serializer.toBinary(ow)
+      }
     }
 
 
