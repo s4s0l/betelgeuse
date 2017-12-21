@@ -22,17 +22,21 @@
 
 package org.s4s0l.betelgeuse.akkacommons.http.rest
 
+import akka.actor.ActorRef
 import akka.http.scaladsl.marshalling.{ToEntityMarshaller, ToResponseMarshallable}
 import akka.http.scaladsl.model.{HttpEntity, HttpMethod, HttpMethods, headers}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{PathMatcher1, _}
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.Headers
 import org.s4s0l.betelgeuse.akkacommons.serialization.HttpMarshalling
 import org.s4s0l.betelgeuse.akkacommons.utils.QA
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 
-import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
+import scala.language.postfixOps
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
@@ -61,33 +65,8 @@ object RestDomainObject {
     def method: HttpMethod
   }
 
-  /**
-    *
-    * @tparam ID typed ID of an object
-    * @tparam T  type of an object
-    * @tparam V  typed version, using some customizable type so it can be safely case matched
-    */
-  trait Protocol[ID, T <: AnyRef, V] {
-
-    def id(id: String): ID
-
-    def classTag: ClassTag[T]
-
-    def domainObjectType: String
-
-    def version: V
-
-    def version(versionName: String): V
-
-    def createRoute: Route = {
-      pathPrefix(version.toString / "objects" / domainObjectType) {
-        routeFactory
-      }
-    }
-
-    protected def routeFactory: Route = reject
-
-  }
+  //todo: should contain headers so that actions could send back something more than payload
+  sealed trait RestCommandResult[T] extends Result[Uuid, T]
 
   trait ProtocolWithUpdates[ID, T <: AnyRef, V] extends ProtocolRoute[ID, T, V]
     with Gets[ID, T, V]
@@ -99,107 +78,175 @@ object RestDomainObject {
     with Gets[ID, T, V]
     with Creates[ID, T, V]
 
-  trait Gets[ID, T <: AnyRef, V] extends Protocol[ID, T, V] {
+
+  trait RestProtocol {
+
+    def and(other: RestProtocol): RestProtocol = new RestProtocol {
+      override def createRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+        RestProtocol.this.createRoute ~ other.createRoute
+      }
+    }
+
+    def createRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = reject
+
+  }
+
+  trait VersionedRestProtocol[V] extends RestProtocol {
+
+    def version: V
+
+    override def createRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      super.createRoute ~ pathPrefix(version.toString) {
+        createVersionedRoute
+      }
+    }
+
+    protected def createVersionedRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = reject
+
+  }
+
+  /**
+    *
+    * @tparam ID typed ID of an object
+    * @tparam T  type of an object
+    * @tparam V  typed version, using some customizable type so it can be safely case matched
+    */
+  trait DomainObjectProtocol[ID, T <: AnyRef, V] extends VersionedRestProtocol[V] {
+
+
+    def id(id: String): ID
+
+    def classTag: ClassTag[T]
+
+    def domainObjectType: String
+
+    override protected def createVersionedRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      super.createVersionedRoute ~
+        pathPrefix("objects" / domainObjectType) {
+          createObjectRoute
+        }
+    }
+
+    protected def createObjectRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = reject
+
+  }
+
+  trait Gets[ID, T <: AnyRef, V] extends DomainObjectProtocol[ID, T, V] {
     i: ProtocolRoute[ID, T, V] =>
 
-    def get(msg: Get[ID, V]): Future[RestCommandResult[T]]
+    def get(msg: Get[ID, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[T]]
 
-    protected val getDirective: Route = {
-      Directives.get {
-        withIdHeaders() { (id, headers) =>
-          onComplete(get(Get(version, id, headers)))(completeWithPayload)
-        }
-      }
-    }
-    protected val listDirective: Route = {
-      Directives.get {
-        pathEnd {
-          withHeaders() { headers =>
-            onComplete(list(GetList(version, headers)))(completeWithPayload)
-          }
-        }
-      }
-    }
+    def list(msg: GetList[V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[List[ID]]]
 
-    def list(msg: GetList[V]): Future[RestCommandResult[List[ID]]]
-
-    protected override def routeFactory: Route = {
-      super.routeFactory ~
+    protected override def createObjectRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      super.createObjectRoute ~
         listDirective ~
         getDirective
     }
-  }
 
-  trait Deletes[ID, T <: AnyRef, V] extends Protocol[ID, T, V] {
-    i: ProtocolRoute[ID, T, V] =>
-    def delete(msg: Delete[ID, V]): Future[RestCommandResult[ID]]
-
-    protected val deleteDirective: Route = {
-      Directives.delete {
+    protected def getDirective(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      Directives.get {
         withIdHeaders() { (id, headers) =>
-          onComplete(delete(Delete(version, id, headers)))(completeWithNoPayload)
+          val msg = Get(version, id, headers)
+          onComplete(get(msg).recover(withRecovery(msg.messageId)))(completeWithPayload)
         }
       }
     }
 
-    protected override def routeFactory: Route = {
-      super.routeFactory ~
+    protected def listDirective(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      Directives.get {
+        pathEnd {
+          withHeaders() { headers =>
+            val msg = GetList(version, headers)
+            onComplete(list(msg).recover(withRecovery(msg.messageId)))(completeWithPayload)
+          }
+        }
+      }
+    }
+  }
+
+  trait Deletes[ID, T <: AnyRef, V] extends DomainObjectProtocol[ID, T, V] {
+    i: ProtocolRoute[ID, T, V] =>
+    def delete(msg: Delete[ID, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[ID]]
+
+    protected override def createObjectRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      super.createObjectRoute ~
         deleteDirective
+    }
+
+    protected def deleteDirective(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      Directives.delete {
+        withIdHeaders() { (id, headers) =>
+          val msg = Delete(version, id, headers)
+          onComplete(delete(msg).recover(withRecovery(msg.messageId)))(completeWithNoPayload)
+        }
+      }
     }
 
   }
 
-  trait Updates[ID, T <: AnyRef, V] extends Protocol[ID, T, V] {
+  trait Updates[ID, T <: AnyRef, V] extends DomainObjectProtocol[ID, T, V] {
     i: ProtocolRoute[ID, T, V] =>
-    def update(msg: Update[ID, T, V]): Future[RestCommandResult[ID]]
+    def update(msg: Update[ID, T, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[ID]]
 
-    protected val updateDirective: Route = {
+    protected override def createObjectRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      super.createObjectRoute ~
+        updateDirective
+    }
+
+    protected def updateDirective(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
       Directives.put {
         withIdHeaders() { (id, headers) =>
           entity(as[T]) { e =>
-            onComplete(update(Update(version, id, e, headers)))(completeWithNoPayload)
+            val msg = Update(version, id, e, headers)
+            onComplete(update(msg).recover(withRecovery(msg.messageId)))(completeWithNoPayload)
           }
         }
 
       }
     }
 
-    protected override def routeFactory: Route = {
-      super.routeFactory ~
-        updateDirective
-    }
-
   }
 
-  trait Creates[ID, T <: AnyRef, V] extends Protocol[ID, T, V] {
+  trait Creates[ID, T <: AnyRef, V] extends DomainObjectProtocol[ID, T, V] {
     i: ProtocolRoute[ID, T, V] =>
     def generateId: ID
 
-    def create(msg: Create[ID, T, V]): Future[RestCommandResult[ID]]
+    def create(msg: Create[ID, T, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[ID]]
 
-    protected val createDirective: Route = {
+    protected override def createObjectRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      super.createObjectRoute ~
+        createDirective
+    }
+
+    protected def createDirective(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
       Directives.post {
         pathEnd {
           withHeaders() { headers =>
             entity(as[T]) { e =>
-              onComplete(create(Create(version, generateId, e, headers)))(completeWithId)
+
+              val msg = Create(version, generateId, e, headers)
+              onComplete(create(msg).recover(withRecovery[ID](msg.messageId)))(completeWithId)
             }
           }
         }
       }
     }
 
-    protected override def routeFactory: Route = {
-      super.routeFactory ~
-        createDirective
-    }
-
   }
 
-  trait Actions[ID, T <: AnyRef, V] extends Protocol[ID, T, V] {
+  trait Actions[ID, T <: AnyRef, V] extends DomainObjectProtocol[ID, T, V] {
     i: ProtocolRoute[ID, T, V] =>
 
-    protected val actionsDirective: Route = {
+    //TODO use maybe directive api here to parse params?
+    def actions: Map[ActionDesc, (Action[ID, V], ExecutionContext, ActorRef) => Future[RestCommandResult[_]]] = Map()
+
+    protected override def createObjectRoute(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
+      super.createObjectRoute ~
+        actionsDirective
+    }
+
+    protected def actionsDirective(implicit executionContext: ExecutionContext, sender: ActorRef): Route = {
       val actionList = path(Segment / "actions") { _ =>
         complete(ToResponseMarshallable(ActionList(actions.keys.map(e => ActionPrompt(e.name, e.method.value, e.params.toList)).toList))(toEntityMarshaller))
       }
@@ -214,9 +261,11 @@ object RestDomainObject {
       val actionDirectives = actions.map { e =>
         e._1 ->
           withIdHeaders(Segment / "actions" / e._1.name / "invoke", e._1.params) { (id, headers) =>
+            //todo make it accept params in request body also, as simple map
             parameterMap { paramMap =>
               val params = paramMap ++ headers.filter(it => e._1.params.contains(it._1))
-              onComplete(e._2(Action(version, id, e._1.name, params, headers)).asInstanceOf[Future[RestCommandResult[AnyRef]]])(completeWithPayload)
+              val msg = Action(version, id, e._1.name, params, headers)
+              onComplete(e._2(msg, executionContext, sender).recover(withRecovery(msg.messageId)).asInstanceOf[Future[RestCommandResult[AnyRef]]])(completeWithPayload)
             }
           }
       }
@@ -245,27 +294,23 @@ object RestDomainObject {
 
 
     }
-
-    //TODO use maybe directive api here to parse params?
-    def actions: Map[ActionDesc, Action[ID, V] => Future[RestCommandResult[_]]]
-
-    protected override def routeFactory: Route = {
-      super.routeFactory ~
-        actionsDirective
-    }
   }
 
   trait ProtocolRoute[ID, T <: AnyRef, V] {
-    protocol: Protocol[ID, T, V] =>
+    protocol: DomainObjectProtocol[ID, T, V] =>
 
     val defaultPassedHeaders: Set[String] = Set("messageId")
 
     protected implicit def fromEntityMarshaller: FromEntityUnmarshaller[T]
 
+    def withRecovery[X](correlationId: Uuid): PartialFunction[Throwable, RestCommandResult[X]] = {
+      case ex: Throwable => RestCommandNotOk[X](ex, correlationId)
+    }
+
     def completeWithPayload[X <: AnyRef]: PartialFunction[Try[RestCommandResult[X]], Route] = {
       case Success(RestCommandOk(value, correlationId)) =>
         respondWithHeader(headers.RawHeader("correlationId", correlationId)) {
-          complete(toResponseMarshallAble(value))
+          complete(if (value == NoPayload) HttpEntity.Empty else toResponseMarshallAble(value))
         }
       case Success(RestCommandNotOk(ex, correlationId)) =>
         respondWithHeader(headers.RawHeader("correlationId", correlationId)) {
@@ -314,28 +359,6 @@ object RestDomainObject {
 
     protected def toEntityMarshaller: ToEntityMarshaller[AnyRef]
 
-
-  }
-
-  trait BaseProtocol[ID, T <: AnyRef, V]
-    extends Protocol[ID, T, V]
-      with ProtocolRoute[ID, T, V] {
-
-    val baseProtocolSettings: BaseProtocolSettings[ID, T, V]
-
-    protected implicit def toEntityMarshaller: ToEntityMarshaller[AnyRef] = baseProtocolSettings.httpMarshaller.marshaller[AnyRef]
-
-    protected implicit def fromEntityMarshaller: FromEntityUnmarshaller[T] = baseProtocolSettings.httpMarshaller.unmarshaller[T](baseProtocolSettings.classTag)
-
-    override def version: V = baseProtocolSettings.version
-
-    override def id(id: String): ID = baseProtocolSettings.stringToId(id)
-
-    override def version(versionName: String): V = baseProtocolSettings.stringToVersion(versionName)
-
-    override def classTag: ClassTag[T] = baseProtocolSettings.classTag
-
-    override def domainObjectType: String = baseProtocolSettings.domainObjectType
   }
 
   case class Get[ID, V](version: V, id: ID, headers: Headers) extends RestCommand
@@ -343,8 +366,6 @@ object RestDomainObject {
   case class GetList[V](version: V, headers: Headers) extends RestCommand
 
   case class Delete[ID, V](version: V, id: ID, headers: Headers) extends RestCommand
-
-  sealed trait RestCommandResult[T] extends Result[Uuid, T]
 
   case class Create[ID, T, V](version: V, id: ID, value: T, headers: Headers) extends RestCommand
 
@@ -368,16 +389,42 @@ object RestDomainObject {
     override def method: HttpMethod = HttpMethods.GET
   }
 
+  trait BaseProtocol[ID, T <: AnyRef, V]
+    extends DomainObjectProtocol[ID, T, V]
+      with ProtocolRoute[ID, T, V] {
+
+    val baseProtocolSettings: BaseProtocolSettings[ID, T, V]
+
+    protected implicit def toEntityMarshaller: ToEntityMarshaller[AnyRef] = baseProtocolSettings.httpMarshaller.marshaller[AnyRef]
+
+    protected implicit def fromEntityMarshaller: FromEntityUnmarshaller[T] = baseProtocolSettings.httpMarshaller.unmarshaller[T](baseProtocolSettings.classTag)
+
+    protected implicit def timeout: Timeout = baseProtocolSettings.timeout
+
+    override def version: V = baseProtocolSettings.version
+
+    override def id(id: String): ID = baseProtocolSettings.stringToId(id)
+
+    override def classTag: ClassTag[T] = baseProtocolSettings.classTag
+
+    override def domainObjectType: String = baseProtocolSettings.domainObjectType
+  }
+
+  class BaseRestProtocol[ID, T <: AnyRef, V](val baseProtocolSettings: BaseProtocolSettings[ID, T, V])
+    extends BaseProtocol[ID, T, V]
+
   class BaseProtocolSettings[ID, T <: AnyRef, V](val version: V, val domainObjectType: String)
                                                 (implicit val classTag: ClassTag[T],
-                                                 val stringToVersion: String => V,
                                                  val stringToId: String => ID,
-                                                 val httpMarshaller: HttpMarshalling)
+                                                 val httpMarshaller: HttpMarshalling,
+                                                 val timeout: Timeout = 5 seconds)
 
   case class Id(id: String)
 
   case class ActionPrompt(name: String, method: String, params: List[String])
 
   case class ActionList(actions: List[ActionPrompt])
+
+  object NoPayload
 
 }

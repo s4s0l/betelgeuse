@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 
@@ -42,6 +42,16 @@ trait BgHttpStomp extends BgHttp {
     BgHttpStompExtension.get(system)
 
 
+  /**
+    * creates stomp flow in http creating an actor that handles all stomp messages coming from
+    * web socket, all messages send to this actor can be a [[StompServerMessage]] or any other message.
+    * It will be passed to the web socket if they match subscription. For Any other message
+    * settings contain function for converting them to [[StompServerMessage]].
+    *
+    * @param flow flow factory from environment that gives access to stomp actor reference and current session Id
+    *             if you want to send some messages remember to set sender to this actor if you want to
+    *             receive responses
+    */
   def stomp(settings: StompHandlerSettings, flow: StompHandlerEnvironment => Flow[StompClientMessage, Option[StompServerMessage], Any]): Route = {
     StompHandler.socksStompFlow(settings, flow)
   }

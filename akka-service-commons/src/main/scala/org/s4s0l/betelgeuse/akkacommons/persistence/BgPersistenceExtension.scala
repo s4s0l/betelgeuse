@@ -40,13 +40,13 @@ class BgPersistenceExtension(private val system: ExtendedActorSystem) extends Ex
 
     override def dbDispatcher: ExecutionContext = ec
 
-    override def queryAsync[A](execution: (DBSession) => A, ec: ExecutionContext): Future[A] = {
+    override def queryAsync[A](execution: (DBSession) => A)(implicit ec: ExecutionContext = dbDispatcher): Future[A] = {
       Future {
         query(execution)
       }(ec)
     }
 
-    override def updateAsync[A](execution: (DBSession) => A, ec: ExecutionContext): Future[A] = {
+    override def updateAsync[A](execution: (DBSession) => A)(implicit ec: ExecutionContext = dbDispatcher): Future[A] = {
       Future {
         update(execution)
       }(ec)

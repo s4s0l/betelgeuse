@@ -28,7 +28,7 @@ import scala.util.{Failure, Success}
 /**
   * @author Marcin Wielgus
   */
-@deprecated("Do not use!")
+@deprecated("Do not use!", "ever")
 trait QuickAskActor {
   actor: Actor with ActorLogging =>
 

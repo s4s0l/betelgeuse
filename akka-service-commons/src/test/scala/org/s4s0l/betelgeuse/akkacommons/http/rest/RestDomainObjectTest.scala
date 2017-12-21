@@ -22,6 +22,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.http.rest
 
+import akka.actor.ActorRef
 import akka.http.scaladsl.marshalling.ToEntityMarshaller
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.testkit.ScalatestRouteTest
@@ -32,7 +33,7 @@ import org.s4s0l.betelgeuse.akkacommons.utils.QA
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.{FeatureSpec, GivenWhenThen, Matchers}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * @author Marcin Wielgus
@@ -40,12 +41,14 @@ import scala.concurrent.Future
 class RestDomainObjectTest extends FeatureSpec with ScalatestRouteTest with Matchers with MockFactory with GivenWhenThen {
   implicit val marshalling: HttpMarshalling = new HttpMarshalling(new JacksonJsonSerializer())
   implicit val toInt: String => Int = x => x.toInt
-
+  implicit val sender: ActorRef = ActorRef.noSender
+  //  implicit val ec: ExecutionContext = ExecutionContext.global
   feature("Actor protocols should be able to self create http routes for domain object actors") {
     scenario("When protocol is successful responses are delivered to the client") {
 
       val route = new AlwaysOk(new BaseProtocolSettings(1, "always-ok")).createRoute
       implicit val toM: ToEntityMarshaller[SomeValue] = marshalling.marshaller[SomeValue]
+
       Get("/1/objects/always-ok") ~> route ~> check {
         responseAs[String] shouldEqual """["ok"]"""
         header("correlationId") shouldBe defined
@@ -87,6 +90,7 @@ class RestDomainObjectTest extends FeatureSpec with ScalatestRouteTest with Matc
         header("correlationId") shouldBe defined
       }
 
+
       info("should accept headers as action parameters")
       Get("/1/objects/always-ok/9/actions/query-action-2/invoke").withHeaders(RawHeader("xxx", "value")) ~> route ~> check {
         responseAs[String] shouldEqual """"qa2:9:value""""
@@ -101,6 +105,11 @@ class RestDomainObjectTest extends FeatureSpec with ScalatestRouteTest with Matc
       Post("/1/objects/always-ok/91/actions/non-idempotent-action/invoke") ~> route ~> check {
         responseAs[String] shouldEqual """"na:91""""
         header("correlationId") shouldBe defined
+      }
+
+      val messageId = "sampleMessageId"
+      Post("/1/objects/always-ok/91/actions/non-idempotent-action/invoke").withHeaders(RawHeader("messageId", messageId)) ~> route ~> check {
+        header("correlationId") shouldBe Some(RawHeader("correlationId", messageId))
       }
 
     }
@@ -121,40 +130,47 @@ object RestDomainObjectTest {
       with Creates[String, SomeValue, Int]
       with Deletes[String, SomeValue, Int]
       with Actions[String, SomeValue, Int] {
-    override def get(msg: Get[String, Int]): Future[RestCommandResult[SomeValue]] =
+    override def get(msg: Get[String, Int])
+                    (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[SomeValue]] =
       Future.successful(RestCommandOk(SomeValue(s"get:${msg.id}"), msg.messageId))
 
-    override def list(msg: GetList[Int]): Future[RestCommandResult[List[String]]] =
+    override def list(msg: GetList[Int])
+                     (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[List[String]]] =
       Future.successful(RestCommandOk(List("ok"), msg.messageId))
 
-    override def update(msg: Update[String, SomeValue, Int]): Future[RestCommandResult[String]] =
+    override def update(msg: Update[String, SomeValue, Int])
+                       (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"update:${msg.id}", msg.messageId))
 
     override def generateId: String = QA.uuid
 
-    override def create(msg: Create[String, SomeValue, Int]): Future[RestCommandResult[String]] =
+    override def create(msg: Create[String, SomeValue, Int])
+                       (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"create:${msg.id}:${msg.value.value}", msg.messageId))
 
-    override def delete(msg: Delete[String, Int]): Future[RestCommandResult[String]] =
+    override def delete(msg: Delete[String, Int])
+                       (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"delete:${msg.id}", msg.messageId))
 
-    override def actions: Map[ActionDesc, Action[String, Int] => Future[RestCommandResult[_]]] = Map(
-      Query("query-action-1", Set("param1", "param2")) -> queryAction1,
-      Query("query-action-2", Set("xxx")) -> queryAction2,
-      Idempotent("idempotent-action") -> idempotentAction,
-      NonIdempotent("non-idempotent-action") -> nonIdempotentAction,
+    override def actions: Map[ActionDesc, (Action[String, Int], ExecutionContext, ActorRef) => Future[RestCommandResult[_]]] =
+      super.actions ++ Map(
+        Query("query-action-1", Set("param1", "param2")) -> (queryAction1(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
+        Query("query-action-2", Set("xxx")) -> (queryAction2(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
+        Idempotent("idempotent-action") -> (idempotentAction(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
+        NonIdempotent("non-idempotent-action") -> (nonIdempotentAction(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
     )
 
-    def queryAction1(msg: Action[String, Int]): Future[RestCommandResult[String]] =
+
+    def queryAction1(msg: Action[String, Int])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"qa1:${msg.id}:${msg.params("param1")}", msg.messageId))
 
-    def queryAction2(msg: Action[String, Int]): Future[RestCommandResult[String]] =
+    def queryAction2(msg: Action[String, Int])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"qa2:${msg.id}:${msg.params("xxx")}", msg.messageId))
 
-    def idempotentAction(msg: Action[String, Int]): Future[RestCommandResult[String]] =
+    def idempotentAction(msg: Action[String, Int])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"ia:${msg.id}", msg.messageId))
 
-    def nonIdempotentAction(msg: Action[String, Int]): Future[RestCommandResult[String]] =
+    def nonIdempotentAction(msg: Action[String, Int])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"na:${msg.id}", msg.messageId))
   }
 

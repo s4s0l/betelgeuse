@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
@@ -21,13 +21,13 @@ import akka.persistence.AtLeastOnceDelivery
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.Headers
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.{Message, Payload}
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedNotOk, OriginStateChangedOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol._
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.StateDistributorProtocol.{OriginStateChanged, OriginStateChangedNotOk, OriginStateChangedOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
-import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
+import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, QA}
 import org.s4s0l.betelgeuse.utils.AllUtils.{listOfFuturesToFutureOfList, _}
 
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -38,6 +38,8 @@ import scala.language.postfixOps
   * This actually could be generalized to 'broadcast acknowledgeable actor'.
   * forwards message to N destinations and awaits its responses confirms received message
   * only if all destinations confirmed.
+  *
+  * It could also not e an actor, as it does not hold any state...
   *
   * @author Marcin Wielgus
   */
@@ -91,7 +93,7 @@ object OriginStateDistributor {
               (implicit actorSystem: ActorRefFactory)
   : Protocol[T] = {
     val ref = actorSystem.actorOf(Props(new OriginStateDistributor(settings)))
-    Protocol(ref)
+    new Protocol[T](ref)
   }
 
   /**
@@ -155,19 +157,16 @@ object OriginStateDistributor {
 
   final case class Settings[T](name: String, satelliteStates: Map[String, SatelliteProtocol[T]])
 
-  /**
-    * An protocol for [[OriginStateDistributor]]
-    */
-  final class Protocol[T] private(actorRef: => ActorRef) {
+
+  trait StateDistributorProtocol[T] {
 
     /**
       * Emits state change. Sender should expect
-      * [[org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.OriginStateChangedResult]]
+      * [[org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.StateDistributorProtocol.OriginStateChangedResult]]
       */
-    def stateChanged(msg: OriginStateChanged[T])
+    def stateChanged(msg: StateDistributorProtocol.OriginStateChanged[T])
                     (implicit sender: ActorRef = Actor.noSender)
-    : Unit =
-      actorRef ! msg
+    : Unit
 
     /**
       * uses deliver method of [[AtLeastOnceDelivery]].
@@ -176,10 +175,58 @@ object OriginStateDistributor {
       */
     def deliverStateChange(from: AtLeastOnceDelivery)
                           (versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
+    : Unit
+  }
+
+  /**
+    * An protocol for [[OriginStateDistributor]]
+    */
+  class Protocol[T](actorRef: => ActorRef) extends StateDistributorProtocol[T] {
+
+    /**
+      * Emits state change. Sender should expect
+      * [[org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.StateDistributorProtocol.OriginStateChangedResult]]
+      */
+    override def stateChanged(msg: StateDistributorProtocol.OriginStateChanged[T])
+                             (implicit sender: ActorRef = Actor.noSender)
+    : Unit =
+      actorRef ! msg
+
+    /**
+      * uses deliver method of [[AtLeastOnceDelivery]].
+      * Works like [[Protocol.stateChanged]].
+      * Utility to hide actor ref from user of this protocol
+      */
+    override def deliverStateChange(from: AtLeastOnceDelivery)
+                                   (versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
     : Unit = {
-      from.deliver(actorRef.path)(deliveryId => OriginStateChanged(deliveryId, versionedId, value, expectedConfirmIn))
+      from.deliver(actorRef.path)(deliveryId => StateDistributorProtocol.OriginStateChanged(deliveryId, versionedId, value, expectedConfirmIn))
     }
 
+  }
+
+  object StateDistributorProtocol {
+
+    def stateDistributorConverter[F, T](distributor: OriginStateDistributor.StateDistributorProtocol[T])(mapper: (VersionedId, F) => T)
+    : OriginStateDistributor.StateDistributorProtocol[F] = {
+      new OriginStateDistributor.StateDistributorProtocol[F]() {
+
+        override def stateChanged(msg: StateDistributorProtocol.OriginStateChanged[F])(implicit sender: ActorRef): Unit =
+          distributor.stateChanged(StateDistributorProtocol.OriginStateChanged(msg.messageId, msg.versionedId, mapper.apply(msg.versionedId, msg.value), msg.expectedConfirmIn))
+
+        override def deliverStateChange(from: AtLeastOnceDelivery)(versionedId: VersionedId, value: F, expectedConfirmIn: FiniteDuration): Unit =
+          distributor.deliverStateChange(from)(versionedId, mapper.apply(versionedId, value), expectedConfirmIn)
+      }
+    }
+
+    sealed trait OriginStateChangedResult extends NullResult[Long]
+
+    case class OriginStateChanged[T](messageId: Long, versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
+      extends Question[Long]
+
+    case class OriginStateChangedOk(correlationId: Long) extends OriginStateChangedResult with OkNullResult[Long]
+
+    case class OriginStateChangedNotOk(correlationId: Long, ex: Throwable) extends OriginStateChangedResult with NotOkNullResult[Long]
   }
 
   object SatelliteProtocol {
@@ -189,7 +236,7 @@ object OriginStateDistributor {
 
     sealed trait StateChangeResult extends Result[Uuid, Null]
 
-    case class StateChange[T](versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration) extends UuidQuestion {
+    case class StateChange[T](versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration, messageId: Uuid = QA.uuid) extends UuidQuestion {
       def toMessage(implicit simpleSerializer: SimpleSerializer): Message = {
         val headers = Headers()
           .withHeader("versionedId", versionedId.toString)
@@ -202,7 +249,7 @@ object OriginStateDistributor {
 
     case class StateChangeNotOk(correlationId: Uuid, ex: Throwable) extends StateChangeResult with NotOkNullResult[Uuid]
 
-    case class DistributionComplete(versionedId: VersionedId, expectedConfirmIn: FiniteDuration) extends UuidQuestion {
+    case class DistributionComplete(versionedId: VersionedId, expectedConfirmIn: FiniteDuration, messageId: Uuid = QA.uuid) extends UuidQuestion {
       def toMessage: Message = {
         val headers = Headers()
           .withHeader("versionedId", versionedId.toString)
@@ -214,25 +261,6 @@ object OriginStateDistributor {
     case class DistributionCompleteOk(correlationId: Uuid) extends DistributionCompleteResult with OkNullResult[Uuid]
 
     case class DistributionCompleteNotOk(correlationId: Uuid, ex: Throwable) extends DistributionCompleteResult with NotOkNullResult[Uuid]
-
-  }
-
-  object Protocol {
-    /**
-      * Wraps actor ref factory with protocol interface
-      */
-    def apply[T](actorRef: => ActorRef)
-    : Protocol[T] =
-      new Protocol(actorRef)
-
-    case class OriginStateChanged[T](messageId: Long, versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
-      extends Question[Long]
-
-    sealed trait OriginStateChangedResult extends NullResult[Long]
-
-    case class OriginStateChangedOk(correlationId: Long) extends OriginStateChangedResult with OkNullResult[Long]
-
-    case class OriginStateChangedNotOk(correlationId: Long, ex: Throwable) extends OriginStateChangedResult with NotOkNullResult[Long]
 
   }
 

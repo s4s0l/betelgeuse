@@ -21,9 +21,9 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import akka.actor.ActorRef
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedNotOk, OriginStateChangedOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.SatelliteProtocol._
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.StateDistributorProtocol.{OriginStateChanged, OriginStateChangedNotOk, OriginStateChangedOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributorTest._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
@@ -59,6 +59,7 @@ class OriginStateDistributorTest
 
         When("Distribute change")
         distributor.stateChanged(OriginStateChanged(1, VersionedId("id1", 1), "value", to))(self)
+
 
         Then("Expect confirmation")
         testKit.expectMsg(to, OriginStateChangedOk(1))

@@ -55,10 +55,15 @@ object StompHandler extends StompHandler {
   /**
     *
     * @param registerAsNamed                if true actor registers itself in given pub sub as service named /ws-$webSocketName/session/$sessionId/default"
-    *                                       and will not register uppon any SUBSCRIBE messages!
+    *                                       and will NOT register uppon any SUBSCRIBE messages! so above name will be the only one
+    *                                       through which it will be reachable
     * @param stompServerMessageActorMapping - optional function for mapping messages other than stomp ones
     * @param webSocketName                  name ofweb socket
-    * @param pubSubActorRef                 pub sub to register receiving actorto
+    * @param pubSubActorRef                 pub sub to register receiving actor to, if registerAsNamed = false
+    *                                       then stomp actor will register as:
+    *                                       /ws-$webSocketName/topic/$name when user subscribes to "/topic/$name"
+    *                                       /ws-$webSocketName/user/$userId/$name  for /user/$name
+    *                                       /ws-$webSocketName/session/$sessionId/$name for /session/$name
     */
   final case class StompHandlerSettings(webSocketName: String, pubSubActorRef: Option[ActorRef] = None,
                                         registerAsNamed: Boolean = false,

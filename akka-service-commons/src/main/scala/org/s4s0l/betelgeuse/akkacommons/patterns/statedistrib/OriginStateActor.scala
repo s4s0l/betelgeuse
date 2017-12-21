@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
@@ -25,7 +25,7 @@ import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
-
+//todo missing test
 /**
   * Actor that is a versioned entity that can handle state distribution
   * via [[OriginStateDistributor]].
@@ -33,13 +33,13 @@ import scala.language.postfixOps
   * @author Marcin Wielgus
   */
 class OriginStateActor[T](settings: Settings[T])
-  extends VersionedEntityActor(VersionedEntityActor.Settings(settings.name))
+  extends VersionedEntityActor[T](VersionedEntityActor.Settings(settings.name))
     with AtLeastOnceDelivery {
 
   override def receiveCommand: Receive = super.receiveCommand orElse {
-    case OriginStateDistributor.Protocol.OriginStateChangedOk(deliveryId) =>
+    case OriginStateDistributor.StateDistributorProtocol.OriginStateChangedOk(deliveryId) =>
       persist(ConfirmEvent(deliveryId))(processEvent(false))
-    case OriginStateDistributor.Protocol.OriginStateChangedNotOk(_, ex) =>
+    case OriginStateDistributor.StateDistributorProtocol.OriginStateChangedNotOk(_, ex) =>
       log.error(ex, "Undelivered state distribution")
   }
 
@@ -47,9 +47,11 @@ class OriginStateActor[T](settings: Settings[T])
     case ConfirmEvent(deliveryId) => confirmDelivery(deliveryId)
   }
 
-  override protected def valueUpdated(versionedId: VersionedId, value: Any): Unit = {
-    settings.distributor.deliverStateChange(this)(versionedId, value.asInstanceOf[T], redeliverInterval)
+  override protected def valueUpdated(versionedId: VersionedId, value: T): Unit = {
+    distributeStateChange(versionedId, value.asInstanceOf[T])
   }
+
+  protected def distributeStateChange(versionedId: VersionedId, value: T): Unit = settings.distributor.deliverStateChange(this)(versionedId, value, redeliverInterval)
 
   override def redeliverInterval: FiniteDuration = settings.stateDistributionRetryInterval
 
@@ -61,16 +63,16 @@ object OriginStateActor {
   def startSharded[T](settings: Settings[T], propsMapper: Props => Props = identity)(implicit shardingExt: BgClusteringShardingExtension)
   : Protocol[T] = {
     val ref = shardingExt.start(settings.name, Props(new OriginStateActor(settings)), VersionedEntityActor.entityExtractor)
-    Protocol(ref)
+    Protocol(ref, settings.name)
   }
 
 
-  final case class Settings[T](name: String, distributor: OriginStateDistributor.Protocol[T], stateDistributionRetryInterval: FiniteDuration = 30 seconds)
+  final case class Settings[T](name: String, distributor: OriginStateDistributor.StateDistributorProtocol[T], stateDistributionRetryInterval: FiniteDuration = 30 seconds)
 
   /**
     * An protocol for [[OriginStateActor]]
     */
-  class Protocol[T] private(actorTarget: ActorTarget) extends VersionedEntityActor.Protocol[T](actorTarget) {
+  class Protocol[T] protected(actorTarget: ActorTarget, shardName: String) extends VersionedEntityActor.Protocol[T](actorTarget, shardName) {
 
   }
 
@@ -80,7 +82,7 @@ object OriginStateActor {
     /**
       * Wraps actor ref factory with protocol interface
       */
-    def apply[T](actorRef: ActorTarget): Protocol[T] = new Protocol(actorRef)
+    def apply[T](actorRef: ActorTarget, shardName: String): Protocol[T] = new Protocol(actorRef, shardName)
 
 
   }

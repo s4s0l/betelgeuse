@@ -14,22 +14,26 @@
  *  limitations under the License.
  */
 
+/*
+ * Copyright© 2017 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
 
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-package org.s4s0l.betelgeuse.akkacommons.persistence.journal
-
-import scalikejdbc.{DBSession, _}
+import org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbAccess
+import scalikejdbc._
 
 /**
-  * todo totalna fuszerka
-  *
   * @author Marcin Wielgus
   */
-object ScalikeAsyncJournalRead {
+class RoachJournalReader(protected val dbAccess: DbAccess) extends JournalReader {
 
-
-  def getAllAgregates(actorType: String, prefix: String): DBSession => List[PersistenceId] = implicit session => {
-    val table = SQLSyntax.createUnsafely(s"${prefix}_async_write_journal_entity")
+  override def allActors(actorType: String)(implicit dBSession: DBSession): List[PersistenceId] = {
+    val table = SQLSyntax.createUnsafely(s"roach_async_write_journal_entity")
     sql"select distinct id from $table where tag = $actorType"
       .map(_.string(1))
       .list()
@@ -37,5 +41,5 @@ object ScalikeAsyncJournalRead {
       .map(PersistenceId(actorType, _))
   }
 
-}
 
+}

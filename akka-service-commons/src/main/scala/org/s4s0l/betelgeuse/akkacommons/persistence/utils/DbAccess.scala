@@ -15,7 +15,6 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
 import scalikejdbc.DBSession
@@ -35,8 +34,8 @@ trait DbAccess {
 
   def dbDispatcher: ExecutionContext
 
-  def queryAsync[A](execution: DBSession => A, ec: ExecutionContext = dbDispatcher): Future[A]
+  def queryAsync[A](execution: DBSession => A)(implicit ec: ExecutionContext = dbDispatcher): Future[A]
 
-  def updateAsync[A](execution: DBSession => A, ec: ExecutionContext = dbDispatcher): Future[A]
+  def updateAsync[A](execution: DBSession => A)(implicit ec: ExecutionContext = dbDispatcher): Future[A]
 
 }

@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
@@ -21,6 +21,7 @@ import akka.pattern.ask
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade.OwnerValueResult
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor._
+import org.s4s0l.betelgeuse.akkacommons.utils.QA
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 
 import scala.concurrent.duration._
@@ -55,7 +56,7 @@ class CacheAccessActor[G, K, R, V](settings: Settings[G, K, R, V]) extends Actor
   override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
 
   override def receive: Actor.Receive = {
-    case req@GetCacheValue(getterMessage) =>
+    case req@GetCacheValue(getterMessage, _) =>
       val key = settings.keyFactory(getterMessage.asInstanceOf[G])
       val valueHolder = cacheValueActors.get(key)
       if (valueHolder.isDefined) {
@@ -218,7 +219,7 @@ object CacheAccessActor {
 
     sealed trait GetCacheValueResult[V] extends Result[Uuid, V]
 
-    case class GetCacheValue[G](getterMessage: G) extends IncomingMessage with UuidQuestion
+    case class GetCacheValue[G](getterMessage: G, messageId: Uuid = QA.uuid) extends IncomingMessage with UuidQuestion
 
     case class GetCacheValueOk[V](correlationId: Uuid, value: V) extends GetCacheValueResult[V] with OkResult[Uuid, V]
 

@@ -15,7 +15,6 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.serialization
 
 import akka.serialization.SerializationExtension
@@ -27,8 +26,6 @@ import com.typesafe.config.{Config, ConfigFactory}
 trait BgSerializationJackson extends BgSerialization {
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgSerializationJackson])
-
-
 
 
   abstract override def customizeConfiguration: Config = {
@@ -46,4 +43,6 @@ trait BgSerializationJackson extends BgSerialization {
     system.registerExtension(BgSerializationJacksonExtension)
     LOGGER.info("Initializing done.")
   }
+
+  implicit def httpMarshalling: HttpMarshalling = serializationJacksonExtension.httpMarshaller
 }

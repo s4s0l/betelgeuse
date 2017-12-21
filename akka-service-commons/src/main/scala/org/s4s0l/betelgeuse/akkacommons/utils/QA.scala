@@ -34,7 +34,7 @@ object QA {
   }
 
   trait UuidQuestion extends Question[Uuid] {
-    lazy val messageId: Uuid = uuid
+    def messageId: Uuid
   }
 
   trait Answer[ID] {

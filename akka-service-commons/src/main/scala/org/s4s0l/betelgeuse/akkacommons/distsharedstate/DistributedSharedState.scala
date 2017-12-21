@@ -85,6 +85,7 @@ object DistributedSharedState {
 
   /**
     * TODO: actorFinder should be replaced when some common query api for persistence is introduced
+    * TODO: actorFinder can be [[org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader]]
     */
   def createSatelliteStateDistribution[V](name: String,
                                           actorFinder: String => Future[Seq[PersistenceId]])
@@ -219,7 +220,7 @@ object DistributedSharedState {
     * TODO: add all other accessors
     */
   class VersionedCache[R] private[distsharedstate](
-                                                    versionedEntity: VersionedEntityActor.Protocol[_],
+                                                    versionedEntity: VersionedEntityActor.ProtocolGetters[_],
                                                     cacheWrapped: CacheAccessActor.Protocol[VersionedEntityActor.Protocol.GetValue, VersionedId, R]
                                                   ) {
     def getValue(id: VersionedId)

@@ -15,18 +15,19 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigActor.{ConfigValue, GetConfig, GlobalConfigActorSettings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigSupervisorActor._
+import org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
 import org.s4s0l.betelgeuse.akkacommons.utils.PubSubWithDefaultMediator
 import org.s4s0l.betelgeuse.utils.AllUtils
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContextExecutor}
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
 
@@ -39,7 +40,7 @@ import scala.util.{Failure, Success}
   */
 class GlobalConfigSupervisorActor[X, T](configName: String,
                                         settings: GlobalConfigActorSettings[X, T],
-                                        globalConfigQueryFacade: GlobalConfigQueryFacade,
+                                        globalConfigQueryFacade: JournalReader,
                                         pubSub: PubSubWithDefaultMediator) extends Actor with ActorLogging {
   private var children = Map[PersistenceId, ActorRef]()
   private implicit val execCtx: ExecutionContextExecutor = context.dispatcher
@@ -49,7 +50,7 @@ class GlobalConfigSupervisorActor[X, T](configName: String,
     pubSub.subscribe("/topic/" + configName, self)
     pubSub.registerByName("/globalcfgs/" + configName, self)
     //todo should be async!
-    val ids = globalConfigQueryFacade.getGlobalConfigIds(configName)
+    val ids = Await.result(globalConfigQueryFacade.allActorsAsync(configName), 10 second)
     ids.foreach { pid =>
       startChild(pid)
     }
@@ -107,7 +108,7 @@ class GlobalConfigSupervisorActor[X, T](configName: String,
 object GlobalConfigSupervisorActor {
   def props[X, T](configName: String,
                   settings: GlobalConfigActorSettings[X, T],
-                  globalConfigQueryFacade: GlobalConfigQueryFacade,
+                  globalConfigQueryFacade: JournalReader,
                   pubSub: PubSubWithDefaultMediator): Props = {
     Props(new GlobalConfigSupervisorActor(configName, settings, globalConfigQueryFacade, pubSub))
   }
