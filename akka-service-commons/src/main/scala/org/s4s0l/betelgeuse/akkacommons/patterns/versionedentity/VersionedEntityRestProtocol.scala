@@ -26,7 +26,7 @@ import akka.actor.ActorRef
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.{BaseProtocolSettings, _}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
-import org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.JournalReader
 import org.s4s0l.betelgeuse.akkacommons.utils.QA
 
 import scala.concurrent.{ExecutionContext, Future}

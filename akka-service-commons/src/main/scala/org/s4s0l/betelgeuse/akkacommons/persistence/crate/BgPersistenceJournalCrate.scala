@@ -18,13 +18,13 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
 import akka.serialization.SerializationExtension
 import com.typesafe.config.{Config, ConfigFactory}
-import org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{BgPersistenceJournal, JournalReader}
 import org.s4s0l.betelgeuse.utils.AllUtils
 
 /**
   * @author Marcin Wielgus
   */
-trait BgPersistenceJournalCrate extends BgPersistenceCrate {
+trait BgPersistenceJournalCrate extends BgPersistenceCrate with BgPersistenceJournal {
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgPersistenceJournalCrate])
 
@@ -47,7 +47,7 @@ trait BgPersistenceJournalCrate extends BgPersistenceCrate {
     LOGGER.info("Initializing done.")
   }
 
-  implicit def journalReader: JournalReader = {
+  implicit override final def journalReader: JournalReader = {
     new CrateJournalReader(dbAccess)
   }
 }

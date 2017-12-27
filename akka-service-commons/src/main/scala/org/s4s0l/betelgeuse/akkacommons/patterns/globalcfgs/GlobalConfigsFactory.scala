@@ -27,8 +27,7 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClientExte
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigActor.GlobalConfigActorSettings
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigSupervisorActor.{ConfigurationChanged, ConfigurationChangedAck}
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigsFactory.GlobalConfigsEventPublisher
-import org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JournalReader, PersistenceId}
 import org.s4s0l.betelgeuse.akkacommons.utils.PubSubWithDefaultMediator
 
 import scala.concurrent.Future

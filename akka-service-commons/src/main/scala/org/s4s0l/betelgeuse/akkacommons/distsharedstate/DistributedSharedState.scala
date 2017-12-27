@@ -32,7 +32,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistrib
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.{OriginStateDistributor, SatelliteStateActor}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{GetValueVersion, ValueNotOk, ValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JournalReader, PersistenceId}
 import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
 import org.s4s0l.betelgeuse.akkacommons.utils.QA.{NotOkNullResult, NullResult, OkNullResult}
 import org.s4s0l.betelgeuse.utils.AllUtils
@@ -85,7 +85,7 @@ object DistributedSharedState {
 
   /**
     * TODO: actorFinder should be replaced when some common query api for persistence is introduced
-    * TODO: actorFinder can be [[org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader]]
+    * TODO: actorFinder can be [[JournalReader]]
     */
   def createSatelliteStateDistribution[V](name: String,
                                           actorFinder: String => Future[Seq[PersistenceId]])
@@ -124,8 +124,8 @@ object DistributedSharedState {
 
     def createCachedValueListeningConsumer[R, C <: NewVersionedValueListener[R]](
                                                                                   cacheName: String,
-                                                                                  valueEnricher: V => R,
-                                                                                  cacheTtl: FiniteDuration,
+                                                                                  valueEnricher: V => Future[R],
+                                                                                  cacheTtl: FiniteDuration)(
                                                                                   consumerFactory: VersionedCache[R] => C)
     : CachedValueListeningConsumer[R, C] = {
       enabled.foreach(_ => throw new Exception("cannot add listeners to enabled context"))
@@ -148,7 +148,7 @@ object DistributedSharedState {
       new CachedValueListeningConsumer[R, C](name, cache, consumer, actorFinder)
     }
 
-    def createCache[R](cacheName: String, valueEnricher: V => R, cacheTtl: FiniteDuration): VersionedCache[R] = {
+    def createCache[R](cacheName: String, valueEnricher: V => Future[R], cacheTtl: FiniteDuration): VersionedCache[R] = {
       val keyFactory: VersionedEntityActor.Protocol.GetValue => VersionedId = (it) => it.messageId
       val valueOwnerFacade = new ValueOwnerFacade[VersionedEntityActor.Protocol.GetValue, VersionedId, V] {
         override def apply(getterMessage: VersionedEntityActor.Protocol.GetValue)

@@ -21,8 +21,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigActor.{ConfigValue, GetConfig, GlobalConfigActorSettings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigSupervisorActor._
-import org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JournalReader, PersistenceId}
 import org.s4s0l.betelgeuse.akkacommons.utils.PubSubWithDefaultMediator
 import org.s4s0l.betelgeuse.utils.AllUtils
 

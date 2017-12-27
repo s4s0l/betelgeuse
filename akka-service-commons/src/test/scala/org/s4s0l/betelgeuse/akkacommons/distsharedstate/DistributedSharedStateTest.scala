@@ -81,7 +81,7 @@ class DistributedSharedStateTest extends BgTestRoach {
     override protected def onInitialized(): Unit = {
       super.onInitialized()
       val dist = DistributedSharedState.createSatelliteStateDistribution[String]("state", _ => Future.successful(List()))
-      consumer = dist.createCachedValueListeningConsumer[String, ListeningLogger]("listenerOne", it => s"enriched:$it", 10 minutes, new ListeningLogger(_))
+      consumer = dist.createCachedValueListeningConsumer[String, ListeningLogger]("listenerOne", it => Future(s"enriched:$it"), 10 minutes)(new ListeningLogger(_))
       dist.enable()
     }
 
@@ -96,7 +96,7 @@ class DistributedSharedStateTest extends BgTestRoach {
     override protected def onInitialized(): Unit = {
       super.onInitialized()
       val dist = DistributedSharedState.createSatelliteStateDistribution[String]("state", _ => Future.successful(List()))
-      consumer = dist.createCachedValueListeningConsumer[String, ListeningLogger]("listenerOne", it => s"enriched:$it", 10 minutes, new ListeningLogger(_))
+      consumer = dist.createCachedValueListeningConsumer[String, ListeningLogger]("listenerOne", it => Future(s"enriched:$it"), 10 minutes)(new ListeningLogger(_))
       dist.enable()
     }
   })

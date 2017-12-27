@@ -20,26 +20,14 @@
  * This file is proprietary and confidential.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.persistence
+package org.s4s0l.betelgeuse.akkacommons.persistence.journal
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbAccess
-import scalikejdbc.DBSession
-
-import scala.concurrent.{ExecutionContext, Future}
+import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistence
 
 /**
   * @author Marcin Wielgus
   */
-trait JournalReader {
+trait BgPersistenceJournal extends BgPersistence {
 
-  def dbDispatcher: ExecutionContext = dbAccess.dbDispatcher
-
-  def allActorsAsync(actorType: String)(implicit executionContext: ExecutionContext = dbDispatcher): Future[Seq[PersistenceId]] = {
-    dbAccess.queryAsync { implicit session => allActors(actorType) }
-  }
-
-  def allActors(actorType: String)(implicit dBSession: DBSession): List[PersistenceId]
-
-  protected def dbAccess: DbAccess
+  implicit def journalReader: JournalReader
 }

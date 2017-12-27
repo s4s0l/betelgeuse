@@ -22,8 +22,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.JournalReader
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JournalReader, PersistenceId}
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbAccess
 import scalikejdbc.{DBSession, _}
 

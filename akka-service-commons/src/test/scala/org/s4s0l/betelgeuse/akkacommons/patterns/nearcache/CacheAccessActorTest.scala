@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
@@ -46,7 +46,7 @@ class CacheAccessActorTest extends BgTestService {
         private var enrichmentCount = 0
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t1",
           (a: Int) => a,
-          (a: Float) => {
+          (a: Float) => Future {
             enrichmentCount = enrichmentCount + 1
             a.toString
           },
@@ -86,7 +86,7 @@ class CacheAccessActorTest extends BgTestService {
 
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t2",
           (a: Int) => a,
-          (_: Float) => value,
+          (_: Float) => Future(value),
           VOF((a: Int) => Future(ValueOwnerFacade.OwnerValueOk(a, a.toFloat))),
           1 second
         ))
@@ -120,7 +120,7 @@ class CacheAccessActorTest extends BgTestService {
       new WithService(aService) {
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t3",
           (a: Int) => a,
-          (a: Float) => a.toString,
+          (a: Float) => Future(a.toString),
           VOF((a: Int) => Future(ValueOwnerFacade.OwnerValueNotOk(a, new Exception("No Value"))))
         ))
         private val value = GetCacheValue(10)
@@ -134,7 +134,7 @@ class CacheAccessActorTest extends BgTestService {
         private val ex = new Exception("ex!")
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t4",
           (a: Int) => a,
-          (a: Float) => a.toString,
+          (a: Float) => Future(a.toString),
           VOF((_: Int) => Future.failed(ex))
         ))
         private val value = GetCacheValue(10)
@@ -143,10 +143,25 @@ class CacheAccessActorTest extends BgTestService {
       }
     }
 
-    scenario("Enriching value throws exception") {
+    scenario("Value enriching future throws exception") {
       new WithService(aService) {
         val ex = new Exception("ex!")
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t5",
+          (a: Int) => a,
+          (_: Float) => Future(throw ex),
+          VOF((a: Int) => Future(ValueOwnerFacade.OwnerValueOk(a, a.toFloat)))
+        ))
+        private val value = GetCacheValue(10)
+        accessor.apply(value).pipeTo(self)
+        testKit.expectMsg(to, GetCacheValueNotOk(value.messageId, ex))
+      }
+    }
+
+
+    scenario("Value enriching throws exception") {
+      new WithService(aService) {
+        val ex = new Exception("ex!")
+        private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t5-duo",
           (a: Int) => a,
           (_: Float) => throw ex,
           VOF((a: Int) => Future(ValueOwnerFacade.OwnerValueOk(a, a.toFloat)))
@@ -167,8 +182,7 @@ class CacheAccessActorTest extends BgTestService {
         Given("Slow owner facade")
         private val accessor = CacheAccessActor.start[Int, Int, String, Float](Settings("t6",
           (a: Int) => a,
-          (a: Float) => {
-
+          (a: Float) => Future {
             enrichmentCount = enrichmentCount + 1
             a.toString
           },

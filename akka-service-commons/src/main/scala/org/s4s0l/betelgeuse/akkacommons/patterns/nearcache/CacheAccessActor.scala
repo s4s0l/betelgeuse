@@ -191,7 +191,7 @@ object CacheAccessActor {
     */
   final case class Settings[G, K, R, V](name: String,
                                         keyFactory: G => K,
-                                        valueEnricher: V => R,
+                                        valueEnricher: V => Future[R],
                                         valueOwnerFacade: ValueOwnerFacade[G, K, V],
                                         timeoutTime: FiniteDuration = 10 minutes)
 
