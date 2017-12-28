@@ -104,10 +104,6 @@ object DistributedSharedState {
     : Future[NewVersionResult]
   }
 
-  trait OnNewVersionListener {
-
-  }
-
   class SatelliteContext[V] private[DistributedSharedState](name: String,
                                                             actorFinder: String => Future[Seq[PersistenceId]])
                                                            (implicit
@@ -243,6 +239,13 @@ object DistributedSharedState {
   }
 
   object NewVersionedValueListener {
+
+    def adaptListener[R, V](l: NewVersionedValueListener[R])(f: V => R): NewVersionedValueListener[V] = new NewVersionedValueListener[V] {
+      override def onNewVersionAsk(versionedId: VersionedId, aValue: V)
+                                  (implicit executionContext: ExecutionContext, sender: ActorRef)
+      : Future[NewVersionResult] = l.onNewVersionAsk(versionedId, f(aValue))
+    }
+
 
     sealed trait NewVersionResult extends NullResult[VersionedId]
 

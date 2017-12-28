@@ -66,7 +66,7 @@ class OriginStatePublishingActor[T](settings: Settings[T])
         } else {
           import context.dispatcher
           validatePublication(versionedId)
-            .recover { case ex: Exception => Some(ex) }
+            .recover { case ex: Throwable => Some(ex) }
             .map {
               case None => BeforePublishValidationOk(versionedId, messageId)
               case Some(ex) => BeforePublishValidationNotOk(ex, messageId)
@@ -96,7 +96,7 @@ class OriginStatePublishingActor[T](settings: Settings[T])
     *
     * This method can return Some(Exception) to prevent publication or throw an Exception
     */
-  protected def validatePublication(versionedId: VersionedId): Future[Option[Exception]] = {
+  protected def validatePublication(versionedId: VersionedId): Future[Option[Throwable]] = {
     Future.successful(None)
   }
 
@@ -125,7 +125,7 @@ object OriginStatePublishingActor {
   /**
     * An protocol for [[OriginStateActor]]
     */
-  class Protocol[T] private(actorTarget: ActorTarget, shardName: String) extends OriginStateActor.Protocol[T](actorTarget, shardName) {
+  class Protocol[T](actorTarget: ActorTarget, shardName: String) extends OriginStateActor.Protocol[T](actorTarget, shardName) {
     /**
       * Publishes given version (if exist) to satellites.
       * If is already published/publishing returns ok without initiating new publication process.
@@ -154,9 +154,9 @@ object OriginStatePublishingActor {
 
   final case class Settings[T](name: String, distributor: OriginStateDistributor.StateDistributorProtocol[T], stateDistributionRetryInterval: FiniteDuration = 30 seconds)
 
-  case class BeforePublishValidationOk(versionedId: VersionedId, messageId: Uuid) extends BeforePublishValidation
+  private case class BeforePublishValidationOk(versionedId: VersionedId, messageId: Uuid) extends BeforePublishValidation
 
-  case class BeforePublishValidationNotOk(ex: Exception, messageId: Uuid) extends BeforePublishValidation
+  private case class BeforePublishValidationNotOk(ex: Throwable, messageId: Uuid) extends BeforePublishValidation
 
   object Protocol {
     /**
