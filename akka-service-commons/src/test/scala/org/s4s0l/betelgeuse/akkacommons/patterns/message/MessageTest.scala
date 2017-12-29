@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.message
@@ -59,6 +59,25 @@ class MessageTest extends FeatureSpec {
 
       val forwarded2 = forwarded.forward("target3")(Message.defaultForward)
       assert(forwarded2.traces == Seq((message.id, message.target), (forwarded.id, forwarded.target)))
+    }
+
+    scenario("Forwarded messages contains sequence headers, responses not") {
+      val message = Message("target", "body").withSequence(1, "a", last = true)
+
+      val forwarded = message.forward("target2")(Message.defaultForward)
+
+      assert(forwarded.sequenceOpt.isDefined)
+      assert(forwarded.sequenceIdOpt.isDefined)
+      assert(forwarded.sequenceNumberOpt.isDefined)
+      assert(forwarded.sequenceLast)
+
+      val response = message.response("target2", "")(Message.defaultForward)
+
+      assert(response.sequenceOpt.isEmpty)
+      assert(response.sequenceIdOpt.isEmpty)
+      assert(response.sequenceNumberOpt.isEmpty)
+      assert(response.sequenceLastOpt.isEmpty)
+
     }
 
     scenario("Api is extensible via implicits with no need to extend anything") {

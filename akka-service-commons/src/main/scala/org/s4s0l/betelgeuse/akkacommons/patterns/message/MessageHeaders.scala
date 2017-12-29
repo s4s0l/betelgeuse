@@ -37,6 +37,7 @@ object MessageHeaders {
   val HEADER_TRACE_TARGETS: String = "traceTargets"
   val HEADER_USER_ID: String = "userId"
   val HEADER_TTL: String = "ttl"
+
   val FORWARDED_HEADERS: Seq[String] = Seq(
     HEADER_TRACE_IDS,
     HEADER_TRACE_TARGETS,
@@ -45,6 +46,14 @@ object MessageHeaders {
     HEADER_SEQUENCE_NUMBER,
     HEADER_SEQUENCE_ID
   )
+
+  val RESPONSE_HEADERS: Seq[String] = Seq(
+    HEADER_TRACE_IDS,
+    HEADER_TRACE_TARGETS,
+    HEADER_USER_ID
+  )
+
+
 
   trait HeaderAccessors {
 

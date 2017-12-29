@@ -36,6 +36,8 @@ trait BgSerializationJackson extends BgSerialization {
   implicit def serializationJacksonExtension: BgSerializationJacksonExtension =
     BgSerializationJacksonExtension.get(system)
 
+  implicit def serializationJackson: JacksonJsonSerializer = serializationJacksonExtension.serializationJackson
+
   override protected def initialize(): Unit = {
     super.initialize()
     LOGGER.info("Initializing...")
