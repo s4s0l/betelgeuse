@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.clustering.dnsseed
@@ -36,15 +36,15 @@ import scala.util.{Failure, Success}
 trait BgDnsSeed extends BgClustering {
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgDnsSeed])
-  private lazy val vipDockerMode = if (System.getProperty("akka.cluster.dns.vipMode", "false") == "true") "tasks." else ""
+  private lazy val vipDockerMode = if (getSystemProperty("akka.cluster.dns.vipMode", "false") == "true") "tasks." else ""
   private lazy val dnsLookup =
-    System.getProperty("akka.cluster.dns.name", s"akka.tcp://${serviceInfo.id.systemName}@$vipDockerMode${serviceInfo.id.systemName}_service:1${serviceInfo.firstPortSuffix}")
+    getSystemProperty("akka.cluster.dns.name", s"akka.tcp://${serviceInfo.id.systemName}@$vipDockerMode${serviceInfo.id.systemName}_service:1${serviceInfo.firstPortSuffix}")
   private lazy val dnsLookupAddress: Address = AddressFromURIString.apply(dnsLookup)
   private var scheduler: Cancellable = _
 
 
   abstract override def customizeConfiguration: Config = {
-    if (serviceInfo.docker || System.getProperty("akka.cluster.dns.name") != null) {
+    if (serviceInfo.docker || getSystemProperty("akka.cluster.dns.name") != null) {
       LOGGER.info("Will customize seeding nodes with dns entries")
       val selfHostName = DnsUtils.getCurrentNodeHostName
       val current = util.Arrays.asList(InetAddress.getAllByName(dnsLookupAddress.host.get): _*).asScala
@@ -63,7 +63,7 @@ trait BgDnsSeed extends BgClustering {
   abstract override protected def initialize(): Unit = {
     super.initialize()
     LOGGER.info("Initializing...")
-    if (serviceInfo.docker || System.getProperty("akka.cluster.dns.name") != null) {
+    if (serviceInfo.docker || getSystemProperty("akka.cluster.dns.name") != null) {
       val selfAddress = cluster.selfAddress
       val selfSeedingNums = config.getIntList("akka.cluster.dns.seeding-num")
       val selfSeeding = selfSeedingNums.contains(config.getInt("akka.cluster.dns.num"))
