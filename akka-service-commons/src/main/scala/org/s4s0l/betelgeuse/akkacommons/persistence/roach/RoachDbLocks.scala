@@ -257,7 +257,6 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
         sql"""show tables from $unsafeSchema"""
           .map(_.string(1)).list.apply()
       val exists = foundTables.contains(locksTable)
-      println("AAAAAAAA " + foundTables.mkString("|"))
       exists
     } else {
       false

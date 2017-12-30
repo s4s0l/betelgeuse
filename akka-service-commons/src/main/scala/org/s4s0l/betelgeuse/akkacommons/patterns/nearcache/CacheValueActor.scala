@@ -45,6 +45,7 @@ private[nearcache] class CacheValueActor[K, R, V](settings: Settings[K, R, V]) e
   var value: R = _
 
   override def preStart(): Unit = {
+    super.preStart()
     //TODO: configurable dispatcher so rich value creation would not block us if is blocking?
     try {
 

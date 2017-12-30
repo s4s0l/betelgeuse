@@ -15,11 +15,10 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.utils
 
 import akka.HackedActor
-import akka.actor.{ActorLogging, Stash}
+import akka.actor.{ActorLogging, ActorRef, Stash}
 
 /**
   *
@@ -31,16 +30,16 @@ trait AsyncInitActor extends HackedActor with ActorLogging with Stash {
 
 
   private var isInitComplete = false
-  //  private var tmpStash = List[(ActorRef, Any)]()
+  private var permit: Option[(ActorRef, Any)] = None
 
   def initialReceive: Receive
 
   def initiationComplete(): Unit = {
     if (!isInitComplete) {
       isInitComplete = true
-      log.debug("Unstashing ....")
       unstashAll()
-      log.debug("unstashed ....")
+      permit.foreach(it => self.!(it._2)(it._1))
+      permit = None
     }
   }
 
@@ -51,7 +50,11 @@ trait AsyncInitActor extends HackedActor with ActorLogging with Stash {
       if (initialReceive.isDefinedAt(msg)) {
         initialReceive.apply(msg)
       } else {
-        stash()
+        if (msg.getClass.getName == "akka.persistence.RecoveryPermitter$RecoveryPermitGranted$") {
+          permit = Some((sender(), msg))
+        } else {
+          stash()
+        }
       }
     } else {
       super.hackedAroundReceive(receive, msg)

@@ -17,13 +17,14 @@
 
 package org.s4s0l.betelgeuse.akkacommons.utils
 
-import akka.actor.Props
+import akka.actor.{ActorLogging, Props}
 import akka.persistence.PersistentActor
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
-import org.s4s0l.betelgeuse.akkacommons.utils.AsyncInitActorTest.{SampleAsyncInitActor, SimpleAsyncInitActor}
+import org.s4s0l.betelgeuse.akkacommons.utils.AsyncInitActorTest.{ComplexAsyncInitActor, SampleAsyncInitActor, SimpleAsyncInitActor}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -47,14 +48,14 @@ class AsyncInitActorTest extends BgTestRoach {
         testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
         actor ! "command"
 
-        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "receiveCommand"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "rec:command"))
 
         private val actor2 = system.actorOf(Props(new SampleAsyncInitActor))
         actor2 ! "init"
         testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
         actor2 ! "command"
 
-        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "receiveRecover", "receiveCommand"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "receiveRecover", "rec:command"))
 
       }
     }
@@ -71,6 +72,45 @@ class AsyncInitActorTest extends BgTestRoach {
         testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "rec:1"))
         testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "rec:1", "rec:2"))
         testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "rec:1", "rec:2", "rec:3"))
+
+      }
+
+    }
+
+    scenario("Messages received during init are replayed in proper order after initialization for persistent actors") {
+      new WithService(aService) {
+
+        private val actor = system.actorOf(Props(new SampleAsyncInitActor("2")))
+        actor ! "1"
+        actor ! "2"
+        actor ! "init"
+        actor ! "3"
+
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "rec:1"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "rec:1", "rec:2"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "rec:1", "rec:2", "rec:3"))
+      }
+
+    }
+
+
+    scenario("Messages received during init are replayed in proper order after initialization for complex actors") {
+      new WithService(aService) {
+
+        private val actor = service.clusteringShardingExtension.start("x", Props(new ComplexAsyncInitActor()), {
+          case (a: String, b: String) => (a, (a, b))
+        })
+        actor ! ("a", "1")
+        Thread.sleep(3000)
+        actor ! ("a", "2")
+        actor ! ("a", "init")
+        actor ! ("a", "3")
+
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "rec:1"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "rec:1", "rec:2"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "rec:1", "rec:2", "rec:3"))
       }
 
     }
@@ -84,7 +124,9 @@ object AsyncInitActorTest {
     var queue: List[String] = List[String]()
 
     override def preStart(): Unit = {
+      super.preStart()
       queue = "preStart" :: queue
+
     }
 
     override def initialReceive: Receive = {
@@ -101,12 +143,13 @@ object AsyncInitActorTest {
     }
   }
 
-  class SampleAsyncInitActor extends PersistentActor with AsyncInitActor {
+  class SampleAsyncInitActor(id: String = "1") extends PersistentActor with TimeoutActor with AsyncInitActor {
 
     var queue: List[String] = List[String]()
 
 
     override def preStart(): Unit = {
+      super.preStart()
       queue = "preStart" :: queue
     }
 
@@ -123,14 +166,50 @@ object AsyncInitActorTest {
     }
 
     override def receiveCommand: Receive = {
-      case _ =>
-        queue = "receiveCommand" :: queue
+      case a =>
+        queue = s"rec:$a" :: queue
         persist("received") { _ =>
           sender() ! queue.reverse
         }
     }
 
-    override def persistenceId: String = "1"
+    override def persistenceId: String = id
+  }
+
+
+  class ComplexAsyncInitActor extends PersistentShardedActor with AsyncInitActor
+    //  with TimeoutShardedActor
+    with ActorLogging {
+
+    var queue: List[String] = List[String]()
+
+
+    override def preStart(): Unit = {
+      super.preStart()
+      queue = "preStart" :: queue
+
+    }
+
+    override def initialReceive: Receive = {
+      case (_, "init") =>
+        queue = "initialReceive" :: queue
+        initiationComplete()
+        sender() ! queue.reverse
+    }
+
+    override def receiveRecover: Receive = {
+      case _ =>
+        queue = "receiveRecover" :: queue
+    }
+
+    override def receiveCommand: Receive = {
+      case (_, a) =>
+        queue = s"rec:$a" :: queue
+        persist("received") { _ =>
+          sender() ! queue.reverse
+        }
+    }
+
   }
 
 }
