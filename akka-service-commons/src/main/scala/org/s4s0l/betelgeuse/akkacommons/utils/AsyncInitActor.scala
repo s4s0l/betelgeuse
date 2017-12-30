@@ -1,17 +1,17 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 
@@ -19,7 +19,7 @@
 package org.s4s0l.betelgeuse.akkacommons.utils
 
 import akka.HackedActor
-import akka.actor.{ActorLogging, ActorRef}
+import akka.actor.{ActorLogging, Stash}
 
 /**
   *
@@ -27,11 +27,11 @@ import akka.actor.{ActorLogging, ActorRef}
   *
   * @author Marcin Wielgus
   */
-trait AsyncInitActor extends HackedActor with ActorLogging {
+trait AsyncInitActor extends HackedActor with ActorLogging with Stash {
 
 
   private var isInitComplete = false
-  private var tmpStash = List[(ActorRef, Any)]()
+  //  private var tmpStash = List[(ActorRef, Any)]()
 
   def initialReceive: Receive
 
@@ -39,10 +39,7 @@ trait AsyncInitActor extends HackedActor with ActorLogging {
     if (!isInitComplete) {
       isInitComplete = true
       log.debug("Unstashing ....")
-      tmpStash.reverse.foreach { it =>
-        self.tell(it._2, it._1)
-      }
-      tmpStash = List()
+      unstashAll()
       log.debug("unstashed ....")
     }
   }
@@ -54,7 +51,7 @@ trait AsyncInitActor extends HackedActor with ActorLogging {
       if (initialReceive.isDefinedAt(msg)) {
         initialReceive.apply(msg)
       } else {
-        tmpStash = (sender(), msg) :: tmpStash
+        stash()
       }
     } else {
       super.hackedAroundReceive(receive, msg)

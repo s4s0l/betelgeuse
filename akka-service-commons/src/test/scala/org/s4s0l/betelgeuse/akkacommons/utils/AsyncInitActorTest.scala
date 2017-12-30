@@ -1,19 +1,18 @@
 /*
  * Copyright© 2017 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
-
 
 
 package org.s4s0l.betelgeuse.akkacommons.utils
@@ -22,8 +21,9 @@ import akka.actor.Props
 import akka.persistence.PersistentActor
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
-import org.s4s0l.betelgeuse.akkacommons.test.{BgTestWithRoachDb}
-import org.s4s0l.betelgeuse.akkacommons.utils.AsyncInitActorTest.SampleAsyncInitActor
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
+import org.s4s0l.betelgeuse.akkacommons.utils.AsyncInitActorTest.{SampleAsyncInitActor, SimpleAsyncInitActor}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -31,28 +31,47 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class AsyncInitActorTest extends BgTestWithRoachDb[BgPersistenceJournalRoach with BgClusteringSharding] {
-  override def createService(): BgPersistenceJournalRoach with BgClusteringSharding = new BgPersistenceJournalRoach with BgClusteringSharding {
+class AsyncInitActorTest extends BgTestRoach {
 
-  }
+  private val aService = testWith(new BgPersistenceJournalRoach with BgClusteringSharding {
+
+  })
 
 
   feature("Journal roach provides journal configuration to be used by actors") {
-    scenario("Actor persists itself ad responds") {
+    scenario("Actor can init itself before recovery") {
+      new WithService(aService) {
 
-      val actor = system.actorOf(Props(new SampleAsyncInitActor))
-      actor ! "init"
-      testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
-      actor ! "command"
+        private val actor = system.actorOf(Props(new SampleAsyncInitActor))
+        actor ! "init"
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
+        actor ! "command"
 
-      testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "receiveCommand"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "receiveCommand"))
 
-      val actor2 = system.actorOf(Props(new SampleAsyncInitActor))
-      actor2 ! "init"
-      testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
-      actor2 ! "command"
+        private val actor2 = system.actorOf(Props(new SampleAsyncInitActor))
+        actor2 ! "init"
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
+        actor2 ! "command"
 
-      testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "receiveRecover", "receiveCommand"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "receiveRecover", "receiveRecover", "receiveCommand"))
+
+      }
+    }
+
+    scenario("Messages received during init are replayed in proper order after initialization") {
+      new WithService(aService) {
+
+        private val actor = system.actorOf(Props(new SimpleAsyncInitActor))
+        actor ! "1"
+        actor ! "2"
+        actor ! "init"
+        actor ! "3"
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "rec:1"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "rec:1", "rec:2"))
+        testKit.expectMsg(14 seconds, List("preStart", "initialReceive", "rec:1", "rec:2", "rec:3"))
+      }
 
     }
   }
@@ -60,6 +79,27 @@ class AsyncInitActorTest extends BgTestWithRoachDb[BgPersistenceJournalRoach wit
 }
 
 object AsyncInitActorTest {
+
+  class SimpleAsyncInitActor extends AsyncInitActor {
+    var queue: List[String] = List[String]()
+
+    override def preStart(): Unit = {
+      queue = "preStart" :: queue
+    }
+
+    override def initialReceive: Receive = {
+      case "init" =>
+        queue = "initialReceive" :: queue
+        initiationComplete()
+        sender() ! queue.reverse
+    }
+
+    override def receive: Receive = {
+      case a =>
+        queue = s"rec:$a" :: queue
+        sender() ! queue.reverse
+    }
+  }
 
   class SampleAsyncInitActor extends PersistentActor with AsyncInitActor {
 
