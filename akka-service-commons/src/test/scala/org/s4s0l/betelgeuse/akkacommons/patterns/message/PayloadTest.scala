@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@ class PayloadTest extends FeatureSpec {
       assert(payload.asString == "{\"name\":\"our cat\",\"age\":12,\"t\":{\"color\":\"black\",\"tail\":true}}")
       val animalRead: Animal = payload.asObject[Animal]
       assert(animal == animalRead)
+      assert(!payload.isEmpty)
+      assert(payload.payloadSize == payload.asString.length)
     }
   }
 
@@ -43,10 +45,20 @@ class PayloadTest extends FeatureSpec {
       assert(payload.asString == "somepayload")
       assert(payload.asBytes == ByteString("somepayload"))
       assert(payload.asArray sameElements Array[Byte]('s': Byte, 'o', 'm', 'e', 'p', 'a', 'y', 'l', 'o', 'a', 'd'))
+      assert(payload.payloadSize == 11)
 
       val payloadFromBytes: Payload = ByteString("somepayload")
       assert(payloadFromBytes.asString == "somepayload")
       assert(payloadFromBytes.asBytes == ByteString("somepayload"))
+      assert(payloadFromBytes.asArray sameElements "somepayload".getBytes())
+      assert(payloadFromBytes.payloadSize == 11)
+
+
+      val payloadFromArray: Payload = "123".getBytes()
+      assert(payloadFromArray.asString == "123")
+      assert(payloadFromArray.asBytes == ByteString("123"))
+      assert(payloadFromArray.asArray sameElements "123".getBytes())
+      assert(payloadFromArray.payloadSize == 3)
 
     }
     scenario("Implicit conversions to string and byteString and array") {

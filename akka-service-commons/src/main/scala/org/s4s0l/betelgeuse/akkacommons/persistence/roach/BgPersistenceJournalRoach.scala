@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 import akka.serialization.SerializationExtension
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{BgPersistenceJournal, JournalReader}
-import org.s4s0l.betelgeuse.utils.AllUtils
 
 /**
   * @author Maciej Flak
@@ -40,7 +39,6 @@ trait BgPersistenceJournalRoach extends BgPersistenceRoach with BgPersistenceJou
   override protected def initialize(): Unit = {
     super.initialize()
     LOGGER.info("Initializing...")
-    AllUtils.scalaWarmUpUniverseMirror()
     SerializationExtension.get(system)
     LOGGER.info("Getting serialization done")
     akka.persistence.Persistence.get(system)
