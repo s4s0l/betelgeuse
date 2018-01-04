@@ -106,7 +106,7 @@ object Payload {
   implicit def toResponseMarshallable(p: Payload): ToResponseMarshallable =
     if (p.contents.isLeft) p.contents.left.get else p.contents.right.get
 
-  def empty: Payload = new Payload(Right(Array()))
+  val empty: Payload = new Payload(Right(Array()))
 
   //TODO: how to make it implicit?
   def asObject[T](p: Payload)
