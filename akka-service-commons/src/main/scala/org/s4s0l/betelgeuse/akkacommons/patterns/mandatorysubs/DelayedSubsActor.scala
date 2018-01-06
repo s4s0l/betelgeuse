@@ -1,24 +1,23 @@
 /*
- * Copyright© 2017 the original author or authors.
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Copyright© 2018 the original author or authors.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props}
 import akka.pattern.{ask, pipe}
-import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor.Protocol.{Publish, PublishNotOk, PublishOk, PublishResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor._
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener
@@ -71,7 +70,7 @@ class DelayedSubsActor[K, V](settings: Settings[K, V]) extends Actor with ActorL
   }
 
   override def receive: Actor.Receive = {
-    case pm@Publish(id, _) =>
+    case pm@Publish(id, _, ackTimeout) =>
       val originalSender = sender()
       val notificationFuture = listOfFuturesToFutureOfList(
         listeners.map(listener =>
@@ -86,7 +85,7 @@ class DelayedSubsActor[K, V](settings: Settings[K, V]) extends Actor with ActorL
           else PublishNotOk(id, new Exception(s"There were failed listeners ${failedListeners.mkString(",")}")))
 
       import org.s4s0l.betelgeuse.utils.AllUtils._
-      notificationFuture.pipeToWithTimeout(originalSender, settings.ackTimeout.duration,
+      notificationFuture.pipeToWithTimeout(originalSender, ackTimeout,
         PublishNotOk(id, new Exception(s"Timeout publishing $id!")), context.system.scheduler)
 
   }
@@ -116,8 +115,7 @@ object DelayedSubsActor {
   }
 
   final case class Settings[K, V](name: String,
-                                  listeners: Future[Seq[Listener[K, V]]],
-                                  ackTimeout: Timeout = 5 seconds)
+                                  listeners: Future[Seq[Listener[K, V]]])
 
   /**
     * An protocol for [[DelayedSubsActor]]
@@ -140,7 +138,7 @@ object DelayedSubsActor {
     def publishAsk(msg: Publish[K, V])
                   (implicit executionContext: ExecutionContext, sender: ActorRef)
     : Future[PublishResult[K]] =
-      actorRef.ask(msg)(settings.ackTimeout, sender).mapTo[PublishResult[K]]
+      actorRef.ask(msg)(msg.ackTimeout, sender).mapTo[PublishResult[K]]
 
   }
 
@@ -161,7 +159,7 @@ object DelayedSubsActor {
       override def configurationChanged(msg: StateChanged[T])
                                        (implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender)
       : Future[StateChangedResult] = {
-        protocol.publishAsk(Publish[VersionedId, T](msg.messageId, msg.value)).map {
+        protocol.publishAsk(Publish[VersionedId, T](msg.messageId, msg.value, msg.expDuration)).map {
           case PublishOk(_) => StateChangedOk(msg.messageId)
           case PublishNotOk(_, ex) => StateChangedNotOk(msg.messageId, ex)
         }.recover { case ex: Throwable => StateChangedNotOk(msg.messageId, ex) }
@@ -170,7 +168,7 @@ object DelayedSubsActor {
 
     sealed trait PublishResult[K] extends QA.NullResult[K]
 
-    case class Publish[K, V](messageId: K, payload: V) extends QA.Question[K]
+    case class Publish[K, V](messageId: K, payload: V, ackTimeout: FiniteDuration) extends QA.Question[K]
 
     case class PublishOk[K](correlationId: K) extends PublishResult[K] with OkNullResult[K]
 

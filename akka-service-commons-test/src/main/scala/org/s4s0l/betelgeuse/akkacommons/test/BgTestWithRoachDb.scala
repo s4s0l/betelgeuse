@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
 /**
   * @author Maciej Flak
   */
-@deprecated("Please migrate to BgTestRoach")
+@deprecated("Please migrate to BgTestRoach", "?")
 trait BgTestWithRoachDb[T <: BgPersistenceRoach] extends BgTestWithPersistence[T] {
 
   override def isCleanupOn: Boolean = true
