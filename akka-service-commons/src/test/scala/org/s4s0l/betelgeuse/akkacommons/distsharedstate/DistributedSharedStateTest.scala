@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntity
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerialization
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
+import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 import org.s4s0l.betelgeuse.akkacommons.{BgService, BgServiceId}
 
 import scala.concurrent.duration._
@@ -40,7 +40,7 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class DistributedSharedStateTest extends BgTestRoach {
+class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
 
   concurentRun = true
 

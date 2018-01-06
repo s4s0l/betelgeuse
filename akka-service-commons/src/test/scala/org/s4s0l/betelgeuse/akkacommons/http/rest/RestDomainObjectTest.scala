@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -158,7 +158,7 @@ object RestDomainObjectTest {
         Query("query-action-2", Set("xxx")) -> (queryAction2(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
         Idempotent("idempotent-action") -> (idempotentAction(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
         NonIdempotent("non-idempotent-action") -> (nonIdempotentAction(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
-    )
+      )
 
 
     def queryAction1(msg: Action[String, Int])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
@@ -173,7 +173,6 @@ object RestDomainObjectTest {
     def nonIdempotentAction(msg: Action[String, Int])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"na:${msg.id}", msg.messageId))
   }
-
 
   case class SomeValue(value: String)
 

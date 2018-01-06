@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,8 +25,8 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActo
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.serialization.{BgSerialization, SimpleSerializer}
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
+import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 import org.scalatest.Outcome
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -36,7 +36,7 @@ import scala.language.postfixOps
   * @author Marcin Wielgus
   */
 class SatelliteStateActorTest extends
-  BgTestRoach {
+  BgTestRoach with BgTestJackson {
 
 
   feature("Satellite State actor is an VersionedEntityActor with ability to confirm distribution") {

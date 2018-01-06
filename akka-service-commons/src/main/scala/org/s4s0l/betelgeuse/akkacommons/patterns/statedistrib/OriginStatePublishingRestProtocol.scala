@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ trait OriginStatePublishingRestProtocol[T <: AnyRef, V] extends BaseProtocol[Str
     )
 
 
-  def getPublicationStatus(msg: Action[String, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[List[PublicationStatus]]] =
+  def getPublicationStatus(msg: Action[String, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[PublicationStatuses]] =
     publishingActor.publishStatus(GetPublicationStatus(msg.id, msg.messageId)).map {
       case GetPublicationStatusOk(value, correlationId) => RestCommandOk(value, correlationId)
       case GetPublicationStatusNotOk(ex, correlationId) => RestCommandNotOk(ex, correlationId)

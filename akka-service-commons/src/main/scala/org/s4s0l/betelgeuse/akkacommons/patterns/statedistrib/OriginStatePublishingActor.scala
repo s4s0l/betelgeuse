@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.{BeforePublishValidationNotOk, BeforePublishValidationOk, PublishEvent, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.QA.{Uuid, UuidQuestion}
 import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, QA}
 
@@ -76,7 +77,7 @@ class OriginStatePublishingActor[T](settings: Settings[T])
         sender() ! PublishVersionNotOk(new Exception(s"No value at version $versionedId"), messageId)
       }
     case GetPublicationStatus(_, messageId) =>
-      sender() ! GetPublicationStatusOk(publishStatus.map(e => PublicationStatus(e._1, e._2)).toList, messageId)
+      sender() ! GetPublicationStatusOk(PublicationStatuses(publishStatus.map(e => PublicationStatus(e._1, e._2)).toList), messageId)
   }
 
   override def processEvent(recover: Boolean): PartialFunction[Any, Unit] = super.processEvent(recover) orElse {
@@ -150,7 +151,7 @@ object OriginStatePublishingActor {
   }
 
 
-  private case class PublishEvent(messageId: String, versionedId: VersionedId)
+  private case class PublishEvent(messageId: String, versionedId: VersionedId) extends JacksonJsonSerializable
 
   final case class Settings[T](name: String, distributor: OriginStateDistributor.StateDistributorProtocol[T], stateDistributionRetryInterval: FiniteDuration = 30 seconds)
 
@@ -166,7 +167,7 @@ object OriginStatePublishingActor {
 
     sealed trait PublishVersionResult extends QA.NullResult[Uuid]
 
-    sealed trait GetPublicationStatusResult extends QA.Result[Uuid, List[PublicationStatus]]
+    sealed trait GetPublicationStatusResult extends QA.Result[Uuid, PublicationStatuses]
 
     case class PublishVersion(versionedId: VersionedId, messageId: Uuid = QA.uuid) extends UuidQuestion
 
@@ -179,10 +180,11 @@ object OriginStatePublishingActor {
 
     case class PublicationStatus(versionedId: VersionedId, completed: Boolean)
 
-    case class GetPublicationStatusOk(value: List[PublicationStatus], correlationId: Uuid) extends GetPublicationStatusResult with QA.OkResult[Uuid, List[PublicationStatus]]
+    case class GetPublicationStatusOk(value: PublicationStatuses, correlationId: Uuid) extends GetPublicationStatusResult with QA.OkResult[Uuid, PublicationStatuses]
 
-    case class GetPublicationStatusNotOk(ex: Throwable, correlationId: Uuid) extends GetPublicationStatusResult with QA.NotOkResult[Uuid, List[PublicationStatus]]
+    case class GetPublicationStatusNotOk(ex: Throwable, correlationId: Uuid) extends GetPublicationStatusResult with QA.NotOkResult[Uuid, PublicationStatuses]
 
+    case class PublicationStatuses(statuses: List[PublicationStatus])
 
   }
 

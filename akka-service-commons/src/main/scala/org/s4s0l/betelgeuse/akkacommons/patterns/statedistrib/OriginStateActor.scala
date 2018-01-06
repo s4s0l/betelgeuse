@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import akka.persistence.AtLeastOnceDelivery
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateActor.{ConfirmEvent, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -76,7 +77,7 @@ object OriginStateActor {
 
   }
 
-  private case class ConfirmEvent(deliveryId: Long)
+  private case class ConfirmEvent(deliveryId: Long) extends JacksonJsonSerializable
 
   object Protocol {
     /**

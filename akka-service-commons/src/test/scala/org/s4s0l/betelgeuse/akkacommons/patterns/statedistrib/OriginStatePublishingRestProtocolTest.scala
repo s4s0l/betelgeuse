@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublish
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedEntityRestProtocol, VersionedId}
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
+import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -49,7 +49,7 @@ import scala.reflect.classTag
   * @author Marcin Wielgus
   */
 class OriginStatePublishingRestProtocolTest extends
-  BgTestRoach with ScalatestRouteTest {
+  BgTestRoach with ScalatestRouteTest with BgTestJackson {
 
 
   implicit def default(implicit system: ActorSystem): RouteTestTimeout = RouteTestTimeout(5.second)
@@ -96,7 +96,7 @@ class OriginStatePublishingRestProtocolTest extends
       Then("We see no publication in publication statuses action")
       Get(s"/v1/objects/test2/$id/actions/publication-status/invoke") ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        responseAs[String] shouldBe s"""[]"""
+        responseAs[String] shouldBe s"""{"statuses":[]}"""
       }
 
 
@@ -134,7 +134,7 @@ class OriginStatePublishingRestProtocolTest extends
       Then("We see one publication in publication statuses action")
       Get(s"/v1/objects/test1/$id/actions/publication-status/invoke") ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        responseAs[String] shouldBe s"""[{"versionedId":{"id":"$id","version":2},"completed":false}]"""
+        responseAs[String] shouldBe s"""{"statuses":[{"versionedId":{"id":"$id","version":2},"completed":false}]}"""
       }
 
       And("Publication request was called only once by an actor")

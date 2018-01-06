@@ -1,17 +1,17 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity
@@ -20,10 +20,12 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.persistence.RecoveryCompleted
 import akka.util.Timeout
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, QA, TimeoutShardedActor}
 
@@ -51,7 +53,7 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
   import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events._
 
   override def receiveRecover: Receive = {
-    case e: CqrsEvent if processEvent(true).isDefinedAt(e) => processEvent(true)
+    case e: Event if processEvent(true).isDefinedAt(e) => processEvent(true)
     case _: RecoveryCompleted => recoveryCompleted()
   }
 
@@ -303,9 +305,12 @@ object VersionedEntityActor {
 
   private object Events {
 
-    sealed trait CqrsEvent
+    sealed trait Event extends JacksonJsonSerializable
 
-    case class ValueEvent[T](uuid: Uuid, versionedId: VersionedId, value: T) extends CqrsEvent
+    case class ValueEvent[T](uuid: Uuid,
+                             versionedId: VersionedId,
+                             @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.EXTERNAL_PROPERTY, property = "type")
+                             value: T) extends Event
 
   }
 
