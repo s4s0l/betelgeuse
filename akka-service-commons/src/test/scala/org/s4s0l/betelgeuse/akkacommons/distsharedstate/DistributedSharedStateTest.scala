@@ -63,8 +63,8 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
         .withFallback(clusteringClientCreateConfig(BgServiceId("satellite2", 3)))
         .withFallback(clusteringClientCreateConfig(BgServiceId("satellite1", 2)))
 
-    override protected def onInitialized(): Unit = {
-      super.onInitialized()
+    override protected def initialize(): Unit = {
+      super.initialize()
       val dist = DistributedSharedState.createStateDistributionToRemoteServices[String]("state",
         List(BgServiceId("satellite1", 2), BgServiceId("satellite2", 3)))
       origin = OriginStateActor.startSharded(OriginStateActor.Settings("state", dist, 4 seconds))
@@ -78,8 +78,8 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
 
     var consumer: CachedValueListeningConsumer[String, ListeningLogger] = _
 
-    override protected def onInitialized(): Unit = {
-      super.onInitialized()
+    override protected def initialize(): Unit = {
+      super.initialize()
       val dist = DistributedSharedState.createSatelliteStateDistribution[String]("state", _ => Future.successful(List()))
       consumer = dist.createCachedValueListeningConsumer[String, ListeningLogger]("listenerOne", it => Future(s"enriched:$it"), 10 minutes)(new ListeningLogger(_))
       dist.enable()
