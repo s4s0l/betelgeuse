@@ -26,6 +26,19 @@ import org.scalatest.FeatureSpec
   */
 class PayloadTest extends FeatureSpec {
 
+  feature("Payload is serializable") {
+    val serializer = new JacksonJsonSerializer()
+    scenario("Is serializable in all formats") {
+      JacksonJsonSerializer.verifySerialization {
+        assert(!serializer.toBinary(Payload.empty).isEmpty)
+        assert(!serializer.toBinary(Payload("ala ma kota")).isEmpty)
+        assert(!serializer.toBinary(Payload(Array[Byte](1, 2, 3))).isEmpty)
+        assert(!serializer.toBinary(Payload(ByteString(Array[Byte](1, 2, 3)))).isEmpty)
+      }
+    }
+  }
+
+
   feature("Payload can be conveniently created and deconstructed to objects using converters") {
     scenario("Creating from object with serializer and reading from them") {
       implicit val serializer: SimpleSerializer = new JacksonJsonSerializer()

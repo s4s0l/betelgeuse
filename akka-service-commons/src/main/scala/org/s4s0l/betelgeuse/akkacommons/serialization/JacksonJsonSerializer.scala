@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ object JacksonJsonSerializer {
 
   // Should only be used during testing
   // When true, all objects being serialized are also deserialized and compared
-  private var verifySerialization: Boolean = false
+  private var verifySerialization: Boolean = "true" == System.getProperty("org.s4s0l.betelgeuse.akkacommons.serialization.verifyEnabled")
 
   def setObjectMapper(preConfiguredObjectMapper: ObjectMapper): Unit = {
     _objectMapper = Some(preConfiguredObjectMapper)

@@ -16,10 +16,14 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.message
 
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.util.ByteString
+import com.fasterxml.jackson.core.{JsonGenerator, JsonParser}
+import com.fasterxml.jackson.databind.annotation.{JsonDeserialize, JsonSerialize}
+import com.fasterxml.jackson.databind.{DeserializationContext, SerializerProvider}
 import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
 
 import scala.language.implicitConversions
@@ -36,6 +40,8 @@ import scala.reflect.ClassTag
   * @author Marcin Wielgus
   */
 @SerialVersionUID(2L)
+@JsonSerialize(using = classOf[PayloadSerializer])
+@JsonDeserialize(using = classOf[PayloadDeserializer])
 class Payload private(val contents: Either[ByteString, Array[Byte]]) extends Serializable {
 
   def asBytes: ByteString = _asBytes
@@ -74,7 +80,7 @@ class Payload private(val contents: Either[ByteString, Array[Byte]]) extends Ser
   override def equals(other: Any): Boolean = other match {
     case that: Payload =>
       (that canEqual this) &&
-        contents == that.contents
+        asArray.sameElements(that.asArray)
     case _ => false
   }
 
@@ -113,6 +119,17 @@ object Payload {
                  (implicit classTag: ClassTag[T], serializer: SimpleSerializer)
   : T = {
     serializer.fromBinary[AnyRef](p.asArray)(classTag.asInstanceOf[ClassTag[AnyRef]]).asInstanceOf[T]
+  }
+
+  def serialize(value: Payload, gen: JsonGenerator, provider: SerializerProvider): Unit = {
+    val array = value.asArray
+    gen.writeBinary(array)
+  }
+
+  def deserialize(jp: JsonParser, ctxt: DeserializationContext): Payload = {
+    val out = new ByteArrayOutputStream(320)
+    jp.readBinaryValue(out)
+    Payload(out.toByteArray)
   }
 
 }
