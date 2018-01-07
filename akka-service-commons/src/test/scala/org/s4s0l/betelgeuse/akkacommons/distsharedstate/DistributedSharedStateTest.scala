@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.distsharedstate
 
 import akka.actor.ActorRef
 import akka.actor.Status.{Failure, Status, Success}
+import akka.util.Timeout
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClient
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
@@ -114,8 +115,8 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
       assert(satellite1.service.consumer.consumer.getPromisedValue(4 second) == (VersionedId("1", 1), "enriched:valueOne"))
       assert(Await.result(satellite1.service.consumer.cache.getVersion("1")(satellite1.execContext, satellite1.self), 4 second) == VersionedId("1", 1))
       assert(Await.result(satellite1.service.consumer.cache.getVersion("2")(satellite1.execContext, satellite1.self), 4 second) == VersionedId("2", 0))
-      assert(Await.result(satellite1.service.consumer.cache.getValue(VersionedId("1", 1))(satellite1.execContext, satellite1.self), 1 second) == "enriched:valueOne")
-      assertThrows[Exception](Await.result(satellite1.service.consumer.cache.getValue(VersionedId("2", 1))(satellite1.execContext, satellite1.self), 1 second))
+      assert(Await.result(satellite1.service.consumer.cache.getValue(VersionedId("1", 1))(satellite1.execContext, satellite1.self, 1 second), 1 second) == "enriched:valueOne")
+      assertThrows[Exception](Await.result(satellite1.service.consumer.cache.getValue(VersionedId("2", 1))(satellite1.execContext, satellite1.self, 1 second), 1 second))
       assert(satellite2.service.consumer.consumer.getPromisedValue(2 second) == (VersionedId("1", 1), "enriched:valueOne"))
 
     }
@@ -165,7 +166,7 @@ object DistributedSharedStateTest {
     def getPromisedValue(duration: FiniteDuration): (VersionedId, String) = Await.result(receivedPromise.future, duration)
 
     override def onNewVersionAsk(versionedId: VersionedId, richValue: String)
-                                (implicit executionContext: ExecutionContext, sender: ActorRef)
+                                (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
     : Future[NewVersionResult] = {
       synchronized {
         println("Got!!")

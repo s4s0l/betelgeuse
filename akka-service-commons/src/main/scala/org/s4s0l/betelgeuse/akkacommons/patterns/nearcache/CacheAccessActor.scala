@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.nearcache
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props, SupervisorStrategy}
 import akka.pattern.ask
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade.OwnerValueResult
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor._
@@ -152,7 +153,6 @@ object CacheAccessActor {
     */
   final class Protocol[G, K, R] private(actorRef: => ActorRef) {
 
-    import concurrent.duration._
 
     /**
       * gets a cache value.
@@ -160,9 +160,9 @@ object CacheAccessActor {
       * @param msg an message wrapping a 'GetValue' message
       */
     def apply(msg: GetCacheValue[G])
-             (implicit executionContext: ExecutionContext, sender: ActorRef)
+             (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
     : Future[GetCacheValueResult[R]] =
-      actorRef.ask(msg)(5 seconds).mapTo[GetCacheValueResult[R]]
+      actorRef.ask(msg)(timeout, sender).mapTo[GetCacheValueResult[R]]
   }
 
 

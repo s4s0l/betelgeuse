@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.s4s0l.betelgeuse.akkacommons.distsharedstate
 
 import akka.actor.{ActorRef, ActorRefFactory}
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClientExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionistExtension
@@ -100,7 +101,7 @@ object DistributedSharedState {
 
   trait NewVersionedValueListener[R] {
     def onNewVersionAsk(versionedId: VersionedId, aValue: R)
-                       (implicit executionContext: ExecutionContext, sender: ActorRef)
+                       (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
     : Future[NewVersionResult]
   }
 
@@ -129,7 +130,7 @@ object DistributedSharedState {
       val consumer: C = consumerFactory(cache)
       val VRMappingListener = new NewVersionedValueListener[V] {
         override def onNewVersionAsk(versionedId: VersionedId, aValue: V)
-                                    (implicit executionContext: ExecutionContext, sender: ActorRef)
+                                    (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
         : Future[NewVersionResult] = {
           cache.getValue(versionedId)
             .flatMap(consumer.onNewVersionAsk(versionedId, _))
@@ -166,7 +167,7 @@ object DistributedSharedState {
       val listenerObject: DelayedSubsActor.Listener[VersionedId, V] = new DelayedSubsActor.Listener[VersionedId, V] {
         override def publish(publishMessage: Publish[VersionedId, V])
                             (implicit executionContext: ExecutionContext, sender: ActorRef):
-        Future[PublishResult[VersionedId]] = onNewVersion.onNewVersionAsk(publishMessage.messageId, publishMessage.payload).map {
+        Future[PublishResult[VersionedId]] = onNewVersion.onNewVersionAsk(publishMessage.messageId, publishMessage.payload)(executionContext, sender, publishMessage.ackTimeout).map {
           case NewVersionedValueListener.NewVersionOk(_) => PublishOk(publishMessage.messageId)
           case NewVersionedValueListener.NewVersionNotOk(_, ex) => PublishNotOk(publishMessage.messageId, ex)
         }
@@ -192,7 +193,7 @@ object DistributedSharedState {
                                                                                                      val consumer: C,
                                                                                                      private val actorFinder: String => Future[Seq[PersistenceId]]) {
 
-    def notifyStartupValues(implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender): Future[Map[PersistenceId, Throwable]] = {
+    def notifyStartupValues(implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender, timeout: Timeout): Future[Map[PersistenceId, Throwable]] = {
       actorFinder.apply(s"satellite-value-$name")
         .flatMap { idsFound =>
           val listOfFutures = idsFound.map { id =>
@@ -220,7 +221,7 @@ object DistributedSharedState {
                                                     cacheWrapped: CacheAccessActor.Protocol[VersionedEntityActor.Protocol.GetValue, VersionedId, R]
                                                   ) {
     def getValue(id: VersionedId)
-                (implicit executionContext: ExecutionContext, sender: ActorRef)
+                (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
     : Future[R] = {
       cacheWrapped.apply(GetCacheValue(VersionedEntityActor.Protocol.GetValue(id)))
         .map {
@@ -242,7 +243,7 @@ object DistributedSharedState {
 
     def adaptListener[R, V](l: NewVersionedValueListener[R])(f: V => R): NewVersionedValueListener[V] = new NewVersionedValueListener[V] {
       override def onNewVersionAsk(versionedId: VersionedId, aValue: V)
-                                  (implicit executionContext: ExecutionContext, sender: ActorRef)
+                                  (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
       : Future[NewVersionResult] = l.onNewVersionAsk(versionedId, f(aValue))
     }
 
