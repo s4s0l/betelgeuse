@@ -20,7 +20,6 @@ import java.sql.SQLException
 
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JurnalDuplicateKeyException, PersistenceId, ScalikeAsyncWriteJournal}
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
-import org.slf4j.LoggerFactory
 import scalikejdbc.DBSession
 
 import scala.concurrent.Future
@@ -29,7 +28,6 @@ import scala.concurrent.Future
   * @author Maciej Flak
   */
 class RoachAsyncWriteJournal extends ScalikeAsyncWriteJournal[RoachAsyncWriteJournalEntity]() {
-  private val LOGGER = LoggerFactory.getLogger(getClass)
   override val dao: RoachAsyncWriteJournalDao = new RoachAsyncWriteJournalDao(JacksonJsonSerializer.get(serialization))
 
 
@@ -42,14 +40,14 @@ class RoachAsyncWriteJournal extends ScalikeAsyncWriteJournal[RoachAsyncWriteJou
   /**
     * asynchronously deletes all persistent messages up to `toSequenceNr`
     *
-    * @param persistenceId
-    * @param toSequenceNr
+    * @param persistenceId - id
+    * @param toSequenceNr - num of max sequence that should be deleted
     * @return
     */
-  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long) : Future[Unit] = Future {
+  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = Future {
     dbAccess.query { implicit session =>
-      val persId: PersistenceId = PersistenceId.fromString(persistenceId)
-      dao.deleteUpTo(persId.tag, persId.uniqueId, toSequenceNr)
+      val id: PersistenceId = PersistenceId.fromString(persistenceId)
+      dao.deleteUpTo(id.tag, id.uniqueId, toSequenceNr)
     }
   }
 

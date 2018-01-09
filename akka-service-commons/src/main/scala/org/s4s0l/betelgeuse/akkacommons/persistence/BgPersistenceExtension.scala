@@ -54,7 +54,7 @@ class BgPersistenceExtension(private val system: ExtendedActorSystem) extends Ex
   }
 
   private val betelgeuseDb: BetelgeuseDb = {
-    val db = new BetelgeuseDb(system.settings.config)
+    val db = new BetelgeuseDb(system.settings.config)(system.dispatcher, system.scheduler)
     db.setupAll()
     db
   }

@@ -38,7 +38,7 @@ class CrateDatabase(jdbcTemplate: JdbcTemplate, conf: FlywayConfiguration, nullT
   override def getConnection(connection: sql.Connection, nullType: Int) = new CrateDbConnection(conf, this, jdbcTemplate, nullType)
 
   // TODO check version or something?
-  override def ensureSupported() = {}
+  override def ensureSupported(): Unit = {}
 
   override def supportsDdlTransactions(): Boolean = false
 
@@ -56,5 +56,5 @@ class CrateDatabase(jdbcTemplate: JdbcTemplate, conf: FlywayConfiguration, nullT
 
   override def useSingleConnection() = true
 
-  override def getInsertStatement(table: Table) = super.getInsertStatement(table)
+  override def getInsertStatement(table: Table): String = super.getInsertStatement(table)
 }

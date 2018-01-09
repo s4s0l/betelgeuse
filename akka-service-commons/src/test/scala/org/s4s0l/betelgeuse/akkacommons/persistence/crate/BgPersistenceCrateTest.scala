@@ -16,17 +16,24 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
+import akka.actor.Scheduler
+import com.miguno.akka.testing.VirtualTime
 import org.s4s0l.betelgeuse.akkacommons.BgServiceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestCrate
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 import scalikejdbc._
 
+import scala.concurrent.ExecutionContext
+
 /**
   * @author Marcin Wielgus
   */
 class BgPersistenceCrateTest extends BgTestCrate {
   private val aService = testWith(new BgPersistenceCrate {})
+
+  implicit val ec: ExecutionContext = ExecutionContext.global
+  implicit val scheduler: Scheduler = (new VirtualTime).scheduler
 
 
   feature("Default configuration is created") {

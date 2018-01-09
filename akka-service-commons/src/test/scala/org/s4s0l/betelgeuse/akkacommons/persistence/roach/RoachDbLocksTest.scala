@@ -16,11 +16,14 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelgeuseDb, DbLocksSettings}
+import akka.actor.{ActorSystem, Scheduler}
+import akka.testkit.TestKit
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings.DbLocksSingle
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest.dropDatabase
 import org.s4s0l.betelgeuse.utils.AllUtils
-import org.scalatest.{FeatureSpec, GivenWhenThen, Outcome}
+import org.scalatest.{FeatureSpecLike, GivenWhenThen, Outcome}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -29,13 +32,15 @@ import scala.language.postfixOps
 /**
   * @author Maciej Flak
   */
-class RoachDbLocksTest extends FeatureSpec
+class RoachDbLocksTest extends TestKit(ActorSystem("a"))
+  with FeatureSpecLike
   with GivenWhenThen
   with DbRoachTest {
 
   val dbLocks = new RoachDbLocks("roach_db_locks_test", "locks_table")
 
-  implicit val ec: ExecutionContext = ExecutionContext.global
+  implicit val ec: ExecutionContext = system.dispatcher
+  implicit val scheduler: Scheduler = system.scheduler
 
 
   feature("The user can perform locking operations in roach database") {
@@ -54,7 +59,7 @@ class RoachDbLocksTest extends FeatureSpec
       //      Thread.sleep(10)
       Then("The first process finishes with no error")
       dbLocks.initLocks(localTxExecutor)
-      println("LOCKS INITED!")
+      println("LOCKS INITIALIZED!")
       And("Second process finishes with no error")
       Await.ready(future, 1 minute)
       localTx(implicit session => {
@@ -106,7 +111,7 @@ class RoachDbLocksTest extends FeatureSpec
 
       When("other tries to lock 'LOCK'")
       Then("Exception is raised")
-      assertThrows[RuntimeException](other.lock("LOCK", localTxExecutor, DbLocksSettings(lockAttemptCount = 2)))
+      assertThrows[RuntimeException](other.lock("LOCK", localTxExecutor, DbLocksSingle(lockAttemptCount = 2)))
 
       localTx(implicit session => {
         When("other unlocks 'LOCK'")
@@ -158,7 +163,7 @@ class RoachDbLocksTest extends FeatureSpec
 
       val future1: Future[String] = Future {
         localTx { implicit session =>
-          dbLocks.runLocked("lock", localTxExecutor, DbLocksSettings()) { implicit session =>
+          dbLocks.runLocked("lock", localTxExecutor, DbLocksSingle()) { implicit session =>
             try {
               execOneRunning = true
               assert(execOneRunning != execTwoRunning)
@@ -173,7 +178,7 @@ class RoachDbLocksTest extends FeatureSpec
 
       val future2 = Future {
         localTx { implicit session =>
-          other.runLocked("lock", localTxExecutor, DbLocksSettings()) { implicit session =>
+          other.runLocked("lock", localTxExecutor, DbLocksSingle()) { implicit session =>
             try {
               execTwoRunning = true
               assert(execOneRunning != execTwoRunning)
@@ -195,7 +200,7 @@ class RoachDbLocksTest extends FeatureSpec
   feature("Delete me please") {
 
     (1 to 2).foreach { i =>
-      scenario(s"deleteing creating $i") {
+      scenario(s"deleting creating $i") {
         val other = new RoachDbLocks("roach_db_locks_test", "locks_table")
         val future1 = Future {
           other.initLocks(localTxExecutor)

@@ -29,5 +29,5 @@ object AllUtils extends TryNTimes
   with PlaceholderUtils
   with FutureUtils {
 
-  implicit def toConfigOptionApi(typesafeConfig: Config): ConfigOptionApi = ConfigOptionApi.toConfigOptionApi(typesafeConfig)
+  implicit def toConfigOptionApi(typeSafeConfig: Config): ConfigOptionApi = ConfigOptionApi.toConfigOptionApi(typeSafeConfig)
 }

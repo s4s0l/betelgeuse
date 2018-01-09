@@ -19,8 +19,10 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 import java.sql.Timestamp
 import java.util.{Calendar, Date, UUID}
 
+import akka.actor.{Cancellable, Scheduler}
 import com.typesafe.config.Config
 import io.crate.shade.org.postgresql.util.PSQLException
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings.{DbLocksRolling, DbLocksSingle}
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{DbLocksSettings, DbLocksSupport}
 import org.s4s0l.betelgeuse.akkacommons.utils.DnsUtils
@@ -31,6 +33,7 @@ import scalikejdbc.interpolation.SQLSyntax
 import scalikejdbc.{DBSession, _}
 
 import scala.collection.immutable
+import scala.concurrent.ExecutionContext
 
 /**
   * @author Marcin Wielgus
@@ -72,33 +75,51 @@ class CrateDbLocks(val schema: String = "locks", locksTable: String = "locks")
     getLockingParty(lockName).exists(_._1 == uuid)
   }
 
-  override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
-                           (code: DBSession => T): T = {
-    var unlocked = false
-    try {
-      lock(lockName, txExecutor, settings)
-      txExecutor.doInTx { implicit session =>
-        try {
-          code(session)
-        } finally {
-          unlock(lockName)
-          unlocked = true
-        }
-      }
-    } finally {
-      if (!unlocked) {
+  override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSingle())
+                           (code: DBSession => T)(implicit ex: ExecutionContext, scheduler: Scheduler): T = {
+    @volatile var isFinished: Boolean = false
+
+    def runLockedInternal(prolongOpt: Option[Cancellable] = None) = {
+      try {
+        lock(lockName, txExecutor, settings)
         txExecutor.doInTx { implicit session =>
-          unlock(lockName)
+          try {
+            code(session)
+          } finally {
+            isFinished = true
+            prolongOpt map (_ cancel)
+            unlock(lockName)
+          }
+        }
+      } finally {
+        if (!isFinished) {
+          isFinished = true
+          prolongOpt.map(_.cancel())
+          txExecutor.doInTx { implicit session =>
+            unlock(lockName)
+          }
         }
       }
     }
+
+    settings match {
+      case _: DbLocksSingle => runLockedInternal()
+      case DbLocksRolling(duration, _, _, lockTimeInitial) => runLockedInternal(
+        Some(
+          scheduler.schedule(duration - lockTimeInitial, duration, () =>
+            if (!isFinished) {
+              lock(lockName, txExecutor, settings)
+            }))
+      )
+    }
+
   }
 
   private def lockAttempt(lockName: String, lockSettings: DbLocksSettings)(implicit session: DBSession): Date = {
     val now = new Timestamp(new Date().getTime)
     val willBeOverdue = {
       val current = Calendar.getInstance()
-      current.add(Calendar.MILLISECOND, lockSettings.maxDuration.toMillis.toInt)
+      current.add(Calendar.MILLISECOND, lockSettings.duration.toMillis.toInt)
       new Timestamp(current.getTime.getTime)
     }
 
@@ -151,7 +172,7 @@ class CrateDbLocks(val schema: String = "locks", locksTable: String = "locks")
     new Date(willBeOverdue.getTime)
   }
 
-  def lock(lockName: String, txExecutor: TxExecutor, lockSettings: DbLocksSettings = DbLocksSettings()): Date = {
+  def lock(lockName: String, txExecutor: TxExecutor, lockSettings: DbLocksSettings = DbLocksSingle()): Date = {
     tryNTimes(lockSettings.lockAttemptCount,
       Set(classOf[Exception]),
       tryNTimesExceptionFactory(s"Taking lock failed. Holder $uuid"),

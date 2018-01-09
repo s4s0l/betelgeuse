@@ -22,8 +22,28 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-case class DbLocksSettings(
-                                 maxDuration: Duration = 60 seconds,
-                                 lockAttemptCount: Int = 15,
-                                 lockAttemptInterval: Duration = 2 second
-                               )
+sealed trait DbLocksSettings {
+  def duration: Duration
+
+  def lockAttemptCount: Int
+
+  def lockAttemptInterval: Duration
+}
+
+object DbLocksSettings {
+
+  case class DbLocksSingle(
+                            maxDuration: Duration = 60 seconds,
+                            lockAttemptCount: Int = 15,
+                            lockAttemptInterval: Duration = 2 second
+                          ) extends DbLocksSettings {
+    override def duration: Duration = maxDuration
+  }
+
+  case class DbLocksRolling(
+                             duration: FiniteDuration = 5 seconds,
+                             lockAttemptCount: Int = 15,
+                             lockAttemptInterval: Duration = 2 second,
+                             schedulerLockShuffle: FiniteDuration = 500 millis
+                           ) extends DbLocksSettings
+}

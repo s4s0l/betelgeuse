@@ -19,7 +19,9 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 import java.sql.Timestamp
 import java.util.{Calendar, Date, UUID}
 
+import akka.actor.{Cancellable, Scheduler}
 import com.typesafe.config.Config
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings.{DbLocksRolling, DbLocksSingle}
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{DbLocksSettings, DbLocksSupport}
 import org.s4s0l.betelgeuse.akkacommons.utils.DnsUtils
@@ -30,6 +32,7 @@ import scalikejdbc.interpolation.SQLSyntax
 import scalikejdbc.{DBSession, _}
 
 import scala.collection.immutable
+import scala.concurrent.ExecutionContext
 
 /**
   * @author Marcin Wielgus
@@ -77,21 +80,41 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
     getLockingParty(lockName).exists(_._1 == uuid)
   }
 
-  override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
-                           (code: DBSession => T): T = {
-    try {
-      lock(lockName, txExecutor, settings)
-      txExecutor.doInTx { implicit session =>
-        code(session)
+  override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSingle())
+                         (code: DBSession => T)(implicit ex: ExecutionContext, scheduler: Scheduler): T = {
+    @volatile var isFinished: Boolean = false
+
+
+    def runLockedInternal(prolongOpt: Option[Cancellable] = None) = {
+      try {
+        lock(lockName, txExecutor, settings) // first lock not in scheduler
+        txExecutor.doInTx { implicit session =>
+          code(session)
+        }
+      } finally {
+        isFinished = true
+        prolongOpt map (_ cancel)
+        txExecutor.doInTx { implicit session =>
+          unlock(lockName)
+        }
       }
-    } finally {
-      txExecutor.doInTx { implicit session =>
-        unlock(lockName)
-      }
+    }
+
+
+    settings match {
+      case _ : DbLocksSingle => runLockedInternal()
+      case DbLocksRolling(duration, _, _, schedulerLockShuffle) => runLockedInternal(
+        Some(
+          scheduler.schedule(duration - schedulerLockShuffle, duration, () =>
+            if (!isFinished) {
+              lock(lockName, txExecutor, settings)
+            }))
+      )
     }
   }
 
-  def lock(lockName: String, txExecutor: TxExecutor, lockSettings: DbLocksSettings = DbLocksSettings()): Date = {
+
+  def lock(lockName: String, txExecutor: TxExecutor, lockSettings: DbLocksSettings = DbLocksSingle()): Date = {
     tryNTimes(lockSettings.lockAttemptCount,
       Set(classOf[Exception]),
       tryNTimesExceptionFactory(s"Taking lock failed. Holder $uuid"),
@@ -106,7 +129,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
     val now = new Timestamp(new Date().getTime)
     val willBeOverdue = {
       val current = Calendar.getInstance()
-      current.add(Calendar.MILLISECOND, lockSettings.maxDuration.toMillis.toInt)
+      current.add(Calendar.MILLISECOND, lockSettings.duration.toMillis.toInt)
       new Timestamp(current.getTime.getTime)
     }
 

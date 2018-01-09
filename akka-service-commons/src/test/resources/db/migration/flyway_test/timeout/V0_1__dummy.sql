@@ -1,0 +1,1 @@
+create table dummy(k string PRIMARY key, s string);

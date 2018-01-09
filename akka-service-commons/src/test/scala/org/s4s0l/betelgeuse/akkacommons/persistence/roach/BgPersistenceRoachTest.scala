@@ -16,11 +16,15 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
+import akka.actor.Scheduler
+import com.miguno.akka.testing.VirtualTime
 import org.s4s0l.betelgeuse.akkacommons.BgServiceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 import scalikejdbc._
+
+import scala.concurrent.ExecutionContext
 
 /**
   * @author Maciej Flak
@@ -28,6 +32,8 @@ import scalikejdbc._
 class BgPersistenceRoachTest extends BgTestRoach {
   private val aService = testWith(new BgPersistenceRoach {})
 
+  implicit val ec: ExecutionContext = ExecutionContext.global
+  implicit val scheduler: Scheduler = (new VirtualTime).scheduler
 
   feature("Default configuration is created") {
     scenario("When no parameters are specified") {

@@ -16,15 +16,19 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
+import akka.actor.Scheduler
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings.DbLocksSingle
 import scalikejdbc.DBSession
+
+import scala.concurrent.ExecutionContext
 
 /**
   * @author Marcin Wielgus
   */
 class DbLocks(val support: DbLocksSupport, val executor: DbLocksSupport.TxExecutor) {
 
-  def runLocked[T](lockName: String, settings: DbLocksSettings = DbLocksSettings())
-                  (code: DBSession => T): T = {
+  def runLocked[T](lockName: String, settings: DbLocksSettings = DbLocksSingle())
+                  (code: DBSession => T)(implicit ex: ExecutionContext, scheduler: Scheduler): T = {
     support.runLocked(lockName, executor, settings)(code)
   }
 }

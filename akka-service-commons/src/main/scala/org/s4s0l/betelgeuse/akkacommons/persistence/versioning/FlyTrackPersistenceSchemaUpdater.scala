@@ -15,9 +15,9 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.persistence.versioning
 
+import java.util.concurrent.TimeUnit
 import javax.sql.DataSource
 
 import com.typesafe.config.Config
@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.concurrent.{Await, Future, duration}
+import scala.concurrent.duration._
 
 /**
   * @author Marcin Wielgus
@@ -38,17 +40,20 @@ class FlyTrackPersistenceSchemaUpdater(config: Config) extends PersistenceSchema
   private val ft = new Flyway()
 
   private val maps = mutable.Map[String, String]() //has to be mutable cause flyway is callin remove on it for some reason
-  config.entrySet().forEach(it =>
-    maps("flyway." + it.getKey) = config.getString(it.getKey)
-  )
-  ft.configure(maps.asJava)
+
+  val additional = List("connectionAcquireRetries", "connectionAcquireDelay", "connectionAcquireValidationQuery")
+
+  config.entrySet().forEach { it =>
+    if (!additional.contains(it.getKey)) maps("flyway." + it.getKey) = config.getString(it.getKey)
+  }
 
 
-  private val retries = if (config.hasPath("retries")) config.getInt("retries") else 1
-  private val retriesDelay = if (config.hasPath("retriesDelay")) config.getInt("retriesDelay") else 3000
   private val connectionAcquireRetries = if (config.hasPath("connectionAcquireRetries")) config.getInt("connectionAcquireRetries") else 60
   private val connectionAcquireDelay = if (config.hasPath("connectionAcquireDelay")) config.getInt("connectionAcquireDelay") else 1000
   private val connectionAcquireValidationQuery = if (config.hasPath("connectionAcquireValidationQuery")) config.getString("connectionAcquireValidationQuery") else "select 1"
+
+
+  ft.configure(maps.asJava)
 
 
   private def validateConnectionOnce(dataSource: DataSource): Boolean =
@@ -77,10 +82,7 @@ class FlyTrackPersistenceSchemaUpdater(config: Config) extends PersistenceSchema
 
   override def updateSchema(dataSource: DataSource): Unit = {
     validateConnection(dataSource)
-    tryNTimesMessage(retries, "Schema update process failed",
-      Set(classOf[Exception]), retriesDelay) {
-      tryMigrate(dataSource)
-    }
+    tryMigrate(dataSource)
   }
 
   def tryMigrate(dataSource: DataSource): Unit = {

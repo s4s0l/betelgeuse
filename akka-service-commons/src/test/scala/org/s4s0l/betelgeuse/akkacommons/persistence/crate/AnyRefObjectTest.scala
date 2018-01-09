@@ -32,7 +32,7 @@ import scala.reflect.ClassTag
   */
 class AnyRefObjectTest extends FeatureSpec with DbCrateTest {
 
-  feature("Classes that implement DepricatedTypeWithMigrationInfo are converted to new version automatically"){
+  feature("Classes that implement DeprecatedTypeWithMigrationInfo are converted to new version automatically"){
 
     scenario("reading deprecated object"){
       localTx { implicit session =>
@@ -62,7 +62,7 @@ class AnyRefObjectTest extends FeatureSpec with DbCrateTest {
 
   feature("Top table scalike objects in crate can have no knowledge about objects it contains") {
 
-    scenario("Any ref object can be sucessfully saved and restored from database") {
+    scenario("Any ref object can be successfully saved and restored from database") {
       localTx { implicit session =>
         val sampleObject1 = new SampleObject("sample1")
         sql"""insert into ${AnyRefTable1.table} (
@@ -86,7 +86,7 @@ class AnyRefObjectTest extends FeatureSpec with DbCrateTest {
     }
 
 
-    scenario("Any ref object can be sucessfully saved and restored from database, no explicit any ref object") {
+    scenario("Any ref object can be successfully saved and restored from database, no explicit any ref object") {
       localTx { implicit session =>
         val sampleObject1 = new SampleObject("sample2")
         sql"""insert into ${AnyRefTable2.table} (

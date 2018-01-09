@@ -17,22 +17,25 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
+import akka.actor.Scheduler
 import com.typesafe.config.{Config, ConfigFactory}
 import org.flywaydb.core.internal.util.StringUtils
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
 import org.s4s0l.betelgeuse.akkacommons.persistence.versioning.FlyTrackPersistenceSchemaUpdater
+import org.s4s0l.betelgeuse.utils.AllUtils
 import org.slf4j.LoggerFactory
 import scalikejdbc.config._
 import scalikejdbc.{DBSession, GlobalSettings, NamedDB, SettingsProvider}
 
 import scala.collection.mutable
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
 /**
   * @author Marcin Wielgus
   */
-class BetelgeuseDb(val config: Config) extends DBs
+class BetelgeuseDb(val config: Config)(implicit executor: ExecutionContext, scheduler: Scheduler) extends DBs
   with TypesafeConfigReader
   with TypesafeConfig
   with NoEnvPrefix {
@@ -93,12 +96,17 @@ class BetelgeuseDb(val config: Config) extends DBs
 
 
     val migrationsEnabled = dbConfig.hasPath("migrations.enabled") && dbConfig.getBoolean("migrations.enabled")
-    val locksEnabled = dbConfig.hasPath("locks.enabled") && dbConfig.getBoolean("locks.enabled")
+
     if (migrationsEnabled) {
-      locksSupport.runLocked(s"FlywayMigration", localTxExecutor, DbLocksSettings(10 minutes, 35, 1 seconds)) { implicit session =>
+      import AllUtils._
+      val lockDuration = dbConfig.duration("migration.lockDuration").getOrElse(1 minute)
+      val lockAttemptCount = dbConfig.int("migration.lockAttemptCount").getOrElse(35)
+      val lockAttemptInterval = dbConfig.duration("migration.lockAttemptInterval").getOrElse(1 second)
+      val preLockFinishProlong = dbConfig.duration("migration.preLockFinishProlong").getOrElse(500 millis)
+
+      locksSupport.runLocked(s"FlywayMigration", localTxExecutor, DbLocksSettings.DbLocksRolling(lockDuration, lockAttemptCount, lockAttemptInterval,preLockFinishProlong)) { implicit session =>
         new FlyTrackPersistenceSchemaUpdater(flywayConfig).updateSchema(new DummyDataSource(dbName))
       }
-
     }
   }
 

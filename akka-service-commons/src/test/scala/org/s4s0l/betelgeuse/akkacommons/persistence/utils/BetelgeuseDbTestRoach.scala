@@ -15,13 +15,12 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
+import com.miguno.akka.testing.VirtualTime
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfterAll, FeatureSpec}
 import scalikejdbc.interpolation.SQLSyntax
-
 
 
 /**
@@ -29,10 +28,10 @@ import scalikejdbc.interpolation.SQLSyntax
   */
 class BetelgeuseDbTestRoach extends FeatureSpec with BeforeAndAfterAll {
 
-  lazy val scalike = new BetelgeuseDb(ConfigFactory.load("BetelgeuseDbTestRoach.conf"))
-  lazy val TEST_TABLE_SCHEMA = SQLSyntax.createUnsafely("betelgeusedbtestroach")
+  lazy val scalike = new BetelgeuseDb(ConfigFactory.load("BetelgeuseDbTestRoach.conf"))(concurrent.ExecutionContext.Implicits.global, (new VirtualTime).scheduler)
+  lazy val TEST_TABLE_SCHEMA: SQLSyntax = SQLSyntax.createUnsafely("betelgeusedbtestroach")
 
-  feature("BetelgeuseDb allows use of salikeJdbc") {
+  feature("BetelgeuseDb allows use of scalikeJdbc") {
     import scalikejdbc._
 
     scenario("Readonly interpolation queries") {

@@ -33,8 +33,7 @@ dependencies {
     compile group: 'org.scalamock', name: "scalamock-scalatest-support_${scalaBinaryVersion}", version: '3.6.0'
     compile "org.scalatest:scalatest_${scalaBinaryVersion}:3.0.3"
     compile 'org.pegdown:pegdown:1.6.0'
-
-
+    compile group: "com.miguno.akka", name: "akka-mock-scheduler_${scalaBinaryVersion}", version: '0.5.1'
 
 
 }

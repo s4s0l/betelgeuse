@@ -16,7 +16,13 @@
 
 package org.s4s0l.betelgeuse.utils
 
+import java.util.concurrent.TimeUnit
+
 import com.typesafe.config.Config
+import org.slf4j.LoggerFactory
+
+import scala.concurrent.duration.FiniteDuration
+import scala.util.{Failure, Success, Try}
 
 /**
   * @author Marcin Wielgus
@@ -35,28 +41,39 @@ trait ConfigOptionApi {
 
   def config(path: String): Option[Config]
 
+  def duration(path: String): Option[FiniteDuration]
+
 }
 
 object ConfigOptionApi {
-  def toConfigOptionApi(typesafeConfig: Config): ConfigOptionApi = new ConfigOptionApi {
 
-    override def boolean(path: String): Option[Boolean] = if (typesafeConfig.hasPath(path))
-      Some(typesafeConfig.getBoolean(path)) else None
+  def toConfigOptionApi(typeSafeConfig: Config): ConfigOptionApi = new ConfigOptionApi {
 
-    override def string(path: String): Option[String] = if (typesafeConfig.hasPath(path))
-      Some(typesafeConfig.getString(path)) else None
+    override def boolean(path: String): Option[Boolean] = if (typeSafeConfig.hasPath(path))
+      Some(typeSafeConfig.getBoolean(path)) else None
 
-    override def int(path: String): Option[Int] = if (typesafeConfig.hasPath(path))
-      Some(typesafeConfig.getInt(path)) else None
+    override def string(path: String): Option[String] = if (typeSafeConfig.hasPath(path))
+      Some(typeSafeConfig.getString(path)) else None
 
-    override def long(path: String): Option[Long] = if (typesafeConfig.hasPath(path))
-      Some(typesafeConfig.getLong(path)) else None
+    override def int(path: String): Option[Int] = if (typeSafeConfig.hasPath(path))
+      Some(typeSafeConfig.getInt(path)) else None
 
-    override def double(path: String): Option[Double] = if (typesafeConfig.hasPath(path))
-      Some(typesafeConfig.getDouble(path)) else None
+    override def long(path: String): Option[Long] = if (typeSafeConfig.hasPath(path))
+      Some(typeSafeConfig.getLong(path)) else None
 
-    override def config(path: String): Option[Config] = if (typesafeConfig.hasPath(path))
-      Some(typesafeConfig.getConfig(path)) else None
+    override def double(path: String): Option[Double] = if (typeSafeConfig.hasPath(path))
+      Some(typeSafeConfig.getDouble(path)) else None
+
+    override def config(path: String): Option[Config] = if (typeSafeConfig.hasPath(path))
+      Some(typeSafeConfig.getConfig(path)) else None
+
+    override def duration(path: String): Option[FiniteDuration] =
+      if (typeSafeConfig.hasPath(path)) {
+        Try(FiniteDuration(typeSafeConfig.getDuration(path).toNanos, TimeUnit.NANOSECONDS)) match {
+          case Success(duration) => Some(duration)
+          case Failure(f) => throw new Exception(s"unable to get duration from configuration at path $path", f)
+        }
+      } else None
   }
 }
 

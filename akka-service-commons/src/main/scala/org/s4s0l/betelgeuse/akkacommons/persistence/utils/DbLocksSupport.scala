@@ -16,10 +16,14 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
+import akka.actor.Scheduler
 import com.typesafe.config.Config
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings.DbLocksSingle
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
 import org.slf4j.LoggerFactory
 import scalikejdbc.DBSession
+
+import scala.concurrent.ExecutionContext
 
 /**
   * @author Marcin Wielgus
@@ -28,8 +32,8 @@ trait DbLocksSupport {
 
   def initLocks(txExecutor: TxExecutor): Unit
 
-  def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
-                  (code: DBSession => T): T
+  def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSingle())
+                  (code: DBSession => T)(implicit ex: ExecutionContext, scheduler: Scheduler): T
 }
 
 object DbLocksSupport {
@@ -42,8 +46,8 @@ object DbLocksSupport {
       LOGGER.warn("You are using NoOpLocker. This is very dangerous for consistency!")
     }
 
-    override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
-                             (code: DBSession => T): T = {
+    override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSingle())
+                             (code: DBSession => T)(implicit ex: ExecutionContext, scheduler: Scheduler): T = {
       throw new Exception("You are using NoOpLocker. This is very dangerous for consistency!")
     }
   }
@@ -60,8 +64,8 @@ class NoOpLocker(config: Config) extends DbLocksSupport {
     LOGGER.warn("You are using NoOpLocker. This is very dangerous for consistency!")
   }
 
-  override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSettings())
-                           (code: DBSession => T): T = {
+  override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSingle())
+                           (code: DBSession => T)(implicit ex: ExecutionContext, scheduler: Scheduler): T = {
     throw new Exception("You are using NoOpLocker. This is very dangerous for consistency!")
   }
 

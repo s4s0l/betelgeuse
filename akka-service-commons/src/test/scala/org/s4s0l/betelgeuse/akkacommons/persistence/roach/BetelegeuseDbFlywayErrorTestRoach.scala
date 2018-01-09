@@ -16,16 +16,18 @@
 
 
 
-package org.s4s0l.betelgeuse.akkacommons.persistence.utils
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import com.miguno.akka.testing.VirtualTime
-import com.typesafe.config.ConfigFactory
-import scalikejdbc.interpolation.SQLSyntax
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelegeuseDbFlywayErrorTestBase, BetelgeuseDb}
 
-/**
-  * @author Maciej Flak
-  */
-class BetelgeuseDbTestCrate extends BetelgeuseDbTestRoach {
-  override lazy val scalike = new BetelgeuseDb(ConfigFactory.load("BetelgeuseDbTestCrate.conf"))(concurrent.ExecutionContext.Implicits.global, (new VirtualTime).scheduler)
-  override lazy val TEST_TABLE_SCHEMA: SQLSyntax = SQLSyntax.createUnsafely("betelgeusedbtestcrate")
+class BetelegeuseDbFlywayErrorTestRoach extends BetelegeuseDbFlywayErrorTestBase{
+
+  override def afterEach() {
+    import scalikejdbc._
+    LOGGER.info("calling AFTER EACH!")
+    scalike.localTx { implicit session =>
+      sql"drop database $TEST_TABLE_SCHEMA".execute().apply()
+    }
+    scalike.closeAll()
+  }
 }

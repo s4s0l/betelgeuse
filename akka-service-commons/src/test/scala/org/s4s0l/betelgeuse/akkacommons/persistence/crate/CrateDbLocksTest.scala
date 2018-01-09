@@ -16,7 +16,10 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelgeuseDb, DbLocksSettings}
+import akka.actor.Scheduler
+import com.miguno.akka.testing.VirtualTime
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings.DbLocksSingle
 import org.s4s0l.betelgeuse.akkacommons.test.DbCrateTest
 import org.scalatest.{FeatureSpec, GivenWhenThen}
 
@@ -31,9 +34,10 @@ class CrateDbLocksTest extends FeatureSpec
   with GivenWhenThen
   with DbCrateTest {
 
-  val dbLocks = new CrateDbLocks()
-
   implicit val ec: ExecutionContext = ExecutionContext.global
+  implicit val scheduler: Scheduler = (new VirtualTime).scheduler
+
+  val dbLocks = new CrateDbLocks()
 
 
   feature("The user can perform locking operations in crate database") {
@@ -107,7 +111,7 @@ class CrateDbLocksTest extends FeatureSpec
 
         When("other tries to lock 'LOCK'")
         Then("Exception is raised")
-        assertThrows[RuntimeException](other.lock("LOCK", localTxExecutor, DbLocksSettings(lockAttemptCount = 2)))
+        assertThrows[RuntimeException](other.lock("LOCK", localTxExecutor, DbLocksSingle(lockAttemptCount = 2)))
 
 
         When("other unlocks 'LOCK'")

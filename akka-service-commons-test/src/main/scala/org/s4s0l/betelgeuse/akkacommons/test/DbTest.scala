@@ -16,6 +16,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.test
 
+import com.miguno.akka.testing.VirtualTime
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
@@ -46,7 +47,7 @@ trait DbTest extends BeforeAndAfterAll {
     val config = loadConfig().withFallback(loadFallbackConfig())
     if (isCleanupOn)
       DbTest.runWithoutSchemaMigration(config, DatabaseName, cleanUp)
-    db = new BetelgeuseDb(config)
+    db = new BetelgeuseDb(config)(scala.concurrent.ExecutionContext.Implicits.global, (new VirtualTime).scheduler)
     db.loadGlobalSettings()
     db.setup(Symbol(DatabaseName))
   }
@@ -85,7 +86,7 @@ object DbTest {
          |db.$databaseName.locks.enabled = false
          """.stripMargin)
     val usedConfig = prepareConfig.withFallback(config)
-    val prepareConnection = new BetelgeuseDb(usedConfig)
+    val prepareConnection = new BetelgeuseDb(usedConfig)(concurrent.ExecutionContext.Implicits.global, (new VirtualTime).scheduler) // migrations.enabled=false
     try {
       prepareConnection.loadGlobalSettings()
       prepareConnection.setup(Symbol(databaseName))
