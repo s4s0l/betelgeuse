@@ -17,6 +17,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.serialization
 
+import java.util
+
 import akka.actor.ActorSystem
 import akka.serialization.{Serialization, SerializationExtension, Serializer}
 
@@ -63,6 +65,7 @@ object SimpleSerializer {
       }
     }
   }
+
 
   /**
     * creates simple serializer facade for akka actorSystem serialization extension

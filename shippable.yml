@@ -29,6 +29,36 @@ build:
     - docker volume rm roach-test-db || true
     - docker volume rm roach-test-db2 || true
     - docker volume rm crate-test-db || true
+    - docker service rm zookeeper || true
+    - docker service rm kafka || true
+    - docker network rm zookeeper || true
+    - docker network rm kafka || true
+    - docker volume rm kafka_vol || true
+    - docker network create --driver overlay --attachable zookeeper
+    - docker network create --driver overlay --attachable kafka
+    - >
+      docker service create \
+         --name zookeeper \
+         --network kafka \
+         --network zookeeper \
+         --mode global \
+         --publish 2182:2182 \
+         --hostname zookeeper \
+         zookeeper
+    - >
+      docker service create \
+        --name kafka \
+        --network kafka \
+        --network zookeeper \
+        --restart-condition on-failure \
+        --restart-max-attempts 3 \
+        --log-driver=json-file \
+        --publish 9092:9092 \
+        --mount type=volume,src=kafka_vol,target=/var/lib/kafka/data \
+        --env KAFKA_BROKER_ID=1 \
+        --env KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+        --env KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
+        confluentinc/cp-kafka:3.1.2
     - >
       docker service create \
           --name cockroachdb \

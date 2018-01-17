@@ -50,6 +50,7 @@ dependencies {
     compile 'io.crate:crate-jdbc:2.2.0'
     compile 'org.postgresql:postgresql:42.1.4'
     compile "org.flywaydb:flyway-core:5.0.0-FlakMfix"
+    compile group: "com.typesafe.akka", name: "akka-stream-kafka_${scalaBinaryVersion}", version: "0.18"
     compile "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
     compile "com.fasterxml.jackson.module:jackson-module-scala_${scalaBinaryVersion}:${jacksonVersion}"
     compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
