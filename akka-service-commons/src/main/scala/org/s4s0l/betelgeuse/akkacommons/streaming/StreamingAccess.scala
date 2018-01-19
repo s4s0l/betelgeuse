@@ -30,7 +30,7 @@ import scala.reflect.ClassTag
 /**
   * @author Maciej Flak
   */
-sealed trait StreamingAccess[K, V] {
+trait StreamingAccess[K, V] {
 
   val consumer: KafkaConsumer[K, V]
 

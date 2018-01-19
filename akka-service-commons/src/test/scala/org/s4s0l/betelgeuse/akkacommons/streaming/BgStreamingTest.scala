@@ -35,7 +35,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
     scenario("someone forgets to pass type parameters") {
       new WithService(aService) {
         assertThrows[IllegalArgumentException] {
-          aService.service.getKafkaAccess("kafka1").asInstanceOf[KafkaAccess[String, String]]
+          aService.service.createKafkaAccess("kafka1").asInstanceOf[KafkaAccess[String, String]]
         }
       }
     }
@@ -43,16 +43,16 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
     scenario("we get kafka instance not at the specified path") {
       new WithService(aService) {
         assertThrows[ConfigException] {
-          aService.service.getKafkaAccess[String, String]("kafka-top-level").asInstanceOf[KafkaAccess[String, String]]
+          aService.service.createKafkaAccess[String, String]("kafka-top-level").asInstanceOf[KafkaAccess[String, String]]
         }
       }
     }
 
     scenario("we have multiple kafka instances") {
       new WithService(aService) {
-        val access1: KafkaAccess[String, String] = aService.service.getKafkaAccess[String, String]("kafka1").asInstanceOf[KafkaAccess[String, String]]
-        val access2: KafkaAccess[String, String] = aService.service.getKafkaAccess[String, String]("kafka2").asInstanceOf[KafkaAccess[String, String]]
-        val kafkaCustom: KafkaAccess[String, String] = aService.service.getKafkaAccess[String, String]("kafkaCustom").asInstanceOf[KafkaAccess[String, String]]
+        val access1: KafkaAccess[String, String] = aService.service.createKafkaAccess[String, String]("kafka1").asInstanceOf[KafkaAccess[String, String]]
+        val access2: KafkaAccess[String, String] = aService.service.createKafkaAccess[String, String]("kafka2").asInstanceOf[KafkaAccess[String, String]]
+        val kafkaCustom: KafkaAccess[String, String] = aService.service.createKafkaAccess[String, String]("kafkaCustom").asInstanceOf[KafkaAccess[String, String]]
 
 
         assert(producersAreTheSame(access1, access2))
@@ -75,7 +75,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
         When("We create kafka serialization context for kafkaAccess")
         implicit val kafkaSerializers: KafkaSerializers = KafkaSerializers(default, kafkaValueSerializer)
-        val access1: KafkaAccess[String, Apple] = aService.service.getKafkaAccess[String, Apple]("kafka1").asInstanceOf[KafkaAccess[String, Apple]]
+        val access1: KafkaAccess[String, Apple] = aService.service.createKafkaAccess[String, Apple]("kafka1").asInstanceOf[KafkaAccess[String, Apple]]
 
 
         val apple = Apple("delicious")
@@ -116,7 +116,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
         implicit val patienceConfig: PatienceConfig = PatienceConfig(2 second, 300 millis)
         val topic: String = getUniqueTopic
 
-        val kafka: StreamingAccess[KEY, MSG] = aService.service.defaultKafkaAccess[KEY, MSG]
+        val kafka: StreamingAccess[KEY, MSG] = aService.service.createDefaultKafkaAccess[KEY, MSG]
         val msg = "hello world from test!"
 
         val push: Future[Done] = kafka.producer.single(topic, List(msg))
@@ -153,7 +153,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
         val topic: String = getUniqueTopic
 
-        val kafka: StreamingAccess[Array[Byte], String] = aService.service.getKafkaAccess[Array[Byte], String]("kafka1")
+        val kafka: StreamingAccess[Array[Byte], String] = aService.service.createKafkaAccess[Array[Byte], String]("kafka1")
 
         val mappingFlow: Flow[String, ProducerRecord[Array[Byte], String], NotUsed] = Flow[String].map(new ProducerRecord(topic, _))
 
