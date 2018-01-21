@@ -54,7 +54,7 @@ class OriginStatePublishingRestProtocolTest extends
   BgTestRoach with ScalatestRouteTest with BgTestJackson {
 
 
-  implicit def default(implicit system: ActorSystem): RouteTestTimeout = RouteTestTimeout(5.second)
+  implicit def default(implicit system: ActorSystem): RouteTestTimeout = RouteTestTimeout(10.second)
 
   implicit val self: ActorRef = ActorRef.noSender
 
@@ -252,7 +252,7 @@ class OriginStatePublishingRestProtocolTest extends
 
     }
 
-    restProtocol.createRoute(aService.execContext, aService.self, aService.service.httpMarshalling)
+    restProtocol.createRoute(aService.execContext, aService.self, aService.service.httpMarshalling, 15.seconds)
   }
 
 
