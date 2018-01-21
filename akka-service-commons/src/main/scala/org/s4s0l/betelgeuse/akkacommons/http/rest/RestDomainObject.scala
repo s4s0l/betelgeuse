@@ -98,7 +98,7 @@ object RestDomainObject {
       case Success(RestCommandOk(value, correlationId, httpStatusCode)) =>
         respondWithHeader(headers.RawHeader("correlationId", correlationId)) {
           if (value == NoPayload)
-            complete(httpStatusCode)
+            complete(httpStatusCode -> HttpEntity.Empty)
           else {
             implicit val toEntity: ToEntityMarshaller[X] = toEntityMarshaller[X]
             complete(httpStatusCode -> value)

@@ -41,9 +41,10 @@ import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRo
 import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future, Promise}
 import scala.language.postfixOps
+import scala.util.Success
 
 /**
   * @author Marcin Wielgus
@@ -88,9 +89,7 @@ class OriginStatePublishingRestProtocolTest extends
       Then("Publish is not possible")
       Put(s"/v1/objects/test2/$id/actions/publish/invoke?versionedId=$id@1") ~> route ~> check {
         status shouldEqual StatusCodes.InternalServerError
-        //todo: when there will be some useful error handler then check if this error was in fact
-        //what we expect
-        //        responseAs[String] should fullyMatch regex """No!"""
+        responseAs[String] shouldBe """{"error":"No!"}"""
       }
 
       Then("We see no publication in publication statuses action")
@@ -107,7 +106,23 @@ class OriginStatePublishingRestProtocolTest extends
       implicit val fM: FromEntityUnmarshaller[Id] = aService.service.httpMarshalling.unmarshaller[Id]
 
       Given("Origin state publishing Actor")
-      val distributor = stub[StateDistributorProtocol[SomeValue]]
+      var publishCount: Int = 0
+      val beforeReplyPromise = Promise[Boolean]()
+      val afterReplyPromise = Promise[Boolean]()
+
+      val distributor = new StateDistributorProtocol[SomeValue] {
+
+        override def stateChanged(msg: StateDistributorProtocol.OriginStateChanged[SomeValue])(implicit sender: ActorRef): Unit = {}
+
+        override def deliverStateChange(from: AtLeastOnceDelivery)(versionedId: VersionedId, value: SomeValue, expectedConfirmIn: FiniteDuration): Unit = {
+          publishCount = publishCount + 1
+          beforeReplyPromise.complete(Success(true))
+          afterReplyPromise.future.onComplete(_ =>
+            from.self ! OriginStateDistributor.StateDistributorProtocol.OriginStateChangedOk(1L, versionedId)
+          )
+
+        }
+      }
       val versionedEntity = OriginStatePublishingActor.startSharded[SomeValue](Settings("test1", distributor))(aService.service.clusteringShardingExtension)
       val route = createRoute("test1", versionedEntity)
 
@@ -131,6 +146,8 @@ class OriginStatePublishingRestProtocolTest extends
         responseAs[String] shouldBe """"""
       }
 
+      Await.ready(beforeReplyPromise.future, 10.seconds)
+
       Then("We see one publication in publication statuses action")
       Get(s"/v1/objects/test1/$id/actions/publication-status/invoke") ~> route ~> check {
         status shouldEqual StatusCodes.OK
@@ -138,8 +155,17 @@ class OriginStatePublishingRestProtocolTest extends
       }
 
       And("Publication request was called only once by an actor")
-      (distributor.deliverStateChange(_: AtLeastOnceDelivery)(_: VersionedId, _: SomeValue, _: FiniteDuration))
-        .verify(*, VersionedId(id, 2), SomeValue("value2"), *)
+      assert(publishCount == 1)
+
+      afterReplyPromise.complete(Success(true))
+
+      Then("We see one publication in publication statuses action marked as completed!")
+      Thread.sleep(1000)
+      Get(s"/v1/objects/test1/$id/actions/publication-status/invoke") ~> route ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String] shouldBe s"""{"statuses":[{"versionedId":{"id":"$id","version":2},"completed":true}]}"""
+      }
+
     }
   }
 
