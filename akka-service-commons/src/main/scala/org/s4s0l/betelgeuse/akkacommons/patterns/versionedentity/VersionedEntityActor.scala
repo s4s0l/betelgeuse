@@ -53,7 +53,7 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
   import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events._
 
   override def receiveRecover: Receive = {
-    case e: Event if processEvent(true).isDefinedAt(e) => processEvent(true)
+    case e: Event if processEvent(true).isDefinedAt(e) => processEvent(true).apply(e)
     case _: RecoveryCompleted => recoveryCompleted()
   }
 
@@ -69,6 +69,7 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
             sender() ! ValueOk(v, value)
           case None =>
             sender() ! ValueNotOk(v, ValueMissingException(v))
+            shardedPassivate()
         }
       case GetLatestValue(id, messageId) =>
         val v = VersionedId(id, currentVersion)
@@ -77,6 +78,7 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
             sender() ! ValueOk(messageId, (v, value))
           case None =>
             sender() ! ValueNotOk(messageId, ValueMissingException(v))
+            shardedPassivate()
         }
       case cmd@SetValue(id, newValue, _) =>
         val v = VersionedId(id, currentVersion + 1)
@@ -106,7 +108,7 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
     */
   protected def isVersionAccepted(version: VersionedId): Boolean = version.version == currentVersion + 1
 
-  def processEvent(recover: Boolean): PartialFunction[Any, Unit] = {
+  def processEvent(recover: Boolean): PartialFunction[Event, Unit] = {
     case ve@ValueEvent(_, versionedId, value) =>
       if (versionedId.version > currentVersion) {
         currentVersion = versionedId.version
@@ -291,7 +293,7 @@ object VersionedEntityActor {
     case class SetValueNotOk(correlationId: Uuid, ex: Throwable) extends ValueUpdateResult with NotOkResult[Uuid, VersionedId]
 
 
-    case class ValueMissingException(versionedId: VersionedId) extends Exception
+    case class ValueMissingException(versionedId: VersionedId) extends Exception("Not Found")
 
     /**
       * Contains current entity version, returned back as answer to [[SetVersionedValue]] when
@@ -303,9 +305,9 @@ object VersionedEntityActor {
 
   }
 
-  private object Events {
+  object Events {
 
-    sealed trait Event extends JacksonJsonSerializable
+    trait Event extends JacksonJsonSerializable
 
     case class ValueEvent[T](uuid: Uuid,
                              versionedId: VersionedId,

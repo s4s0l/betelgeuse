@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.util.ByteString
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.core.{JsonGenerator, JsonParser}
 import com.fasterxml.jackson.databind.annotation.{JsonDeserialize, JsonSerialize}
 import com.fasterxml.jackson.databind.{DeserializationContext, SerializerProvider}
@@ -73,6 +74,7 @@ class Payload private(val contents: Either[ByteString, Array[Byte]]) extends Ser
     Payload.asObject(this)(classTag, serializer)
   }
 
+  @JsonIgnore
   def isEmpty: Boolean = _length == 0
 
   def canEqual(other: Any): Boolean = other.isInstanceOf[Payload]

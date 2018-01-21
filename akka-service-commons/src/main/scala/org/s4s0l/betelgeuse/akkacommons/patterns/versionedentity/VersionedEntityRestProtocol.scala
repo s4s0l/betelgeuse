@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,8 +23,10 @@
 package org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity
 
 import akka.actor.ActorRef
+import akka.http.scaladsl.model.StatusCodes
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject
-import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.{BaseProtocolSettings, _}
+import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.JournalReader
 import org.s4s0l.betelgeuse.akkacommons.utils.QA
@@ -37,7 +39,7 @@ import scala.language.postfixOps
   *
   * @author Marcin Wielgus
   */
-trait VersionedEntityRestProtocol[T <: AnyRef, V] extends BaseProtocol[String, T, V]
+trait VersionedEntityRestProtocol[T <: AnyRef, V] extends DomainObjectProtocol[String, T, V]
   with Gets[String, T, V]
   with Updates[String, T, V]
   with Creates[String, T, V] {
@@ -45,10 +47,11 @@ trait VersionedEntityRestProtocol[T <: AnyRef, V] extends BaseProtocol[String, T
 
   // todo it should return version as header
   override def get(msg: Get[String, V])
-                  (implicit executionContext: ExecutionContext, sender: ActorRef)
+                  (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
   : Future[RestCommandResult[T]] = {
-    versionedEntity.getLatestValue(GetLatestValue(msg.id, msg.messageId)).map {
+    versionedEntityActorProtocol.getLatestValue(GetLatestValue(msg.id, msg.messageId)).map {
       case ValueOk(correlationId, (_, value)) => RestCommandOk(value.asInstanceOf[T], correlationId)
+      case ValueNotOk(correlationId, ex: ValueMissingException) => RestCommandNotOk[T](ex, correlationId, StatusCodes.NotFound)
       case ValueNotOk(correlationId, ex) => RestCommandNotOk[T](ex, correlationId)
     }.recover { case ex: Throwable => RestCommandNotOk[T](ex, msg.messageId) }
   }
@@ -57,20 +60,16 @@ trait VersionedEntityRestProtocol[T <: AnyRef, V] extends BaseProtocol[String, T
   // or from optional T => VersionedId mapping, if any of it is present then
   // it should do setVersionedValue
   override def update(msg: Update[String, T, V])
-                     (implicit executionContext: ExecutionContext, sender: ActorRef)
+                     (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
   : Future[RestCommandResult[String]] = {
-    versionedEntity.setValue(SetValue(msg.id, msg.value, msg.messageId)).map {
+    versionedEntityActorProtocol.setValue(SetValue(msg.id, msg.value, msg.messageId)).map {
       case SetValueOk(correlationId, _) => RestCommandOk(msg.id, correlationId)
       case SetValueNotOk(correlationId, ex) => RestCommandNotOk[String](ex, correlationId)
     }.recover { case ex: Throwable => RestCommandNotOk[String](ex, msg.messageId) }
   }
 
-  protected def versionedEntity: VersionedEntityActor.Protocol[T]
-
-  protected def journalRead: JournalReader
-
   override def list(msg: GetList[V])
-                   (implicit executionContext: ExecutionContext, sender: ActorRef)
+                   (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
   : Future[RestCommandResult[List[String]]] = {
     journalRead.allActorsAsync(domainObjectType)(journalRead.dbDispatcher)
       .map(x => RestCommandOk(x.map(_.uniqueId).toList, msg.messageId))
@@ -78,32 +77,20 @@ trait VersionedEntityRestProtocol[T <: AnyRef, V] extends BaseProtocol[String, T
   }
 
   override def create(msg: Create[String, T, V])
-                     (implicit executionContext: ExecutionContext, sender: ActorRef)
+                     (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
   : Future[RestCommandResult[String]] = {
-    versionedEntity.setVersionedValue(SetVersionedValue(VersionedId(msg.id, 1), msg.value, msg.messageId)).map {
+    versionedEntityActorProtocol.setVersionedValue(SetVersionedValue(VersionedId(msg.id, 1), msg.value, msg.messageId)).map {
       case SetValueOk(correlationId, versionedId) => RestCommandOk(versionedId.id, correlationId)
       case SetValueNotOk(correlationId, ex) => RestCommandNotOk[String](ex, correlationId)
     }.recover { case ex: Throwable => RestCommandNotOk[String](ex, msg.messageId) }
   }
+
+  protected def journalRead: JournalReader
+
+  protected def versionedEntityActorProtocol: VersionedEntityActor.Protocol[T]
 
   override def generateId: String = QA.uuid
 
 
 }
 
-
-object VersionedEntityRestProtocol {
-  def apply[T <: AnyRef, V](actorProtocol: VersionedEntityActor.Protocol[T], settings: BaseProtocolSettings[String, T, V])
-                           (implicit journalReaderToUse: JournalReader)
-  : VersionedEntityRestProtocol[T, V]
-  = new VersionedEntityRestProtocol[T, V]() {
-
-    override def versionedEntity: VersionedEntityActor.Protocol[T] = actorProtocol
-
-    override def journalRead: JournalReader = journalReaderToUse
-
-    override val baseProtocolSettings: BaseProtocolSettings[String, T, V] = settings
-  }
-
-
-}

@@ -24,9 +24,11 @@ package org.s4s0l.betelgeuse.akkacommons.http.rest
 
 import akka.actor.ActorRef
 import akka.http.scaladsl.marshalling.ToEntityMarshaller
-import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.MediaTypes
+import akka.http.scaladsl.model.headers.{RawHeader, `Content-Type`}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.{BaseProtocolSettings, _}
+import akka.util.Timeout
+import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject._
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObjectTest.{AlwaysOk, SomeValue}
 import org.s4s0l.betelgeuse.akkacommons.serialization.{HttpMarshalling, JacksonJsonSerializer}
 import org.s4s0l.betelgeuse.akkacommons.utils.QA
@@ -46,19 +48,21 @@ class RestDomainObjectTest extends FeatureSpec with ScalatestRouteTest with Matc
   feature("Actor protocols should be able to self create http routes for domain object actors") {
     scenario("When protocol is successful responses are delivered to the client") {
 
-      val route = new AlwaysOk(new BaseProtocolSettings(1, "always-ok")).createRoute
+      val route = new AlwaysOk(1, "always-ok", new DomainObjectSettings()).createRoute
       implicit val toM: ToEntityMarshaller[SomeValue] = marshalling.marshaller[SomeValue]
 
       Get("/1/objects/always-ok") ~> route ~> check {
         responseAs[String] shouldEqual """["ok"]"""
         header("correlationId") shouldBe defined
+        header[`Content-Type`] shouldBe Some(`Content-Type`(MediaTypes.`application/json`))
       }
       Get("/1/objects/always-ok/6") ~> route ~> check {
-        responseAs[String] shouldEqual """{"value":"get:6"}"""
         header("correlationId") shouldBe defined
+        responseAs[String] shouldEqual """{"value":"get:6"}"""
+        header[`Content-Type`] shouldBe Some(`Content-Type`(MediaTypes.`application/json`))
       }
-
       Post("/1/objects/always-ok", SomeValue("x")) ~> route ~> check {
+        header[`Content-Type`] shouldBe Some(`Content-Type`(MediaTypes.`application/json`))
         responseAs[String] should startWith("""{"id":"create:""")
         responseAs[String] should endWith(""":x"}""")
         header("correlationId") shouldBe defined
@@ -85,7 +89,7 @@ class RestDomainObjectTest extends FeatureSpec with ScalatestRouteTest with Matc
       }
 
       info("should accept query params as action parameters")
-      Get("/1/objects/always-ok/8/actions/query-action-1/invoke?param1=aaa") ~> route ~> check {
+      Get("/1/objects/always-ok/8/actions/query-action-1/invoke?param1=aaa&param2=2") ~> route ~> check {
         responseAs[String] shouldEqual """"qa1:8:aaa""""
         header("correlationId") shouldBe defined
       }
@@ -123,41 +127,42 @@ class RestDomainObjectTest extends FeatureSpec with ScalatestRouteTest with Matc
 
 object RestDomainObjectTest {
 
-  class AlwaysOk(val baseProtocolSettings: BaseProtocolSettings[String, SomeValue, Int])
-    extends BaseProtocol[String, SomeValue, Int]
+  class AlwaysOk(val version: Int, val domainObjectType: String, val domainObjectSettings: DomainObjectSettings[String, SomeValue, Int])
+    extends RestDomainObject.DomainObjectProtocol[String, SomeValue, Int]
       with Gets[String, SomeValue, Int]
       with Updates[String, SomeValue, Int]
       with Creates[String, SomeValue, Int]
       with Deletes[String, SomeValue, Int]
       with Actions[String, SomeValue, Int] {
+
     override def get(msg: Get[String, Int])
-                    (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[SomeValue]] =
+                    (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout): Future[RestCommandResult[SomeValue]] =
       Future.successful(RestCommandOk(SomeValue(s"get:${msg.id}"), msg.messageId))
 
     override def list(msg: GetList[Int])
-                     (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[List[String]]] =
+                     (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout): Future[RestCommandResult[List[String]]] =
       Future.successful(RestCommandOk(List("ok"), msg.messageId))
 
     override def update(msg: Update[String, SomeValue, Int])
-                       (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
+                       (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"update:${msg.id}", msg.messageId))
 
     override def generateId: String = QA.uuid
 
     override def create(msg: Create[String, SomeValue, Int])
-                       (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
+                       (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"create:${msg.id}:${msg.value.value}", msg.messageId))
 
     override def delete(msg: Delete[String, Int])
-                       (implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[String]] =
+                       (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout): Future[RestCommandResult[String]] =
       Future.successful(RestCommandOk(s"delete:${msg.id}", msg.messageId))
 
-    override def actions: Map[ActionDesc, (Action[String, Int], ExecutionContext, ActorRef) => Future[RestCommandResult[_]]] =
+    override def actions: Map[ActionDesc, ActionType] =
       super.actions ++ Map(
-        Query("query-action-1", Set("param1", "param2")) -> (queryAction1(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
-        Query("query-action-2", Set("xxx")) -> (queryAction2(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
-        Idempotent("idempotent-action") -> (idempotentAction(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
-        NonIdempotent("non-idempotent-action") -> (nonIdempotentAction(_: Action[String, Int])(_: ExecutionContext, _: ActorRef)),
+        Query("query-action-1", Set("param1", "param2")) -> ((a: Action[String, Int], c: RestProtocolContext) => queryAction1(a)(c.executionContext, c.sender)),
+        Query("query-action-2", Set("xxx")) -> ((a: Action[String, Int], c: RestProtocolContext) => queryAction2(a)(c.executionContext, c.sender)),
+        Idempotent("idempotent-action") -> ((a: Action[String, Int], c: RestProtocolContext) => idempotentAction(a)(c.executionContext, c.sender)),
+        NonIdempotent("non-idempotent-action") -> ((a: Action[String, Int], c: RestProtocolContext) => nonIdempotentAction(a)(c.executionContext, c.sender))
       )
 
 

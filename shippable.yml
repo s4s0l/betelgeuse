@@ -25,22 +25,21 @@ build:
     - docker info
     - docker service ls
     - docker service rm cockroachdb || true
-    - docker service rm crate || true
     - docker volume rm roach-test-db || true
     - docker volume rm roach-test-db2 || true
+
+    - docker service rm crate || true
     - docker volume rm crate-test-db || true
+
     - docker service rm zookeeper || true
     - docker service rm kafka || true
-    - docker network rm zookeeper || true
-    - docker network rm kafka || true
     - docker volume rm kafka_vol || true
-    - docker network create --driver overlay --attachable zookeeper
-    - docker network create --driver overlay --attachable kafka
+
+    - docker network create --driver overlay --attachable intservnet || true
     - >
       docker service create \
          --name zookeeper \
-         --network kafka \
-         --network zookeeper \
+         --network intservnet \
          --mode global \
          --publish 2182:2182 \
          --hostname zookeeper \
@@ -48,8 +47,7 @@ build:
     - >
       docker service create \
         --name kafka \
-        --network kafka \
-        --network zookeeper \
+        --network intservnet \
         --restart-condition on-failure \
         --restart-max-attempts 3 \
         --log-driver=json-file \

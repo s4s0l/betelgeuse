@@ -28,9 +28,10 @@ import akka.pattern.pipe
 import akka.persistence.AtLeastOnceDelivery
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.Protocol._
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.{BeforePublishValidationNotOk, BeforePublishValidationOk, PublishEvent, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor._
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events.Event
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.ValueMissingException
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.QA.{Uuid, UuidQuestion}
 import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, QA}
 
@@ -74,17 +75,30 @@ class OriginStatePublishingActor[T](settings: Settings[T])
             }.pipeTo(self)(sender())
         }
       } else {
-        sender() ! PublishVersionNotOk(new Exception(s"No value at version $versionedId"), messageId)
+        sender() ! PublishVersionNotOk(ValueMissingException(versionedId), messageId)
+        shardedPassivate()
       }
     case GetPublicationStatus(_, messageId) =>
-      sender() ! GetPublicationStatusOk(PublicationStatuses(publishStatus.map(e => PublicationStatus(e._1, e._2)).toList), messageId)
+      if (getCurrentVersionId.version == 0) {
+        sender() ! GetPublicationStatusNotOk(ValueMissingException(getCurrentVersionId), messageId)
+        shardedPassivate()
+      } else {
+        sender() ! GetPublicationStatusOk(PublicationStatuses(publishStatus.map(e => PublicationStatus(e._1, e._2)).toList), messageId)
+      }
   }
 
-  override def processEvent(recover: Boolean): PartialFunction[Any, Unit] = super.processEvent(recover) orElse {
+  override def processEvent(recover: Boolean): PartialFunction[Event, Unit] = super.processEvent(recover) orElse {
     case PublishEvent(messageId, versionedId) =>
       publishStatus(versionedId) = false
       distributeStateChange(versionedId, getValueAtVersion(versionedId).get)
-      sender() ! PublishVersionOk(messageId)
+      if (!recover)
+        sender() ! PublishVersionOk(messageId)
+  }
+
+
+  override protected def distributeStateChanged(versionedId: VersionedId): Unit = {
+    super.distributeStateChanged(versionedId)
+    publishStatus(versionedId) = true
   }
 
   /**
@@ -97,7 +111,7 @@ class OriginStatePublishingActor[T](settings: Settings[T])
     *
     * This method can return Some(Exception) to prevent publication or throw an Exception
     */
-  protected def validatePublication(versionedId: VersionedId): Future[Option[Throwable]] = {
+  protected def validatePublication(versionedId: VersionedId): Future[Option[ValidationException]] = {
     Future.successful(None)
   }
 
@@ -109,6 +123,7 @@ class OriginStatePublishingActor[T](settings: Settings[T])
 
 
 object OriginStatePublishingActor {
+
 
   def startSharded[T](settings: Settings[T], propsMapper: Props => Props = identity)(implicit shardingExt: BgClusteringShardingExtension)
   : Protocol[T] = {
@@ -151,7 +166,7 @@ object OriginStatePublishingActor {
   }
 
 
-  private case class PublishEvent(messageId: String, versionedId: VersionedId) extends JacksonJsonSerializable
+  private case class PublishEvent(messageId: String, versionedId: VersionedId) extends Event
 
   final case class Settings[T](name: String, distributor: OriginStateDistributor.StateDistributorProtocol[T], stateDistributionRetryInterval: FiniteDuration = 30 seconds)
 
@@ -188,5 +203,6 @@ object OriginStatePublishingActor {
 
   }
 
+  class ValidationException(msg: String) extends Exception(msg)
 
 }

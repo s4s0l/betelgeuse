@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 package org.s4s0l.betelgeuse.akkacommons.utils
 
 import akka.actor.Actor
-import akka.cluster.sharding.ShardRegion.Passivate
 
 /**
   * @author Marcin Wielgus
@@ -31,19 +30,13 @@ trait TimeoutShardedActor extends TimeoutActor with ShardedActor {
     throw new RuntimeException("Unsupported, should not happen, timeoutHandlerReceiver is overrided so it should never be called!")
   }
 
-  def onPasivationRequest():Unit ={}
 
-  def onPassivationCallback() : Unit= {}
 
   override val timeoutHandlerReceiver: Actor.Receive = {
     case x if x == timeoutSelfMessage =>
       log.debug("Actor timed out, passivating.")
-      onPasivationRequest()
-      context.parent ! Passivate(stopMessage = PassivationCallback)
-    case PassivationCallback =>
-      onPassivationCallback()
-      context.stop(self)
-      log.debug("Actor passivation callback received, stopping.")
+      shardedPassivate()
+
   }
 }
 
