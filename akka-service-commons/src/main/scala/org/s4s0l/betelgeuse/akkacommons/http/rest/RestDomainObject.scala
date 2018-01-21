@@ -358,8 +358,13 @@ object RestDomainObject {
             //todo make it accept params in request body also, as simple map
             parameterMap { paramMap =>
               val params = paramMap ++ headers.filter(it => e._1.params.contains(it._1))
+              val missing = e._1.params.filter(it => !params.contains(it) || params(it).isEmpty)
               val msg = Action(version, id, e._1.name, params, headers)
-              onComplete(e._2(msg, context).recover(withRecovery(msg.messageId)).asInstanceOf[Future[RestCommandResult[AnyRef]]])(completeWithPayload)
+              if (missing.isEmpty) {
+                onComplete(e._2(msg, context).recover(withRecovery(msg.messageId)).asInstanceOf[Future[RestCommandResult[AnyRef]]])(completeWithPayload)
+              } else {
+                failureRoute(RestCommandNotOk(new Exception(s"Missing action parameters: ${missing.mkString(", ")}"), msg.messageId, StatusCodes.BadRequest))
+              }
             }
           }
       }

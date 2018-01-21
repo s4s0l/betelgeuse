@@ -22,7 +22,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
-import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props}
 import akka.http.scaladsl.marshalling.ToEntityMarshaller
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Route
@@ -34,7 +34,8 @@ import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.{DomainObjectSettings, Id}
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObjectTest.SomeValue
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.StateDistributorProtocol
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.{Protocol, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.{Protocol, Settings, ValidationException}
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{GetValueVersion, ValueVersionResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedEntityRestProtocol, VersionedId}
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.JournalReader
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
@@ -71,7 +72,7 @@ class OriginStatePublishingRestProtocolTest extends
       val distributor = stub[StateDistributorProtocol[SomeValue]]
       val versionedEntity: OriginStatePublishingActor.Protocol[SomeValue] = {
         val ref = aService.service.clusteringShardingExtension.start("test2", Props(new OriginStatePublishingActor(Settings("test2", distributor)) {
-          override protected def validatePublication(versionedId: VersionedId): Future[Option[Exception]] = Future.successful(Some(new Exception("No!")))
+          override protected def validatePublication(versionedId: VersionedId): Future[Option[ValidationException]] = Future.successful(Some(new ValidationException("No!")))
         }), VersionedEntityActor.entityExtractor orElse OriginStatePublishingActor.entityExtractor)
         Protocol(ref, "test2")
       }
@@ -87,8 +88,8 @@ class OriginStatePublishingRestProtocolTest extends
 
 
       Then("Publish is not possible")
-      Put(s"/v1/objects/test2/$id/actions/publish/invoke?versionedId=$id@1") ~> route ~> check {
-        status shouldEqual StatusCodes.InternalServerError
+      Put(s"/v1/objects/test2/$id/actions/publish/invoke?version=1") ~> route ~> check {
+        status shouldEqual StatusCodes.BadRequest
         responseAs[String] shouldBe """{"error":"No!"}"""
       }
 
@@ -101,16 +102,51 @@ class OriginStatePublishingRestProtocolTest extends
 
     }
 
+    scenario("Publication state is restored") {
+      implicit val toM: ToEntityMarshaller[SomeValue] = aService.service.httpMarshalling.marshaller[SomeValue]
+      implicit val fM: FromEntityUnmarshaller[Id] = aService.service.httpMarshalling.unmarshaller[Id]
+
+      Given("Origin state publishing Actor that always works")
+      val distributor = stub[StateDistributorProtocol[SomeValue]]
+      val ref = aService.service.clusteringShardingExtension.start("test3", Props(new OriginStatePublishingActor(Settings("test3", distributor))), VersionedEntityActor.entityExtractor orElse OriginStatePublishingActor.entityExtractor)
+      val versionedEntity: OriginStatePublishingActor.Protocol[SomeValue] = Protocol(ref, "test3")
+      val route = createRoute("test3", versionedEntity)
+
+
+      When("We create some value")
+      val id: String = Post("/v1/objects/test3", SomeValue("value1")) ~> route ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String] should fullyMatch regex """\{"id":"[a-z0-9\-]+"\}"""
+        responseAs[Id].id
+      }
+      And("We publish change")
+      Put(s"/v1/objects/test3/$id/actions/publish/invoke?version=1") ~> route ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String] shouldBe """"""
+      }
+      And("We poison kill actor")
+      ref.tell(GetValueVersion(id, "123"), aService.self)
+      aService.testKit.expectMsg(ValueVersionResult("123", VersionedId(id, 1)))
+      aService.testKit.lastSender ! PoisonPill
+
+
+      And("If we ask for publication status")
+      Get(s"/v1/objects/test3/$id/actions/publication-status/invoke") ~> route ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String] shouldBe s"""{"statuses":[{"versionedId":{"id":"$id","version":1},"completed":false}]}"""
+      }
+
+    }
+
     scenario("Publication is sent only on explicit request") {
       implicit val toM: ToEntityMarshaller[SomeValue] = aService.service.httpMarshalling.marshaller[SomeValue]
       implicit val fM: FromEntityUnmarshaller[Id] = aService.service.httpMarshalling.unmarshaller[Id]
 
       Given("Origin state publishing Actor")
-      var publishCount: Int = 0
-      val beforeReplyPromise = Promise[Boolean]()
-      val afterReplyPromise = Promise[Boolean]()
-
       val distributor = new StateDistributorProtocol[SomeValue] {
+        var publishCount: Int = 0
+        val beforeReplyPromise: Promise[Boolean] = Promise[Boolean]()
+        val afterReplyPromise: Promise[Boolean] = Promise[Boolean]()
 
         override def stateChanged(msg: StateDistributorProtocol.OriginStateChanged[SomeValue])(implicit sender: ActorRef): Unit = {}
 
@@ -140,13 +176,35 @@ class OriginStatePublishingRestProtocolTest extends
         responseAs[String] shouldBe """"""
       }
 
+      When("We publish without version")
+      Put(s"/v1/objects/test1/$id/actions/publish/invoke") ~> route ~> check {
+        Then("We expect it to fail")
+        responseAs[String] shouldBe """{"error":"Missing action parameters: version"}"""
+        status shouldEqual StatusCodes.BadRequest
+      }
+
+      When("We publish with wrong version")
+      Put(s"/v1/objects/test1/$id/actions/publish/invoke?version=notANumber") ~> route ~> check {
+        Then("We expect it to fail")
+        responseAs[String] shouldBe """{"error":"Invalid version param."}"""
+        status shouldEqual StatusCodes.BadRequest
+      }
+
+      When("We publish with wrong id")
+      Put(s"/v1/objects/test1/$id-wrong/actions/publish/invoke?version=12") ~> route ~> check {
+        Then("We expect it to fail")
+        responseAs[String] shouldBe """{"error":"Not Found"}"""
+        status shouldEqual StatusCodes.NotFound
+      }
+
+
       And("We publish change")
-      Put(s"/v1/objects/test1/$id/actions/publish/invoke?versionedId=$id@2") ~> route ~> check {
+      Put(s"/v1/objects/test1/$id/actions/publish/invoke?version=2") ~> route ~> check {
         status shouldEqual StatusCodes.OK
         responseAs[String] shouldBe """"""
       }
 
-      Await.ready(beforeReplyPromise.future, 10.seconds)
+      Await.ready(distributor.beforeReplyPromise.future, 10.seconds)
 
       Then("We see one publication in publication statuses action")
       Get(s"/v1/objects/test1/$id/actions/publication-status/invoke") ~> route ~> check {
@@ -155,15 +213,22 @@ class OriginStatePublishingRestProtocolTest extends
       }
 
       And("Publication request was called only once by an actor")
-      assert(publishCount == 1)
+      assert(distributor.publishCount == 1)
 
-      afterReplyPromise.complete(Success(true))
+      distributor.afterReplyPromise.complete(Success(true))
 
       Then("We see one publication in publication statuses action marked as completed!")
       Thread.sleep(1000)
       Get(s"/v1/objects/test1/$id/actions/publication-status/invoke") ~> route ~> check {
         status shouldEqual StatusCodes.OK
         responseAs[String] shouldBe s"""{"statuses":[{"versionedId":{"id":"$id","version":2},"completed":true}]}"""
+      }
+
+      Then("We get 404 for missing entity when getting publication status for missing resource")
+      Get(s"/v1/objects/test1/$id-missing/actions/publication-status/invoke") ~> route ~> check {
+        Then("We expect it to fail")
+        responseAs[String] shouldBe """{"error":"Not Found"}"""
+        status shouldEqual StatusCodes.NotFound
       }
 
     }
@@ -192,3 +257,5 @@ class OriginStatePublishingRestProtocolTest extends
 
 
 }
+
+

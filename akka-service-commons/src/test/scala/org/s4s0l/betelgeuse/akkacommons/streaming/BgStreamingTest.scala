@@ -1,3 +1,19 @@
+/*
+ * Copyright© 2018 the original author or authors.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package org.s4s0l.betelgeuse.akkacommons.streaming
 
 import akka.kafka.scaladsl.Consumer
@@ -11,6 +27,7 @@ import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, 
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 import org.scalatest.GivenWhenThen
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.ScalaFutures
 import org.slf4j.LoggerFactory
 
@@ -24,9 +41,9 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
   private val aService = testWith(new BgStreaming {}
   )
-  aService.to = 5 seconds
+  aService.to = 5.seconds
 
-  aService.timeout = 5 seconds
+  aService.timeout = 5.seconds
 
 
   def getUniqueTopic = s"topic${System.currentTimeMillis()}"
@@ -113,7 +130,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
       new WithService(aService) {
         type KEY = Array[Byte]
         type MSG = String
-        implicit val patienceConfig: PatienceConfig = PatienceConfig(2 second, 300 millis)
+        implicit val patienceConfig: PatienceConfig = PatienceConfig(2.second, 300.millis)
         val topic: String = getUniqueTopic
 
         val kafka: StreamingAccess[KEY, MSG] = aService.service.createDefaultKafkaAccess[KEY, MSG]
@@ -134,14 +151,14 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
         val head: Future[MSG] = source.runWith(Sink.head)
 
-        whenReady(head) { res =>
+        whenReady(head, Timeout(30.seconds)) { res =>
           assert(res == msg)
         }
 
         val all: Future[ConsumerMessage.CommittableMessage[KEY, MSG]] = kafka.consumer.source(Set(topic)).runWith(Sink.head)
 
         assertThrows[java.util.concurrent.TimeoutException] {
-          Await.result(all, 1 second)
+          Await.result(all, 1.second)
         }
       }
     }
@@ -149,7 +166,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
     scenario("provides streaming capabilities source, flows and sink") {
       new WithService(aService) {
-        implicit val patienceConfig: PatienceConfig = PatienceConfig(1 second, 300 millis)
+        implicit val patienceConfig: PatienceConfig = PatienceConfig(1.second, 300.millis)
 
         val topic: String = getUniqueTopic
 
@@ -195,7 +212,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
 
         whenReady(pull_job) { res =>
-          assert(res.size == 6)
+          assert(res.lengthCompare(6) == 0, s"but was ${res.size}")
           assert(res.toSet == Set("a", "b", "c", "A", "B", "C"))
         }
       }

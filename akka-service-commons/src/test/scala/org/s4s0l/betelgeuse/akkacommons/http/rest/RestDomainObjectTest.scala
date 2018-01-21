@@ -89,7 +89,7 @@ class RestDomainObjectTest extends FeatureSpec with ScalatestRouteTest with Matc
       }
 
       info("should accept query params as action parameters")
-      Get("/1/objects/always-ok/8/actions/query-action-1/invoke?param1=aaa") ~> route ~> check {
+      Get("/1/objects/always-ok/8/actions/query-action-1/invoke?param1=aaa&param2=2") ~> route ~> check {
         responseAs[String] shouldEqual """"qa1:8:aaa""""
         header("correlationId") shouldBe defined
       }

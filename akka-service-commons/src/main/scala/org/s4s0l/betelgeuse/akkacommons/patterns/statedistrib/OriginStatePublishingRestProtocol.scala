@@ -23,8 +23,11 @@
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import akka.actor.ActorRef
+import akka.http.scaladsl.model.StatusCodes
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.{Idempotent, RestProtocolContext, _}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.Protocol._
+import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.ValidationException
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.ValueMissingException
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -40,22 +43,31 @@ trait OriginStatePublishingRestProtocol[T <: AnyRef, V] extends Actions[String, 
   override def actions: Map[ActionDesc, (Action[String, V], RestProtocolContext) => Future[RestCommandResult[_]]] =
     super.actions ++ Map(
       Query("publication-status") -> ((a: Action[String, V], c: RestProtocolContext) => getPublicationStatus(a)(c.executionContext, c.sender)),
-      Idempotent("publish", Set("versionedId")) -> ((a: Action[String, V], c: RestProtocolContext) => publishVersion(a)(c.executionContext, c.sender))
+      Idempotent("publish", Set("version")) -> ((a: Action[String, V], c: RestProtocolContext) => publishVersion(a)(c.executionContext, c.sender))
     )
 
 
   def getPublicationStatus(msg: Action[String, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[PublicationStatuses]] =
     originStatePublishingActorProtocol.publishStatus(GetPublicationStatus(msg.id, msg.messageId)).map {
       case GetPublicationStatusOk(value, correlationId) => RestCommandOk(value, correlationId)
+      case GetPublicationStatusNotOk(ex: ValueMissingException, correlationId) => RestCommandNotOk(ex, correlationId, StatusCodes.NotFound)
       case GetPublicationStatusNotOk(ex, correlationId) => RestCommandNotOk(ex, correlationId)
     }
 
 
-  def publishVersion(msg: Action[String, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[Any]] =
-    originStatePublishingActorProtocol.publish(PublishVersion(VersionedId(msg.params("versionedId")), msg.messageId)).map {
-      case PublishVersionOk(correlationId) => RestCommandOk(NoPayload, correlationId)
-      case PublishVersionNotOk(ex, correlationId) => RestCommandNotOk(ex, correlationId)
+  def publishVersion(msg: Action[String, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[Any]] = {
+    if (msg.params("version").forall(_.isDigit)) {
+      originStatePublishingActorProtocol.publish(PublishVersion(VersionedId(msg.id, msg.params("version").toInt), msg.messageId)).map {
+        case PublishVersionOk(correlationId) => RestCommandOk(NoPayload, correlationId)
+        case PublishVersionNotOk(ex: ValidationException, correlationId) => RestCommandNotOk(ex, correlationId, StatusCodes.BadRequest)
+        case PublishVersionNotOk(ex: ValueMissingException, correlationId) => RestCommandNotOk(ex, correlationId, StatusCodes.NotFound)
+        case PublishVersionNotOk(ex, correlationId) => RestCommandNotOk(ex, correlationId)
+      }
+    } else {
+      Future.successful(RestCommandNotOk(new Exception("Invalid version param."), msg.messageId, StatusCodes.BadRequest))
     }
+
+  }
 
 }
 
