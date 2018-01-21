@@ -23,10 +23,9 @@
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
 
 import akka.actor.ActorRef
-import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject._
+import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.{Idempotent, RestProtocolContext, _}
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.JournalReader
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
@@ -34,41 +33,30 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-trait OriginStatePublishingRestProtocol[T <: AnyRef, V] extends BaseProtocol[String, T, V]
-  with Actions[String, T, V] {
+trait OriginStatePublishingRestProtocol[T <: AnyRef, V] extends Actions[String, T, V] {
 
-  def publishingActor: OriginStatePublishingActor.Protocol[T]
+  def originStatePublishingActorProtocol: OriginStatePublishingActor.Protocol[T]
 
-  override def actions: Map[ActionDesc, (Action[String, V], ExecutionContext, ActorRef) => Future[RestCommandResult[_]]] =
+  override def actions: Map[ActionDesc, (Action[String, V], RestProtocolContext) => Future[RestCommandResult[_]]] =
     super.actions ++ Map(
-      Query("publication-status") -> (getPublicationStatus(_: Action[String, V])(_: ExecutionContext, _: ActorRef)),
-      Idempotent("publish", Set("versionedId")) -> (publishVersion(_: Action[String, V])(_: ExecutionContext, _: ActorRef))
+      Query("publication-status") -> ((a: Action[String, V], c: RestProtocolContext) => getPublicationStatus(a)(c.executionContext, c.sender)),
+      Idempotent("publish", Set("versionedId")) -> ((a: Action[String, V], c: RestProtocolContext) => publishVersion(a)(c.executionContext, c.sender))
     )
 
 
   def getPublicationStatus(msg: Action[String, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[PublicationStatuses]] =
-    publishingActor.publishStatus(GetPublicationStatus(msg.id, msg.messageId)).map {
+    originStatePublishingActorProtocol.publishStatus(GetPublicationStatus(msg.id, msg.messageId)).map {
       case GetPublicationStatusOk(value, correlationId) => RestCommandOk(value, correlationId)
       case GetPublicationStatusNotOk(ex, correlationId) => RestCommandNotOk(ex, correlationId)
     }
 
 
   def publishVersion(msg: Action[String, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[Any]] =
-    publishingActor.publish(PublishVersion(VersionedId(msg.params("versionedId")), msg.messageId)).map {
+    originStatePublishingActorProtocol.publish(PublishVersion(VersionedId(msg.params("versionedId")), msg.messageId)).map {
       case PublishVersionOk(correlationId) => RestCommandOk(NoPayload, correlationId)
       case PublishVersionNotOk(ex, correlationId) => RestCommandNotOk(ex, correlationId)
     }
 
 }
 
-object OriginStatePublishingRestProtocol {
 
-  def apply[T <: AnyRef, V](actorProtocol: OriginStatePublishingActor.Protocol[T], settings: BaseProtocolSettings[String, T, V])(implicit journalReaderToUse: JournalReader)
-  : OriginStatePublishingRestProtocol[T, V]
-  = new OriginStatePublishingRestProtocol[T, V] {
-
-    override def publishingActor: OriginStatePublishingActor.Protocol[T] = actorProtocol
-
-    override val baseProtocolSettings: BaseProtocolSettings[String, T, V] = settings
-  }
-}

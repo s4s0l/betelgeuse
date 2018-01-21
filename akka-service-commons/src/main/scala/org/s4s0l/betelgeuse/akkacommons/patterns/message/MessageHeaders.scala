@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.message
 
 
 import java.util.UUID
+
+import com.fasterxml.jackson.annotation.JsonIgnore
 
 import scala.concurrent.duration
 import scala.concurrent.duration.{Deadline, Duration, FiniteDuration}
@@ -87,6 +89,7 @@ object MessageHeaders {
            last <- sequenceLastOpt)
         yield SequenceInfo(id, number, last)
 
+    @JsonIgnore
     def isFailed: Boolean = failedOpt.isDefined
 
     def failedOpt: Option[Int] = headers.get(HEADER_FAILED).map(_.toInt)

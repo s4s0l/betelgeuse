@@ -1,17 +1,17 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib
@@ -75,7 +75,7 @@ class OriginStateDistributor[T](settings: Settings[T]) extends Actor with ActorL
             .filter(seq => !seq.exists(_.isNotOk))
         }
       }
-        .map(_ => OriginStateChangedOk(deliveryId))
+        .map(_ => OriginStateChangedOk(deliveryId, versionedId))
         .recover {
           case _: NoSuchElementException => OriginStateChangedNotOk(deliveryId, new Exception("Some distributions failed"))
           case ex: Throwable => OriginStateChangedNotOk(deliveryId, ex)
@@ -219,14 +219,15 @@ object OriginStateDistributor {
       }
     }
 
-    sealed trait OriginStateChangedResult extends NullResult[Long]
+    sealed trait OriginStateChangedResult extends Result[Long, VersionedId]
 
     case class OriginStateChanged[T](messageId: Long, versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
       extends Question[Long]
 
-    case class OriginStateChangedOk(correlationId: Long) extends OriginStateChangedResult with OkNullResult[Long]
+    case class OriginStateChangedOk(correlationId: Long, value: VersionedId) extends OriginStateChangedResult with OkResult[Long, VersionedId]
 
-    case class OriginStateChangedNotOk(correlationId: Long, ex: Throwable) extends OriginStateChangedResult with NotOkNullResult[Long]
+    case class OriginStateChangedNotOk(correlationId: Long, ex: Throwable) extends OriginStateChangedResult with NotOkResult[Long, VersionedId]
+
   }
 
   object SatelliteProtocol {

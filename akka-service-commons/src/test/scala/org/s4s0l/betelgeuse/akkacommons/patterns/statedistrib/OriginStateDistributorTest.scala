@@ -62,7 +62,7 @@ class OriginStateDistributorTest
 
 
         Then("Expect confirmation")
-        testKit.expectMsg(to, OriginStateChangedOk(1))
+        testKit.expectMsg(to, OriginStateChangedOk(1, VersionedId("id1", 1)))
 
         And("Change was delivered")
         private val emitted = queue.toArray(new Array[String](4))

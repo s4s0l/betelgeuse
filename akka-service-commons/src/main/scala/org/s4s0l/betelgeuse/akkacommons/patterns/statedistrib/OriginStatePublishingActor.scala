@@ -29,8 +29,8 @@ import akka.persistence.AtLeastOnceDelivery
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.{BeforePublishValidationNotOk, BeforePublishValidationOk, PublishEvent, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events.Event
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.QA.{Uuid, UuidQuestion}
 import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, QA}
 
@@ -80,11 +80,18 @@ class OriginStatePublishingActor[T](settings: Settings[T])
       sender() ! GetPublicationStatusOk(PublicationStatuses(publishStatus.map(e => PublicationStatus(e._1, e._2)).toList), messageId)
   }
 
-  override def processEvent(recover: Boolean): PartialFunction[Any, Unit] = super.processEvent(recover) orElse {
+  override def processEvent(recover: Boolean): PartialFunction[Event, Unit] = super.processEvent(recover) orElse {
     case PublishEvent(messageId, versionedId) =>
       publishStatus(versionedId) = false
       distributeStateChange(versionedId, getValueAtVersion(versionedId).get)
-      sender() ! PublishVersionOk(messageId)
+      if (!recover)
+        sender() ! PublishVersionOk(messageId)
+  }
+
+
+  override protected def distributeStateChanged(versionedId: VersionedId): Unit = {
+    super.distributeStateChanged(versionedId)
+    publishStatus(versionedId) = true
   }
 
   /**
@@ -151,7 +158,7 @@ object OriginStatePublishingActor {
   }
 
 
-  private case class PublishEvent(messageId: String, versionedId: VersionedId) extends JacksonJsonSerializable
+  private case class PublishEvent(messageId: String, versionedId: VersionedId) extends Event
 
   final case class Settings[T](name: String, distributor: OriginStateDistributor.StateDistributorProtocol[T], stateDistributionRetryInterval: FiniteDuration = 30 seconds)
 

@@ -194,7 +194,7 @@ object DistributedSharedState {
                                                                                                      private val actorFinder: String => Future[Seq[PersistenceId]]) {
 
     def notifyStartupValues(implicit executionContext: ExecutionContext, sender: ActorRef = ActorRef.noSender, timeout: Timeout): Future[Map[PersistenceId, Throwable]] = {
-      actorFinder.apply(s"satellite-value-$name")
+      actorFinder.apply(s"satellite-state-$name")
         .flatMap { idsFound =>
           val listOfFutures = idsFound.map { id =>
             val statusUpdate = for (

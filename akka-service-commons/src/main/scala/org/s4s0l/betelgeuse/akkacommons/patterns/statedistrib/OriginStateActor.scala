@@ -20,8 +20,8 @@ import akka.actor.Props
 import akka.persistence.AtLeastOnceDelivery
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateActor.{ConfirmEvent, Settings}
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events.Event
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -38,19 +38,23 @@ class OriginStateActor[T](settings: Settings[T])
     with AtLeastOnceDelivery {
 
   override def receiveCommand: Receive = super.receiveCommand orElse {
-    case OriginStateDistributor.StateDistributorProtocol.OriginStateChangedOk(deliveryId) =>
-      persist(ConfirmEvent(deliveryId))(processEvent(false))
+    case OriginStateDistributor.StateDistributorProtocol.OriginStateChangedOk(deliveryId, versionedId) =>
+      persist(ConfirmEvent(deliveryId, versionedId))(processEvent(false))
     case OriginStateDistributor.StateDistributorProtocol.OriginStateChangedNotOk(_, ex) =>
       log.error(ex, "Undelivered state distribution")
   }
 
-  override def processEvent(recover: Boolean): PartialFunction[Any, Unit] = super.processEvent(recover) orElse {
-    case ConfirmEvent(deliveryId) => confirmDelivery(deliveryId)
+  override def processEvent(recover: Boolean): PartialFunction[Event, Unit] = super.processEvent(recover) orElse {
+    case ConfirmEvent(deliveryId, versionedId) =>
+      confirmDelivery(deliveryId)
+      distributeStateChanged(versionedId)
   }
 
   override protected def valueUpdated(versionedId: VersionedId, value: T): Unit = {
     distributeStateChange(versionedId, value.asInstanceOf[T])
   }
+
+  protected def distributeStateChanged(versionedId: VersionedId): Unit = {}
 
   protected def distributeStateChange(versionedId: VersionedId, value: T): Unit = settings.distributor.deliverStateChange(this)(versionedId, value, redeliverInterval)
 
@@ -77,7 +81,7 @@ object OriginStateActor {
 
   }
 
-  private case class ConfirmEvent(deliveryId: Long) extends JacksonJsonSerializable
+  private case class ConfirmEvent(deliveryId: Long, versionedId: VersionedId) extends Event
 
   object Protocol {
     /**

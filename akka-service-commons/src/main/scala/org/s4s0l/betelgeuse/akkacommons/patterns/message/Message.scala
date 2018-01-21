@@ -20,6 +20,7 @@ import java.util.UUID
 
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.Message.ForwardHeaderProvider
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.{HeaderAccessors, HeaderSetter, _}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 
 import scala.language.implicitConversions
 
@@ -51,7 +52,8 @@ object Message {
 @SerialVersionUID(2L)
 final case class Message(target: String, id: String, headers: Map[String, String], payload: Payload)
   extends HeaderAccessors
-    with HeaderSetter[Message] {
+    with HeaderSetter[Message]
+    with JacksonJsonSerializable {
 
   override def withHeaders(map: Map[String, String]): Message = copy(headers = headers ++ map)
 

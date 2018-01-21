@@ -3,10 +3,31 @@ Swarm required: `docker swarm init`
 
 ```
 #!/usr/bin/env bash
-docker network create -d overlay crate-network
+docker network create --driver overlay --attachable intservnet
+
+docker service create \
+         --name zookeeper \
+         --network intservnet \
+         --mode global \
+         --publish 2182:2182 \
+         --hostname zookeeper \
+         zookeeper
+
+docker service create \
+        --name kafka \
+        --network intservnet \
+        --restart-condition on-failure \
+        --restart-max-attempts 3 \
+        --log-driver=json-file \
+        --publish 9092:9092 \
+        --mount type=volume,src=kafka_vol,target=/var/lib/kafka/data \
+        --env KAFKA_BROKER_ID=1 \
+        --env KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+        --env KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
+        confluentinc/cp-kafka:3.1.2         
+
 docker service create \
     --name crate \
-    --network crate-network \
     --mode global \
     -e CRATE_HEAP_SIZE=1024m \
     --endpoint-mode vip \

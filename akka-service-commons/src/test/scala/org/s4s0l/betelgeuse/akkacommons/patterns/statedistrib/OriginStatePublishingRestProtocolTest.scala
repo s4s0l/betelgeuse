@@ -31,11 +31,12 @@ import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.persistence.AtLeastOnceDelivery
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject
-import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.{BaseProtocolSettings, Id}
+import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.{DomainObjectSettings, Id}
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObjectTest.SomeValue
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStateDistributor.StateDistributorProtocol
 import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.OriginStatePublishingActor.{Protocol, Settings}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedEntityRestProtocol, VersionedId}
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.JournalReader
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
@@ -43,7 +44,6 @@ import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
-import scala.reflect.classTag
 
 /**
   * @author Marcin Wielgus
@@ -145,14 +145,24 @@ class OriginStatePublishingRestProtocolTest extends
 
   private def createRoute(name: String, versionedEntity: OriginStatePublishingActor.Protocol[SomeValue]): Route = {
 
-    val settings = new BaseProtocolSettings("v1", name)(
-      classTag[SomeValue],
-      identity, aService.service.httpMarshalling, 5 seconds
-    )
-    val restProtocol: RestDomainObject.RestProtocol =
-      OriginStatePublishingRestProtocol(versionedEntity, settings)(aService.service.journalReader) and
-        VersionedEntityRestProtocol(versionedEntity, settings)(aService.service.journalReader)
-    restProtocol.createRoute
+    val restProtocol: RestDomainObject.RestProtocol = new OriginStatePublishingRestProtocol[SomeValue, String] with VersionedEntityRestProtocol[SomeValue, String] {
+
+      override def originStatePublishingActorProtocol: OriginStatePublishingActor.Protocol[SomeValue] = versionedEntity
+
+      override protected def domainObjectSettings: DomainObjectSettings[String, SomeValue, String] = new DomainObjectSettings()
+
+      override protected def domainObjectType: String = name
+
+      override def version: String = "v1"
+
+      override protected def versionedEntityActorProtocol: VersionedEntityActor.Protocol[SomeValue] = versionedEntity
+
+      override protected def journalRead: JournalReader = aService.service.journalReader
+
+    }
+
+    restProtocol.createRoute(aService.execContext, aService.self, aService.service.httpMarshalling)
   }
+
 
 }

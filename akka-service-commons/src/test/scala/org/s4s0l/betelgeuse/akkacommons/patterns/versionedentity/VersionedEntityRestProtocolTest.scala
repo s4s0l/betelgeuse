@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,9 +29,10 @@ import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
-import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.BaseProtocolSettings
+import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObject.DomainObjectSettings
 import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObjectTest.SomeValue
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.JournalReader
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
@@ -56,7 +57,7 @@ class VersionedEntityRestProtocolTest extends
     with BgClusteringSharding with BgSerializationJackson {
     private implicit val toInt: String => Int = x => x.toInt
     private lazy val versionedEntity = VersionedEntityActor.startSharded[SomeValue](Settings("rest-proto-sample"))
-    lazy val restProtocol: VersionedEntityRestProtocol[SomeValue, Int] = VersionedEntityRestProtocol(versionedEntity, new BaseProtocolSettings(1, "rest-proto-sample"))
+    lazy val restProtocol: VersionedEntityRestProtocol[SomeValue, Int] = createProtocol("rest-proto-sample", 1, versionedEntity)
 
   })
 
@@ -66,7 +67,7 @@ class VersionedEntityRestProtocolTest extends
       implicit val fM: FromEntityUnmarshaller[List[String]] = aService.service.httpMarshalling.unmarshaller[List[String]]
 
       var id: String = ""
-      val route: Route = aService.service.restProtocol.createRoute
+      val route: Route = aService.service.restProtocol.createRoute(aService.service.executor, aService.self, aService.service.httpMarshalling)
       Post("/1/objects/rest-proto-sample", SomeValue("value1")) ~> route ~> check {
         status shouldEqual StatusCodes.OK
         responseAs[String] should fullyMatch regex """\{"id":"[a-z0-9\-]+"\}"""
@@ -85,8 +86,36 @@ class VersionedEntityRestProtocolTest extends
         status shouldEqual StatusCodes.OK
         responseAs[String] shouldBe """"""
       }
+      Get(s"/1/objects/rest-proto-sample/$id") ~> route ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String] shouldBe """{"value":"value2"}"""
+      }
+
+      Get(s"/1/objects/rest-proto-sample/missing-$id") ~> route ~> check {
+        status shouldEqual StatusCodes.NotFound
+        responseAs[String] shouldBe """{"error":"Not Found"}"""
+      }
     }
 
 
   }
+
+
+  private def createProtocol(name: String, _version: Int, versionedEntity: VersionedEntityActor.Protocol[SomeValue]): VersionedEntityRestProtocol[SomeValue, Int] = {
+
+    new VersionedEntityRestProtocol[SomeValue, Int] {
+
+      override protected def domainObjectSettings: DomainObjectSettings[String, SomeValue, Int] = new DomainObjectSettings()
+
+      override protected def domainObjectType: String = name
+
+      override def version: Int = _version
+
+      override protected def versionedEntityActorProtocol: VersionedEntityActor.Protocol[SomeValue] = versionedEntity
+
+      override protected def journalRead: JournalReader = aService.service.journalReader
+
+    }
+  }
+
 }
