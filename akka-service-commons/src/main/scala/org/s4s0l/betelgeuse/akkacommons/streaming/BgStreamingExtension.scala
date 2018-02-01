@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +35,7 @@ import scala.reflect.ClassTag
   */
 class BgStreamingExtension(private val system: ExtendedActorSystem) extends Extension {
 
-
+  //fixme: config can be implicit as it is implicitly provided in BgService
   def buildStreamingAccess[K, V](config: Config)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = defaultSerializers): StreamingAccess[K, V] = {
     implicit val systemA: ExtendedActorSystem = system
     val ec = system.dispatchers.lookup(config.string("poolName").getOrElse("streaming.context.streaming-io-dispatcher"))
