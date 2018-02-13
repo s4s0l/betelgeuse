@@ -1,17 +1,17 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 description = "Common utilities for creating akka services"
@@ -20,14 +20,12 @@ ext {
     jacksonVersion = "2.8.9"
 }
 
-
-
 /**
  *  to create permanent alias add following line to ~/.bashrc
  *
  *      alias repl='gradle repl --console plain --no-daemon'
  */
-task ('repl', type:JavaExec) {
+task('repl', type: JavaExec) {
     description = "Scala repl with projects classpath run with: './gradlew repl --console plain --no-daemon'"
     main = "scala.tools.nsc.MainGenericRunner"
     classpath = sourceSets.main.runtimeClasspath
@@ -56,6 +54,42 @@ dependencies {
     compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
     compile group: 'com.lihaoyi', name: "fastparse_${scalaBinaryVersion}", version: '0.4.4'
     testCompile project(":akka-service-commons-test")
+}
+
+
+task(type: Copy, dependsOn: assemble, "dockerPrepare") {
+    from("src/main/docker") {
+    }
+    from("$project.buildDir/libs/") {
+        include("$project.name-${project.version}.jar")
+        into "bglib"
+    }
+    from(configurations.runtime) {
+        into "bglib"
+    }
+    from(project.rootProject.configurations.agent){
+        into "agent"
+    }
+    into "$project.buildDir/docker"
+
+}
+task(type: Exec, dependsOn: dockerPrepare, "dockerBuild") {
+    workingDir "$project.buildDir/docker"
+    commandLine "docker", "build", "-t", "sasol/betelgeuse-akka:${project.version}", "."
+    inputs.dir("$project.buildDir/docker")
+    outputs.file("$project.buildDir/docker.done")
+    doLast {
+        file("$project.buildDir/docker.done").text = java.util.UUID.randomUUID().toString()
+    }
+}
+task(type: Exec, "dockerLogin") {
+    workingDir "$project.buildDir/docker"
+    commandLine "docker", "login", "-u", System.getenv("DOCKER_HUB_USER"), "-p", System.getenv("DOCKER_HUB_PASS")
+}
+
+task(type: Exec, dependsOn: [dockerBuild, dockerLogin], "dockerPush") {
+    workingDir "$project.buildDir/docker"
+    commandLine "docker", "push", "sasol/betelgeuse-akka:${project.version}"
 }
 
 

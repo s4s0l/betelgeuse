@@ -3,9 +3,9 @@ jdk:
   - oraclejdk8
 env:
   global:
-    - BINTRAY_USER=sasol DIND4J_VERSION=1.9
+    - BINTRAY_USER=sasol DOCKER_HUB_USER=sasol DIND4J_VERSION=1.9
     - secure: X2Q2S0W0kVbaRm9Dp0J6l1lHqPmpDGVawppYcq1ccVS1Sr1W2RkG8Kz1m4q7rkqNQj9FKmsNAwyF+qfW54TDnwJzLCUBb5pgCXO3BNg54V9BkWRU3HeAjJvXFYoqXDuw/G204PNmj4mNWshXy7HjTvFYxxyYZ8+VfIYuq35SILMUWgaCrZ0vdhkqDEaO6po7txpryCA67A5r7HPKjjDZUVSeTTp7g5P9/VIH6MiRB/1oaQ11RuYrvIbumZl+enexJaBJFif3ITaYEV2X3tNGuSy5k5UqMOg4b0ZDkI7hyDg1mTqm3qfJLjhrTO5nvTRtdycVhI17WUfoBC9R90D3uA==
-
+    - secure: aufiAtNQzAvdM8wSyUCxmCcg3RxMm/WShxqd+FQ4HueZh5/ZyhutJnVqEhhJ/ihMU6Xe26NIgFK3rPnSDBZnM6odfamtELO+l/cHax8RQrX/pQ6JtZl2T72VbwfVEzgkci8NmKGFlBevZ0e/Bmc2V7qrHp9IhARFcSN7f6Sipr/bwDFy0ssGxFO+c84MR2rIiZ+pixv3Vi+GXMU+RGcxuo7Hn6odHbG33ydsrhHdmuDZ9G28bDS3+U2FqePr/GVp1Ckh6bNZXn/rLNmAfYjSINzP8D8YQM0FIkUFO8JfQ7nhbJfQnQTx/tNs2UuEoCvusMpbapK0SmWHf/h1OFDX8g==
 
 build:
   cache: true
@@ -92,7 +92,7 @@ build:
   ci:
     - sleep 10
     - docker ps -a
-    - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test jacocoTestReport jacocoFullReport --info --stacktrace
+    - ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache clean test jacocoTestReport jacocoFullReport :akka-service-commons:dockerBuild --info --stacktrace
   post_ci:
   on_failure:
     - docker service logs cockroachdb
@@ -107,7 +107,7 @@ build:
       test $IS_RELEASE == "true" &&
       test $SHIPPABLE_REPO_SLUG == "s4s0l/betelgeuse" &&
       ./gradlew --no-daemon --project-cache-dir=.cache --gradle-user-home=.cache
-      -Pversion="$GIT_TAG_NAME" --info bintrayUpload
+      -Pversion="$GIT_TAG_NAME" --info bintrayUpload :akka-service-commons:dockerLogin :akka-service-commons:dockerPush
       ) || (echo "SKIPPED")
     - docker service rm cockroachdb
     - docker service rm crate
