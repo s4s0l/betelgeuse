@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,15 +16,11 @@
 
 package org.s4s0l.betelgeuse.akkacommons.clustering.dnsseed
 
-import java.net.InetAddress
-import java.util
-
 import akka.actor.{Address, AddressFromURIString, Cancellable}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkacommons.clustering.BgClustering
 import org.s4s0l.betelgeuse.akkacommons.utils.DnsUtils
 
-import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -46,11 +42,9 @@ trait BgDnsSeed extends BgClustering {
   abstract override def customizeConfiguration: Config = {
     if (serviceInfo.docker || getSystemProperty("akka.cluster.dns.name") != null) {
       LOGGER.info("Will customize seeding nodes with dns entries")
-      val selfHostName = DnsUtils.getCurrentNodeHostName
-      val current = util.Arrays.asList(InetAddress.getAllByName(dnsLookupAddress.host.get): _*).asScala
-      val mehost = current.find(x => x.getCanonicalHostName == selfHostName).get.getHostAddress
-      val sysName = s"bg.info.externalAddress = $mehost"
-      LOGGER.info(s"bg.info.externalAddress will be set to $mehost")
+      val myHost = DnsUtils.getSelfIpAddressFromHostName(dnsLookupAddress)
+      val sysName = s"bg.info.externalAddress = $myHost"
+      LOGGER.info(s"bg.info.externalAddress will be set to $myHost")
       LOGGER.info("Customize config with clustering-dns-seed.conf with fallback to...")
       ConfigFactory.parseString(sysName)
         .withFallback(ConfigFactory.parseResources("clustering-dns-seed.conf").withFallback(super.customizeConfiguration))

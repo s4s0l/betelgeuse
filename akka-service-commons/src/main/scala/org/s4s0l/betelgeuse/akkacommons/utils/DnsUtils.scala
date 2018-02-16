@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.net.InetAddress
 import java.util
 
 import akka.actor.{ActorPath, Address, RootActorPath}
+import org.s4s0l.betelgeuse.utils.AllUtils
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -44,6 +45,28 @@ object DnsUtils {
       Option(System.getenv("HOSTNAME"))
     }.getOrElse {
       throw new Exception("Unablee to determine current node host name!")
+    }
+  }
+
+  /**
+    * gets and ip address from hostname, gets current hostname then does dns lookup
+    * on dnsLookupAddress and tries to find ip among srv records.
+    *
+    */
+  def getSelfIpAddressFromHostName(dnsLookupAddress: Address): String = {
+    AllUtils.tryNTimes(10, exceptionProducer = AllUtils.tryNTimesExceptionFactory("Unable to detect current host ip address")) {
+      import scala.collection.JavaConverters._
+      val selfHostName = DnsUtils.getCurrentNodeHostName
+      val allByName = InetAddress.getAllByName(dnsLookupAddress.host.get)
+      val current = util.Arrays.asList(allByName: _*).asScala
+      val myHost = current.find(x => x.getCanonicalHostName == selfHostName).map {
+        _.getHostAddress
+      }
+      myHost.getOrElse(throw new Exception(s"Unable to find current host name $selfHostName among $current canonical names: ${
+        current.map {
+          _.getCanonicalHostName
+        }
+      }"))
     }
   }
 
