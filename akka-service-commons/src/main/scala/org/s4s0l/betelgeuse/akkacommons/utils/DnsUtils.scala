@@ -58,15 +58,11 @@ object DnsUtils {
       import scala.collection.JavaConverters._
       val selfHostName = DnsUtils.getCurrentNodeHostName
       val allByName = InetAddress.getAllByName(dnsLookupAddress.host.get)
-      val current = util.Arrays.asList(allByName: _*).asScala
-      val myHost = current.find(x => x.getCanonicalHostName == selfHostName).map {
-        _.getHostAddress
+      val current = util.Arrays.asList(allByName: _*).asScala.map { it => (it, List(it.getCanonicalHostName, it.getHostAddress, it.getHostName)) }
+      val myHost = current.find(x => x._2.contains(selfHostName)).map {
+        _._1.getHostAddress
       }
-      myHost.getOrElse(throw new Exception(s"Unable to find current host name $selfHostName among $current canonical names: ${
-        current.map {
-          _.getCanonicalHostName
-        }
-      }"))
+      myHost.getOrElse(throw new Exception(s"Unable to find current host name $selfHostName among $current"))
     }
   }
 
