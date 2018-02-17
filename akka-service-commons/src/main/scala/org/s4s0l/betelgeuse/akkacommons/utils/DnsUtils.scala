@@ -58,8 +58,10 @@ object DnsUtils {
       import scala.collection.JavaConverters._
       val selfHostName = DnsUtils.getCurrentNodeHostName
       val allByName = InetAddress.getAllByName(dnsLookupAddress.host.get)
+      val fromLocal = List(InetAddress.getLocalHost.getCanonicalHostName, InetAddress.getLocalHost.getHostAddress, InetAddress.getLocalHost.getHostName)
       val current = util.Arrays.asList(allByName: _*).asScala.map { it => (it, List(it.getCanonicalHostName, it.getHostAddress, it.getHostName)) }
-      val myHost = current.find(x => x._2.contains(selfHostName)).map {
+      LOGGER.info(s"Dns addresses all by name: $current, self host name: $selfHostName, local host address $fromLocal")
+      val myHost = current.find(x => x._2.contains(selfHostName) || x._2.intersect(fromLocal).nonEmpty).map {
         _._1.getHostAddress
       }
       myHost.getOrElse(throw new Exception(s"Unable to find current host name $selfHostName among $current"))
