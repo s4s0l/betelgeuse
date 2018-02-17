@@ -44,7 +44,7 @@ object DnsUtils {
     fromInetAddress.orElse {
       Option(System.getenv("HOSTNAME"))
     }.getOrElse {
-      throw new Exception("Unablee to determine current node host name!")
+      throw new Exception("Unable to determine current node host name!")
     }
   }
 
@@ -56,16 +56,34 @@ object DnsUtils {
   def getSelfIpAddressFromHostName(dnsLookupAddress: Address): String = {
     AllUtils.tryNTimes(10, exceptionProducer = AllUtils.tryNTimesExceptionFactory("Unable to detect current host ip address")) {
       import scala.collection.JavaConverters._
-      val selfHostName = DnsUtils.getCurrentNodeHostName
       val allByName = InetAddress.getAllByName(dnsLookupAddress.host.get)
-      val fromLocal = List(InetAddress.getLocalHost.getCanonicalHostName, InetAddress.getLocalHost.getHostAddress, InetAddress.getLocalHost.getHostName)
-      val current = util.Arrays.asList(allByName: _*).asScala.map { it => (it, List(it.getCanonicalHostName, it.getHostAddress, it.getHostName)) }
-      LOGGER.info(s"Dns addresses all by name: $current, self host name: $selfHostName, local host address $fromLocal")
-      val myHost = current.find(x => x._2.contains(selfHostName) || x._2.intersect(fromLocal).nonEmpty).map {
+      val allByNameLookup = util.Arrays.asList(allByName: _*).asScala.map { it => (it, List(it.getCanonicalHostName, it.getHostAddress, it.getHostName)) }
+      val selfAddresses = getAllLocalIpAddresses.toList
+      LOGGER.info(s"Dns addresses all by name: $allByNameLookup, self host names: $selfAddresses")
+      val myHost = allByNameLookup.find(x => x._2.intersect(selfAddresses).nonEmpty).map {
         _._1.getHostAddress
       }
-      myHost.getOrElse(throw new Exception(s"Unable to find current host name $selfHostName among $current"))
+      myHost.getOrElse(throw new Exception(s"Unable to find current host names $selfAddresses"))
     }
+  }
+
+  def getAllLocalIpAddresses: Set[String] = {
+    import java.net.{InetAddress, NetworkInterface}
+    import java.util
+
+    import scala.collection.JavaConverters._
+    val localhost = InetAddress.getLocalHost
+    // Just in case this host has multiple IP addresses....
+    val allMyIps = InetAddress.getAllByName(localhost.getCanonicalHostName)
+    val localHostAddresses = if (allMyIps != null && allMyIps.length > 1) {
+      util.Arrays.asList(allMyIps: _*).asScala.flatMap { it => List(it.getCanonicalHostName, it.getHostAddress, it.getHostName) }
+    } else {
+      List(localhost.getCanonicalHostName, localhost.getHostAddress, localhost.getHostName)
+    }
+    val fromInterfaces = NetworkInterface.getNetworkInterfaces.asScala
+      .flatMap(_.getInetAddresses.asScala)
+      .flatMap { it => List(it.getCanonicalHostName, it.getHostAddress, it.getHostName) }
+    (localHostAddresses ++ fromInterfaces ++ List(DnsUtils.getCurrentNodeHostName)).toSet
   }
 
   def lookupActorPaths(candidates: Seq[ActorPath])(implicit executor: ExecutionContext): Future[Seq[ActorPath]] = {
