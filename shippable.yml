@@ -43,7 +43,7 @@ build:
          --mode global \
          --publish 2182:2182 \
          --hostname zookeeper \
-         zookeeper
+         zookeeper:3.4.11
     - >
       docker service create \
         --name kafka \

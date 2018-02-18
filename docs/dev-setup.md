@@ -11,7 +11,7 @@ docker service create \
          --mode global \
          --publish 2182:2182 \
          --hostname zookeeper \
-         zookeeper
+         zookeeper:3.4.11
 
 docker service create \
         --name kafka \
@@ -37,7 +37,7 @@ docker service create \
     --publish 4300:4300 \
     --publish 5432:5432 \
     --mount type=volume,source=crate-test-db,target=/data \
-  crate:latest \
+  crate:2.2.4 \
     crate \
     -Cpath.repo=/data/repos \
     -Cdiscovery.zen.ping.unicast.hosts=crate \
