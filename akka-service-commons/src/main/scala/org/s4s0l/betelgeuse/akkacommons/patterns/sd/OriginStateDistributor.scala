@@ -144,7 +144,7 @@ object OriginStateDistributor {
       * Works like [[ProtocolImpl.stateChanged]].
       * Utility to hide actor ref from user of this protocol
       */
-    def deliverStateChange(from: AtLeastOnceDelivery)
+    def deliverStateChange(from: AtLeastOnceDelivery, onCall: => Unit = {})
                           (versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
     : Unit
   }
@@ -168,10 +168,13 @@ object OriginStateDistributor {
       * Works like [[ProtocolImpl.stateChanged]].
       * Utility to hide actor ref from user of this protocol
       */
-    override def deliverStateChange(from: AtLeastOnceDelivery)
+    override def deliverStateChange(from: AtLeastOnceDelivery, onCall: => Unit = {})
                                    (versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration)
     : Unit = {
-      from.deliver(actorRef.path)(deliveryId => Protocol.OriginStateChanged(deliveryId, versionedId, value, expectedConfirmIn))
+      from.deliver(actorRef.path)(deliveryId => {
+        onCall
+        Protocol.OriginStateChanged(deliveryId, versionedId, value, expectedConfirmIn)
+      })
     }
 
   }
@@ -188,8 +191,8 @@ object OriginStateDistributor {
         override def stateChanged(msg: Protocol.OriginStateChanged[F])(implicit sender: ActorRef): Unit =
           distributor.stateChanged(Protocol.OriginStateChanged(msg.messageId, msg.versionedId, mapper.apply(msg.versionedId, msg.value), msg.expectedConfirmIn))
 
-        override def deliverStateChange(from: AtLeastOnceDelivery)(versionedId: VersionedId, value: F, expectedConfirmIn: FiniteDuration): Unit =
-          distributor.deliverStateChange(from)(versionedId, mapper.apply(versionedId, value), expectedConfirmIn)
+        override def deliverStateChange(from: AtLeastOnceDelivery, onCall: => Unit = {})(versionedId: VersionedId, value: F, expectedConfirmIn: FiniteDuration): Unit =
+          distributor.deliverStateChange(from, onCall)(versionedId, mapper.apply(versionedId, value), expectedConfirmIn)
       }
     }
 

@@ -144,7 +144,7 @@ class OriginStatePublishingRestProtocolTest extends
 
         override def stateChanged(msg: OriginStateDistributor.Protocol.OriginStateChanged[SomeValue])(implicit sender: ActorRef): Unit = {}
 
-        override def deliverStateChange(from: AtLeastOnceDelivery)(versionedId: VersionedId, value: SomeValue, expectedConfirmIn: FiniteDuration): Unit = {
+        override def deliverStateChange(from: AtLeastOnceDelivery, onCall: => Unit = {})(versionedId: VersionedId, value: SomeValue, expectedConfirmIn: FiniteDuration): Unit = {
           publishCount = publishCount + 1
           beforeReplyPromise.complete(Success(true))
           afterReplyPromise.future.onComplete(_ =>

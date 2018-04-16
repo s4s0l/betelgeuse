@@ -57,7 +57,7 @@ class OriginStateActor[T](settings: Settings[T])
     case OriginStateDistributor.Protocol.OriginStateChangedOkWithValidationError(deliveryId, versionedId, errs) =>
       persist(ConfirmEvent(deliveryId, versionedId, Some(errs)))(processEvent(false))
     case OriginStateDistributor.Protocol.OriginStateChangedNotOk(_, ex) =>
-      log.error(ex, "Undelivered state distribution")
+      logge("Undelivered state distribution", VersionedId(persistenceId, -666), ex)
     case GetPublicationStatus(_, messageId) =>
       if (getCurrentVersionId.version == 0) {
         sender() ! GetPublicationStatusNotOk(ValueMissingException(getCurrentVersionId), messageId)
@@ -79,8 +79,10 @@ class OriginStateActor[T](settings: Settings[T])
   protected def distributeStateChanged(versionedId: VersionedId, errors: Option[ValidationError]): Unit = {
     errors match {
       case None =>
+        logg("Storing confirmation - no errors", versionedId)
         publishStatus(versionedId) = Left(true)
       case Some(err) =>
+        logg("Storing confirmation - with validation errors", versionedId)
         publishStatus(versionedId) = Right(err)
     }
   }
@@ -90,11 +92,20 @@ class OriginStateActor[T](settings: Settings[T])
   }
 
   protected def distributeStateChange(versionedId: VersionedId, value: T): Unit = {
-    settings.distributor.deliverStateChange(this)(versionedId, value, redeliverInterval)
+    settings.distributor.deliverStateChange(this, logg("Distributing change", versionedId))(versionedId, value, redeliverInterval)
     publishStatus(versionedId) = Left(false)
   }
 
   override def redeliverInterval: FiniteDuration = settings.stateDistributionRetryInterval
+
+  private def logge(msg: String, versionedId: VersionedId, ex: Throwable): Unit = {
+    log.error(ex, "Origin state={}, entity={} {}", settings.name, versionedId, msg)
+  }
+
+
+  private def logg(msg: String, versionedId: VersionedId): Unit = {
+    log.info("Origin state={}, entity={} {}", settings.name, versionedId, msg)
+  }
 
 }
 

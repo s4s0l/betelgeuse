@@ -73,19 +73,25 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
     case x@StateChangedEvent(version, _, _, msgId) =>
       x.toHandlerResult match {
         case Left(None) =>
+          logg("Handling state change event as ignored", version)
           stateChangesProcessed(version) = Left(false)
           if (!recover) {
+            logg("Responding ok", version)
             senderProvider ! responseFactory(StateChangeOk(msgId))
           }
         case Left(Some(value)) =>
+          logg("Handling state change event as mapped", version)
           saveValueEvent(ValueEvent[V](msgId, version, value.asInstanceOf[V]))
           stateChangesProcessed(version) = Left(true)
           if (!recover) {
+            logg("Responding ok", version)
             senderProvider ! responseFactory(StateChangeOk(msgId))
           }
         case Right(errors) =>
+          logg("Handling state change event as validation errors", version)
           stateChangesProcessed(version) = Right(errors)
           if (!recover) {
+            logg("Responding with validation errors", version)
             senderProvider ! responseFactory(StateChangeOkWithValidationError(msgId, errors))
           }
       }
@@ -164,23 +170,28 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
               logg("Distribution completed notification was ok.", msg.versionedId)
               responseFactory(DistributionCompleteOk(msgId))
             case SatelliteStateListener.StateChangedNotOk(_, ex) =>
-              logge("Distribution completed notification failed ok.", msg.versionedId, ex)
+              logge("Distribution completed notification not ok.", msg.versionedId, ex)
               responseFactory(DistributionCompleteNotOk(msgId, ex))
           }
           .recover { case it: Throwable =>
-            logge("Distribution completed notification failed ok.", msg.versionedId, it)
+            logge("Distribution completed notification failed.", msg.versionedId, it)
             responseFactory(DistributionCompleteNotOk(msgId, it))
           }
           .pipeToWithTimeout(senderTmp, exp, {
             val exception = new Exception("Timeout!!!")
-            logge("Distribution completed notification failed ok.", msg.versionedId, exception)
+            logge("Distribution completed notification failed.", msg.versionedId, exception)
             responseFactory(DistributionCompleteNotOk(msgId, exception))
           }, context.system.scheduler)
     }
   }
 
   private def logge(msg: String, versionedId: VersionedId, ex: Throwable): Unit = {
-    log.info("Satellite state={}, entity={} {}", settings.name, versionedId, msg, ex)
+    log.error(ex, "Satellite state={}, entity={} {}", settings.name, versionedId, msg)
+  }
+
+
+  private def logg(msg: String, versionedId: VersionedId): Unit = {
+    log.info("Satellite state={}, entity={} {}", settings.name, versionedId, msg)
   }
 
   private def handleStateChangeCommand(msg: StateChange[I])(responseFactory: (StateChangeResult) => Any)
@@ -225,9 +236,6 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
     }
   }
 
-  private def logg(msg: String, versionedId: VersionedId): Unit = {
-    log.info("Satellite state={}, entity={} {}", settings.name, versionedId, msg)
-  }
 
   /**
     * Unlike [[VersionedEntityActor]] we accept all versions that are unknown to us

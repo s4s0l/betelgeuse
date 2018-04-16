@@ -27,8 +27,10 @@ import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedState.V
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedStateTest._
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.NewVersionedValueListener.NewVersionResult
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor.Protocol
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor.Protocol.{GetPublicationStatus, GetPublicationStatusOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
-import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor.SatelliteValueHandler
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor.{HandlerResult, SatelliteValueHandler}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{SetValue, SetValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
@@ -90,7 +92,10 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
 
     override protected def initialize(): Unit = {
       super.initialize()
-      val dist = createSatelliteStateFactory[String, String]("state", handler1)
+      val dist = createSatelliteStateFactory[String, String]("state", new SatelliteValueHandler[String, String] {
+        override def handle(versionedId: VersionedId, input: String)(implicit executionContext: ExecutionContext): Future[HandlerResult[String]] =
+          handler1.handle(versionedId, input)
+      })
       val cache = dist.createCache("listenerOne", it => Future(s"enriched:$it"), 10.minutes)
       consumer = new ListeningLogger(cache)
       cache.addListener(consumer)
@@ -112,7 +117,10 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
 
     override protected def initialize(): Unit = {
       super.initialize()
-      val dist = createSatelliteStateFactory[String, String]("state", handler2)
+      val dist = createSatelliteStateFactory[String, String]("state", new SatelliteValueHandler[String, String] {
+        override def handle(versionedId: VersionedId, input: String)(implicit executionContext: ExecutionContext): Future[HandlerResult[String]] =
+          handler2.handle(versionedId, input)
+      })
       val cache = dist.createCache("listenerOne", it => Future(s"enriched:$it"), 10.minutes)
       consumer = new ListeningLogger(cache)
       cache.addListener(consumer)
@@ -189,6 +197,13 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
       assertThrows[Exception](getHandler1PromisedValue(5 second))
       assertThrows[Exception](getHandler1PromisedValue(1 second))
 
+      And("We see validation result in statuses")
+      val sts: Future[Protocol.GetPublicationStatusResult] = origin.service.origin.publishStatus(GetPublicationStatus("3"))(origin.execContext, origin.self)
+      val res: Protocol.GetPublicationStatusResult = Await.result(sts, origin.to)
+      assert(res.asInstanceOf[GetPublicationStatusOk].value.statuses.size == 1)
+      assert(res.asInstanceOf[GetPublicationStatusOk].value.statuses.head.completed)
+      assert(res.asInstanceOf[GetPublicationStatusOk].value.statuses.head.validationError.validationErrors.head == "fuck")
+
 
     }
 
@@ -243,7 +258,6 @@ object DistributedSharedStateTest {
                                 (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
     : Future[NewVersionResult] = {
       synchronized {
-        println("Got!!")
         receivedValues = (versionedId, richValue) :: receivedValues
         receivedPromise.complete(util.Success((versionedId, richValue)))
         next.map {
