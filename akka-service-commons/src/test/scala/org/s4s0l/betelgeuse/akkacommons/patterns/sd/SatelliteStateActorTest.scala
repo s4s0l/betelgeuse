@@ -22,7 +22,9 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringRece
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.NewVersionedValueListener.{NewVersionNotOk, NewVersionOk}
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.{BgSatelliteStateService, NewVersionedValueListener}
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{GetValue, GetValueNotOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.serialization.{BgSerialization, BgSerializationJackson, SimpleSerializer}
@@ -177,10 +179,191 @@ class SatelliteStateActorTest extends
 
     }
 
+    scenario("Handler reports validation error") {
+      new WithService(my) {
+
+
+        Given("A new shard storing string values named test1")
+        private val idInTest = "id4aa"
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status = service.validationFailedHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to*20))
+
+
+
+        Then("Should respond with validation failed")
+        assert(Await.result(change1Status, to * 2).isInstanceOf[StateChangeOkWithValidationError])
+
+        And("Handler was called")
+        assert(handlerRequest.contains("valueOne"))
+
+        When("Confirm Distribution is send")
+        private val changeDistributed = service.validationFailedHandler.distributionComplete(DistributionComplete(VersionedId(s"$idInTest", 1), to))
+
+        Then("Distribution confirmation does not complete ok")
+        assert(Await.result(changeDistributed, to).isInstanceOf[DistributionCompleteNotOk])
+
+        And("Listener is not called as we did not store any value")
+        assert(listenerResponse.isEmpty)
+
+
+        listenerResponse = None
+        handlerRequest = None
+
+        When("We repeat messages")
+
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status1 = service.validationFailedHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to))
+
+        Then("Should respond with validation failed - again")
+        assert(Await.result(change1Status1, to * 2).isInstanceOf[StateChangeOkWithValidationError])
+
+        And("Handler should not be called again")
+        assert(handlerRequest.isEmpty)
+
+      }
+
+    }
+
+    scenario("Handler rejects value") {
+      new WithService(my) {
+
+
+        Given("A new shard storing string values named test1")
+        private val idInTest = "id4aaxx"
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status = service.rejectingHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to*2))
+
+        Then("Should respond with ok")
+        assert(Await.result(change1Status, to * 2).isInstanceOf[StateChangeOk])
+
+        And("Handler was called")
+        assert(handlerRequest.contains("valueOne"))
+
+        When("Confirm Distribution is send")
+        private val changeDistributed = service.rejectingHandler.distributionComplete(DistributionComplete(VersionedId(s"$idInTest", 1), to))
+
+        Then("Distribution confirmation completes ok")
+        assert(Await.result(changeDistributed, to).isInstanceOf[DistributionCompleteOk])
+
+        And("Notifier is not bothered")
+        assert(listenerResponse.isEmpty)
+
+        When("We request value that was previously confirmed")
+        private val getRsp = service.rejectingHandler.getValue(GetValue(VersionedId(s"$idInTest", 1)))
+
+        Then("value will be missing")
+        assert(Await.result(getRsp, to).isInstanceOf[GetValueNotOk[String]])
+
+        listenerResponse = None
+        handlerRequest = None
+
+        When("We repeat messages")
+
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status1 = service.rejectingHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to))
+
+        Then("Should respond with ok - again")
+        assert(Await.result(change1Status1, to * 2).isInstanceOf[StateChangeOk])
+
+        And("Handler should not be called again")
+        assert(handlerRequest.isEmpty)
+
+      }
+
+    }
+
+    scenario("Handler fails value") {
+      new WithService(my) {
+
+
+        Given("A new shard storing string values named test1")
+        private val idInTest = "id4aayy"
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status = service.failedHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to*2))
+
+        Then("Should respond with not ok")
+        assert(Await.result(change1Status, to * 2).isInstanceOf[StateChangeNotOk])
+
+        And("Handler was called")
+        assert(handlerRequest.contains("valueOne"))
+
+        When("Confirm Distribution is send")
+        private val changeDistributed = service.failedHandler.distributionComplete(DistributionComplete(VersionedId(s"$idInTest", 1), to))
+
+        Then("Distribution confirmation completes not ok")
+        assert(Await.result(changeDistributed, to).isInstanceOf[DistributionCompleteNotOk])
+
+        And("Notifier is bothered")
+        assert(listenerResponse.isEmpty)
+
+
+        listenerResponse = None
+        handlerRequest = None
+
+        When("We repeat messages")
+
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status1 = service.failedHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to))
+
+        Then("Should respond with ok - again")
+        assert(Await.result(change1Status1, to * 2).isInstanceOf[StateChangeNotOk])
+
+        And("Handler should be called again")
+        assert(handlerRequest.contains("valueOne"))
+
+      }
+
+    }
+
 
   }
 
   feature("Satellite State actor is an VersionedEntityActor with ability to confirm distribution using Message pattern protocol also") {
+
+    scenario("Handler reports validation error using Message pattern protocol also") {
+      new WithService(my) {
+        private implicit val serializer: SimpleSerializer = service.simpleSerialization
+
+        Given("A new shard storing string values named test1")
+        private val idInTest = "id4aamp"
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status = service.validationFailedHandler.asRemote.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to*20))
+
+
+
+        Then("Should respond with validation failed")
+        assert(Await.result(change1Status, to * 2).isInstanceOf[StateChangeOkWithValidationError])
+
+        And("Handler was called")
+        assert(handlerRequest.contains("valueOne"))
+
+        When("Confirm Distribution is send")
+        private val changeDistributed = service.validationFailedHandler.asRemote.distributionComplete(DistributionComplete(VersionedId(s"$idInTest", 1), to))
+
+        Then("Distribution confirmation does not complete ok")
+        assert(Await.result(changeDistributed, to).isInstanceOf[DistributionCompleteNotOk])
+
+        And("Notifier is completed")
+        assert(listenerResponse.isEmpty)
+
+        listenerResponse = None
+        handlerRequest = None
+
+        When("We repeat messages")
+
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status1 = service.validationFailedHandler.asRemote.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to))
+
+        Then("Should respond with validation failed - again")
+        assert(Await.result(change1Status1, to * 2).isInstanceOf[StateChangeOkWithValidationError])
+
+        And("Handler should not be called again")
+        assert(handlerRequest.isEmpty)
+
+      }
+
+    }
+
 
     scenario("Does not confirm distribution if value was not introduced before using Message pattern protocol also") {
       new WithService(my) {
@@ -357,8 +540,42 @@ class SatelliteStateActorTest extends
     with BgClusteringReceptionist
     with BgSatelliteStateService {
 
+    lazy val rejectingHandler: SatelliteStateActor.Protocol[String, String] = {
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestRejectingHandler", d => {
+        handlerRequest = Some(d)
+        Left(None)
+      })
+      context.addGlobalListener("l", successListener)
+      context.enable()
+      context.satelliteStateActor
+    }
+
+    lazy val validationFailedHandler: SatelliteStateActor.Protocol[String, String] = {
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestValidationFailedHandler", d => {
+        handlerRequest = Some(d)
+        Right(ValidationError(Seq("No!")))
+      })
+      context.addGlobalListener("l", successListener)
+      context.enable()
+      context.satelliteStateActor
+    }
+
+    lazy val failedHandler: SatelliteStateActor.Protocol[String, String] = {
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestFailedHandler", d => {
+        handlerRequest = Some(d)
+        throw new Exception("!")
+      })
+      context.addGlobalListener("l", successListener)
+      context.enable()
+      context.satelliteStateActor
+    }
+
+
     lazy val successSatellite: SatelliteStateActor.Protocol[String, String] = {
-      val context = createSimpleSatelliteStateFactory[String]("SatelliteStateActorTestSuccess")
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestSuccess", d => {
+        handlerRequest = Some(d)
+        Left(Some(d))
+      })
       context.addGlobalListener("l", successListener)
       context.enable()
       context.satelliteStateActor
@@ -388,8 +605,11 @@ class SatelliteStateActorTest extends
 
   var listenerResponse: Option[String] = _
 
+  var handlerRequest: Option[String] = _
+
   override def withFixture(test: NoArgTest): Outcome = {
     listenerResponse = None
+    handlerRequest = None
     super.withFixture(test)
   }
 }

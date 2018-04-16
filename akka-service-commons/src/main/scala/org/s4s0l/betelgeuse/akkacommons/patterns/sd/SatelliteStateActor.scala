@@ -69,7 +69,7 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
 
   override def receiveCommand: Receive = super.receiveCommand orElse {
 
-    case msg: StateChange[_] =>
+    case msg: StateChange[I] =>
       handleStateChangeCommand(msg.asInstanceOf[StateChange[I]])(identity)
 
     case msg@Message("state-change", messageId, _, _) =>
@@ -135,7 +135,7 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
     stateChangesProcessed.get(msg.versionedId) match {
       case Some(Right(errorS)) =>
         //we seen it with errors before
-        StateChangeOkWithValidationError(msg.messageId, errorS)
+        sender() ! responseFactory(StateChangeOkWithValidationError(msg.messageId, errorS))
       case Some(Left(true)) =>
         //we seen it and accepted it before
         sender() ! responseFactory(StateChangeOk(msg.messageId))
@@ -144,9 +144,16 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
         sender() ! responseFactory(StateChangeOk(msg.messageId))
       case None =>
         //we see it first time
-        val handled = settings.handler(msg.value)
-        persist(StateChangedEvent(msg.versionedId, handled, msg.messageId)) {
-          processStateChangeEvents(recover = false, responseFactory)
+        try {
+
+          val handled = settings.handler(msg.value)
+          persist(StateChangedEvent(msg.versionedId, handled, msg.messageId)) {
+            processStateChangeEvents(recover = false, responseFactory)
+          }
+        } catch {
+          case ex: Exception =>
+            log.error(s"Handler failed for $persistenceId", ex)
+            sender() ! responseFactory(StateChangeNotOk(msg.messageId, ex))
         }
     }
   }

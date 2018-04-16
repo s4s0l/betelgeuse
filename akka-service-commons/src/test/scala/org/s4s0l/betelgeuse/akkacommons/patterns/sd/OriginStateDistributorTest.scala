@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import akka.actor.ActorRef
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
-import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.{OriginStateChanged, OriginStateChangedNotOk, OriginStateChangedOk}
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributorTest._
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
@@ -76,6 +76,36 @@ class OriginStateDistributorTest
 
       }
     }
+
+
+    scenario(s"Does not confirm if stateChange is not confirmed by one of satellites due to ValidationError") {
+      new WithService(aService) {
+        private val name = "stateChangeNotConfirmValidationFuture"
+        private val ff = validationFuture
+        Given("Two satellite states registered in state distributor")
+        private val distributor = OriginStateDistributor.start(OriginStateDistributor.Settings(name, Map(
+          "one" -> MockSatellite("one", ff, successFutureDistribution),
+          "two" -> MockSatellite("two", successFuture, successFutureDistribution)
+        )))
+
+        When("Distribute change")
+        distributor.stateChanged(OriginStateChanged(2, VersionedId("id1", 1), "value", 1 second))(self)
+
+        Then("Expect No confirmation")
+        assert(testKit.expectMsgClass(2 seconds, classOf[OriginStateChangedOkWithValidationError]).correlationId == 2)
+
+        And("Change was delivered")
+        private val emitted = queue.toArray(new Array[String](4))
+        private val changes = List("one:SC:value:id1@1", "two:SC:value:id1@1")
+        assert(changes.contains(emitted(0)))
+        assert(changes.contains(emitted(1)))
+
+        And("Change confirm was not emitted")
+        assert(queue.size() == 2)
+        queue.clear()
+      }
+    }
+
 
     Seq(
       ("stateChangeNotConfirmedFailureFuture", failureFuture, "Failure returned by listener"),
@@ -163,6 +193,7 @@ object OriginStateDistributorTest {
   val successFuture: FutureFactoryChange = (uuid: Uuid, executionContext: ExecutionContext) => Future(StateChangeOk(uuid))(executionContext)
   val failureFuture: FutureFactoryChange = (uuid: Uuid, executionContext: ExecutionContext) => Future(StateChangeNotOk(uuid, new Exception("?")))(executionContext)
   val exceptionFuture: FutureFactoryChange = (_: Uuid, _: ExecutionContext) => Future.failed(new Exception("?"))
+  val validationFuture: FutureFactoryChange = (uuid: Uuid, executionContext: ExecutionContext) => Future(StateChangeOkWithValidationError(uuid, ValidationError(Seq("x"))))(executionContext)
   val timeoutFuture: FutureFactoryChange = (_: Uuid, _: ExecutionContext) => Future.never
 
   val successFutureDistribution: FutureFactoryDistribution = (uuid: Uuid, executionContext: ExecutionContext) => Future(DistributionCompleteOk(uuid))(executionContext)
