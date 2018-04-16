@@ -1,17 +1,17 @@
 /*
  * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -50,9 +50,9 @@ trait VersionedEntityRestProtocol[T <: AnyRef, V] extends DomainObjectProtocol[S
                   (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
   : Future[RestCommandResult[T]] = {
     versionedEntityActorProtocol.getLatestValue(GetLatestValue(msg.id, msg.messageId)).map {
-      case ValueOk(correlationId, (_, value)) => RestCommandOk(value.asInstanceOf[T], correlationId)
-      case ValueNotOk(correlationId, ex: ValueMissingException) => RestCommandNotOk[T](ex, correlationId, StatusCodes.NotFound)
-      case ValueNotOk(correlationId, ex) => RestCommandNotOk[T](ex, correlationId)
+      case GetLatestValueOk(correlationId, _, value) => RestCommandOk(value.asInstanceOf[T], correlationId)
+      case GetLatestValueNotOk(correlationId, _, ex: ValueMissingException) => RestCommandNotOk[T](ex, correlationId, StatusCodes.NotFound)
+      case GetLatestValueNotOk(correlationId, _, ex) => RestCommandNotOk[T](ex, correlationId)
     }.recover { case ex: Throwable => RestCommandNotOk[T](ex, msg.messageId) }
   }
 
@@ -64,6 +64,7 @@ trait VersionedEntityRestProtocol[T <: AnyRef, V] extends DomainObjectProtocol[S
   : Future[RestCommandResult[String]] = {
     versionedEntityActorProtocol.setValue(SetValue(msg.id, msg.value, msg.messageId)).map {
       case SetValueOk(correlationId, _) => RestCommandOk(msg.id, correlationId)
+      case SetValueValidationError(correlationId, ex) => RestCommandOk[String](ex.getMessage, correlationId, StatusCodes.BadRequest)
       case SetValueNotOk(correlationId, ex) => RestCommandNotOk[String](ex, correlationId)
     }.recover { case ex: Throwable => RestCommandNotOk[String](ex, msg.messageId) }
   }
@@ -81,6 +82,7 @@ trait VersionedEntityRestProtocol[T <: AnyRef, V] extends DomainObjectProtocol[S
   : Future[RestCommandResult[String]] = {
     versionedEntityActorProtocol.setVersionedValue(SetVersionedValue(VersionedId(msg.id, 1), msg.value, msg.messageId)).map {
       case SetValueOk(correlationId, versionedId) => RestCommandOk(versionedId.id, correlationId)
+      case SetValueValidationError(correlationId, ex) => RestCommandNotOk[String](ex, correlationId, StatusCodes.BadRequest)
       case SetValueNotOk(correlationId, ex) => RestCommandNotOk[String](ex, correlationId)
     }.recover { case ex: Throwable => RestCommandNotOk[String](ex, msg.messageId) }
   }

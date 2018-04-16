@@ -1,17 +1,17 @@
 /*
  * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity
@@ -30,7 +30,7 @@ import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, QA, TimeoutShardedActor}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.language.postfixOps
+import scala.language.{implicitConversions, postfixOps}
 
 /**
   * Persistent actor that holds some value which is versioned.
@@ -41,7 +41,7 @@ import scala.language.postfixOps
   * @see [[org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol]]
   * @author Marcin Wielgus
   */
-class VersionedEntityActor[T](settings: Settings) extends Actor
+class VersionedEntityActor[T](settings: Settings[T]) extends Actor
   with ActorLogging
   with PersistentShardedActor
   with TimeoutShardedActor {
@@ -52,7 +52,7 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
 
   import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events._
 
-  override def receiveRecover: Receive = {
+  final override def receiveRecover: Receive = {
     case e: Event if processEvent(true).isDefinedAt(e) => processEvent(true).apply(e)
     case _: RecoveryCompleted => recoveryCompleted()
   }
@@ -66,39 +66,61 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
       case GetValue(v) =>
         getValueAtVersion(v) match {
           case Some(value) =>
-            sender() ! ValueOk(v, value)
+            sender() ! GetValueOk(v, value)
           case None =>
-            sender() ! ValueNotOk(v, ValueMissingException(v))
+            sender() ! GetValueNotOk(v, ValueMissingException(v))
             shardedPassivate()
         }
       case GetLatestValue(id, messageId) =>
         val v = VersionedId(id, currentVersion)
         getValueAtVersion(v) match {
           case Some(value) =>
-            sender() ! ValueOk(messageId, (v, value))
+            sender() ! GetLatestValueOk(messageId, v, value)
           case None =>
-            sender() ! ValueNotOk(messageId, ValueMissingException(v))
+            sender() ! GetLatestValueNotOk(messageId, v, ValueMissingException(v))
             shardedPassivate()
         }
       case cmd@SetValue(id, newValue, _) =>
         val v = VersionedId(id, currentVersion + 1)
-        persist(ValueEvent(cmd.messageId, v, interceptNewVersion(v, newValue.asInstanceOf[T])))(processEvent(false))
+        validateNewVersionValue(v, newValue.asInstanceOf[T]) match {
+          case Left(value) =>
+            persist(ValueEvent(cmd.messageId, v, value.asInstanceOf[T]))(processEvent(false))
+          case Right(ex) =>
+            confirmValidationError(cmd.messageId, ex)
+        }
+
+
       case cmd@SetVersionedValue(v, newValue, _) =>
         if (isVersionAccepted(v)) {
-          persist(ValueEvent(cmd.messageId, v, interceptNewVersion(v, newValue.asInstanceOf[T])))(processEvent(false))
+          validateNewVersionValue(v, newValue.asInstanceOf[T]) match {
+            case Left(value) =>
+              persist(ValueEvent(cmd.messageId, v, value))(processEvent(false))
+            case Right(ex) =>
+              confirmValidationError(cmd.messageId, ex)
+          }
         } else if (getValueAtVersion(v).contains(newValue)) {
           confirmUpdated(cmd.messageId, v)
         } else {
-          confirmOptimisticError(cmd.asInstanceOf[SetVersionedValue[T]])
+          confirmOptimisticError(cmd.messageId)
         }
+    }
+  }
+
+  private def validateNewVersionValue(versionedId: VersionedId, value: T): Either[T, Exception] = {
+    try {
+      Left(interceptNewVersion(versionedId, value.asInstanceOf[T]))
+    } catch {
+      case ex: Exception => Right(ex)
     }
   }
 
   /**
     * called before new version is persisted. returned value will be used as new value
-    * passed down to event. By default returns value
+    * passed down to event. By default rubs validator from settings
     */
-  protected def interceptNewVersion(versionedId: VersionedId, value: T): T = value
+  protected def interceptNewVersion(versionedId: VersionedId, value: T): T = {
+    settings.validator(versionedId, value)
+  }
 
   /**
     * tests whether new version should be accepted as new value, by
@@ -109,15 +131,20 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
   protected def isVersionAccepted(version: VersionedId): Boolean = version.version == currentVersion + 1
 
   def processEvent(recover: Boolean): PartialFunction[Event, Unit] = {
-    case ve@ValueEvent(_, versionedId, value) =>
-      if (versionedId.version > currentVersion) {
-        currentVersion = versionedId.version
-        currentValue = Some(value.asInstanceOf[T])
-      }
-      versionMap = versionMap + (versionedId.version -> value.asInstanceOf[T])
-      valueUpdated(versionedId, value.asInstanceOf[T])
+    case ve@ValueEvent(uuid, versionedId, _) =>
+      saveValueEvent(ve.asInstanceOf[ValueEvent[T]])
       if (!recover)
-        confirmUpdated(ve.uuid, versionedId)
+        confirmUpdated(uuid, versionedId)
+  }
+
+  protected def saveValueEvent(ve: ValueEvent[T]): Unit = {
+    val ValueEvent(_, versionedId, value) = ve
+    if (versionedId.version > currentVersion) {
+      currentVersion = versionedId.version
+      currentValue = Some(value.asInstanceOf[T])
+    }
+    versionMap = versionMap + (versionedId.version -> value.asInstanceOf[T])
+    valueUpdated(versionedId, value.asInstanceOf[T])
   }
 
   /**
@@ -133,8 +160,12 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
     sender() ! SetValueOk(uuid, versionedId)
   }
 
-  protected def confirmOptimisticError(cmd: SetVersionedValue[T]): Unit = {
-    sender() ! SetValueNotOk(cmd.messageId, ValueUpdateOptimisticException(getCurrentVersionId))
+  protected def confirmOptimisticError(messageId: Uuid): Unit = {
+    sender() ! SetValueNotOk(messageId, ValueUpdateOptimisticException(getCurrentVersionId))
+  }
+
+  protected def confirmValidationError(messageId: Uuid, ex: Exception): Unit = {
+    sender() ! SetValueValidationError(messageId, ex)
   }
 
   protected def getCurrentVersionId: VersionedId = {
@@ -147,23 +178,20 @@ class VersionedEntityActor[T](settings: Settings) extends Actor
 
 object VersionedEntityActor {
 
-  def startSharded[T](settings: Settings, propsMapper: Props => Props = identity)
+  def startSharded[T](settings: Settings[T], propsMapper: Props => Props = identity)
                      (implicit shardingExt: BgClusteringShardingExtension)
   : Protocol[T] = {
     val ref = shardingExt.start(settings.name, props[T](settings), entityExtractor)
     Protocol(ref, settings.name)
   }
 
-  private def props[T](settings: Settings): Props = {
+  private def props[T](settings: Settings[T]): Props = {
     Props(new VersionedEntityActor[T](settings))
   }
 
   def entityExtractor: ShardRegion.ExtractEntityId = {
     case a: IncomingMessage => (a.entityId, a)
   }
-
-  final case class Settings(name: String)
-
 
   trait ProtocolGetters[T] {
 
@@ -188,8 +216,8 @@ object VersionedEntityActor {
       */
     def getValue(msg: GetValue)
                 (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[GetValueResult[T, VersionedId]] =
-      actorTarget.?(msg)(5 seconds, sender).mapTo[GetValueResult[T, VersionedId]]
+    : Future[GetValueResult[T]] =
+      actorTarget.?(msg)(5 seconds, sender).mapTo[GetValueResult[T]]
 
     /**
       * Gets a latest value of a given id and version.
@@ -198,9 +226,11 @@ object VersionedEntityActor {
       */
     def getLatestValue(msg: GetLatestValue)
                       (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[GetValueResult[(VersionedId, T), Uuid]] =
-      actorTarget.?(msg)(5 seconds, sender).mapTo[GetValueResult[(VersionedId, T), Uuid]]
+    : Future[GetLatestValueResult[T]] =
+      actorTarget.?(msg)(5 seconds, sender).mapTo[GetLatestValueResult[T]]
   }
+
+  final case class Settings[T](name: String, validator: (VersionedId, T) => T = (_: VersionedId, a: T) => a)
 
   /**
     * An protocol for [[VersionedEntityActor]]
@@ -266,7 +296,7 @@ object VersionedEntityActor {
 
     sealed trait ValueUpdateResult extends Result[Uuid, VersionedId]
 
-    trait GetValueResult[T, V] extends Result[V, T]
+    sealed trait GetLatestValueResult[V] extends Result[QA.Uuid, V]
 
     case class GetValueVersion(entityId: String, messageId: Uuid = QA.uuid) extends IncomingMessage with UuidQuestion
 
@@ -278,9 +308,19 @@ object VersionedEntityActor {
 
     case class GetLatestValue(entityId: String, messageId: QA.Uuid = QA.uuid) extends IncomingMessage with Question[QA.Uuid]
 
-    case class ValueOk[T, V](correlationId: V, value: T) extends GetValueResult[T, V] with OkResult[V, T]
+    trait GetValueResult[V] extends Result[VersionedId, V]
 
-    case class ValueNotOk[T, V](correlationId: V, ex: Throwable) extends GetValueResult[T, V] with NotOkResult[V, T]
+    case class GetLatestValueOk[V](correlationId: QA.Uuid, version: VersionedId, value: V)
+      extends GetLatestValueResult[V] with OkResult[QA.Uuid, V]
+
+    case class GetLatestValueNotOk[V](correlationId: QA.Uuid, version: VersionedId, ex: Throwable)
+      extends GetLatestValueResult[V] with NotOkResult[QA.Uuid, V]
+
+    case class GetValueOk[V](correlationId: VersionedId, value: V) extends GetValueResult[V] with OkResult[VersionedId, V]
+
+    case class GetValueNotOk[V](correlationId: VersionedId, ex: Throwable) extends GetValueResult[V] with NotOkResult[VersionedId, V]
+
+    case class SetValueValidationError(correlationId: Uuid, ex: Throwable) extends ValueUpdateResult with NotOkResult[Uuid, VersionedId]
 
     case class SetValue[T](entityId: String, value: T, messageId: Uuid = QA.uuid) extends IncomingMessage with UuidQuestion
 
@@ -290,8 +330,15 @@ object VersionedEntityActor {
 
     case class SetValueOk(correlationId: Uuid, value: VersionedId) extends ValueUpdateResult with OkResult[Uuid, VersionedId]
 
-    case class SetValueNotOk(correlationId: Uuid, ex: Throwable) extends ValueUpdateResult with NotOkResult[Uuid, VersionedId]
+    object GetLatestValueResult {
+      implicit def toGetValueResult[V](lvr: GetLatestValueResult[V]): GetValueResult[V] =
+        lvr match {
+          case GetLatestValueOk(_, id, value) => GetValueOk(id, value)
+          case GetLatestValueNotOk(_, id, ex) => GetValueNotOk(id, ex)
+        }
+    }
 
+    case class SetValueNotOk(correlationId: Uuid, ex: Throwable) extends ValueUpdateResult with NotOkResult[Uuid, VersionedId]
 
     case class ValueMissingException(versionedId: VersionedId) extends Exception("Not Found")
 

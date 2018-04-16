@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.pattern.ask
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{Publish, _}
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.{InternalActorDead, MessageForwarderContext, Settings}
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener
-import org.s4s0l.betelgeuse.akkacommons.patterns.statedistrib.SatelliteStateActor.SatelliteStateListener.{StateChanged, StateChangedNotOk, StateChangedOk, StateChangedResult}
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateListener
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateListener.{StateChanged, StateChangedNotOk, StateChangedOk, StateChangedResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 import org.s4s0l.betelgeuse.utils.AllUtils._

@@ -1,17 +1,17 @@
 /*
  * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity
@@ -84,7 +84,7 @@ class VersionedEntityActorTest extends
         private val getLatestValue = GetLatestValue("id1")
         protocol.getLatestValue(getLatestValue).pipeTo(self)
         Then("Version returned should now have value == 1")
-        testKit.expectMsg(to, ValueOk(getLatestValue.messageId, (VersionedId("id1", 1), "sth")))
+        testKit.expectMsg(to, GetLatestValueOk(getLatestValue.messageId, VersionedId("id1", 1), "sth"))
 
 
         When("We store value 'sth2' in entity 'id1' via SetValue")
@@ -97,7 +97,7 @@ class VersionedEntityActorTest extends
         private val getLatestValue2 = GetLatestValue("id1")
         protocol.getLatestValue(getLatestValue2).pipeTo(self)
         Then("Version returned should now have value == 2")
-        testKit.expectMsg(to, ValueOk(getLatestValue2.messageId, (VersionedId("id1", 2), "sth2")))
+        testKit.expectMsg(to, GetLatestValueOk(getLatestValue2.messageId, VersionedId("id1", 2), "sth2"))
       }
     }
 
@@ -118,17 +118,17 @@ class VersionedEntityActorTest extends
         When("We ask for version 1")
         protocol.getValue(GetValue(VersionedId("id1", 1))).pipeTo(self)
         Then("We expect it to return a value 'sth1'")
-        testKit.expectMsg(to, VersionedEntityActor.Protocol.ValueOk(VersionedId("id1", 1), "sth1"))
+        testKit.expectMsg(to, VersionedEntityActor.Protocol.GetValueOk(VersionedId("id1", 1), "sth1"))
 
         When("We ask for version 2")
         protocol.getValue(GetValue(VersionedId("id1", 2))).pipeTo(self)
         Then("We expect it to return a value 'sth2'")
-        testKit.expectMsg(to, VersionedEntityActor.Protocol.ValueOk(VersionedId("id1", 2), "sth2"))
+        testKit.expectMsg(to, VersionedEntityActor.Protocol.GetValueOk(VersionedId("id1", 2), "sth2"))
 
         When("We ask for version 3")
         protocol.getValue(GetValue(VersionedId("id1", 3))).pipeTo(self)
         Then("We expect it to return a None in version 3")
-        testKit.expectMsg(to, VersionedEntityActor.Protocol.ValueNotOk(VersionedId("id1", 3), ValueMissingException(VersionedId("id1", 3))))
+        testKit.expectMsg(to, VersionedEntityActor.Protocol.GetValueNotOk(VersionedId("id1", 3), ValueMissingException(VersionedId("id1", 3))))
       }
     }
 
