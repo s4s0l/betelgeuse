@@ -36,7 +36,7 @@ import scala.language.postfixOps
   */
 trait OriginStateRestProtocol[T <: AnyRef, V] extends Actions[String, T, V] {
 
-  def originStatePublishingActorProtocol: OriginStatePublishingActor.Protocol[T]
+  def originStateActorProtocol: OriginStateActor.Protocol[T]
 
   override def actions: Map[ActionDesc, (Action[String, V], RestProtocolContext) => Future[RestCommandResult[_]]] =
     super.actions ++ Map(
@@ -45,7 +45,7 @@ trait OriginStateRestProtocol[T <: AnyRef, V] extends Actions[String, T, V] {
 
 
   def getPublicationStatus(msg: Action[String, V])(implicit executionContext: ExecutionContext, sender: ActorRef): Future[RestCommandResult[PublicationStatuses]] =
-    originStatePublishingActorProtocol.publishStatus(GetPublicationStatus(msg.id, msg.messageId)).map {
+    originStateActorProtocol.publishStatus(GetPublicationStatus(msg.id, msg.messageId)).map {
       case GetPublicationStatusOk(value, correlationId) => RestCommandOk(value, correlationId)
       case GetPublicationStatusNotOk(ex: ValueMissingException, correlationId) => RestCommandNotOk(ex, correlationId, StatusCodes.NotFound)
       case GetPublicationStatusNotOk(ex, correlationId) => RestCommandNotOk(ex, correlationId)
