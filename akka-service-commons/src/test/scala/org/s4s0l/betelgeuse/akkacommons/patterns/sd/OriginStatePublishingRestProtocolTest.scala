@@ -234,6 +234,8 @@ class OriginStatePublishingRestProtocolTest extends
       with OriginStateRestProtocol[SomeValue, String]
       with VersionedEntityRestProtocol[SomeValue, String] {
 
+      override def originStatePublishingActorProtocol: Protocol[SomeValue] = versionedEntity
+
       override def originStateActorProtocol: OriginStatePublishingActor.Protocol[SomeValue] = versionedEntity
 
       override protected def domainObjectSettings: DomainObjectSettings[String, SomeValue, String] = new DomainObjectSettings()
