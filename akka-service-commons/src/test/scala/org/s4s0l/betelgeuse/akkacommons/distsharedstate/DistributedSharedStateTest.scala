@@ -163,8 +163,6 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
       satellite2.service.consumer.nextSuccess()
       And("After that no more calls")
       assertThrows[Exception](satellite1.service.consumer.getPromisedValue(5 second))
-
-
     }
 
     scenario("Origin value change is propagated to all parties, but when somebody  fails validation it will not be retried") {
@@ -180,7 +178,7 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
       And("All handlers were called")
       assert(DistributedSharedStateTest.getHandler1PromisedValue(4 second) == "valueThree")
       assert(DistributedSharedStateTest.getHandler2PromisedValue(4 second) == "valueThree")
-      resetHandlers
+      resetHandlers()
 
       When("we wait till redelivery occurs")
       Thread.sleep(3000)
@@ -196,11 +194,11 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
   }
 
   override def withFixture(test: NoArgTest): Outcome = {
-    resetHandlers
+    resetHandlers()
     super.withFixture(test)
   }
 
-  private def resetHandlers = {
+  private def resetHandlers(): Unit = {
     DistributedSharedStateTest.handler1 = i => Left(Some(i.toUpperCase))
     DistributedSharedStateTest.handler2 = i => Left(Some(i.toLowerCase()))
     DistributedSharedStateTest.handler2CalledPromise = Promise[String]()

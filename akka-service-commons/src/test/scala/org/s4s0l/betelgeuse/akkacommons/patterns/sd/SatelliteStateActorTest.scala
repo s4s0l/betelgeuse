@@ -296,7 +296,6 @@ class SatelliteStateActorTest extends
         And("Notifier is bothered")
         assert(listenerResponse.isEmpty)
 
-
         listenerResponse = None
         handlerRequest = None
 

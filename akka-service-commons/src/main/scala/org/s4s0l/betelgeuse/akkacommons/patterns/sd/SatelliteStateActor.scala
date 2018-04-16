@@ -145,7 +145,6 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
       case None =>
         //we see it first time
         try {
-
           val handled = settings.handler(msg.value)
           persist(StateChangedEvent(msg.versionedId, handled, msg.messageId)) {
             processStateChangeEvents(recover = false, responseFactory)

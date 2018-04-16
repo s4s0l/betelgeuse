@@ -175,8 +175,6 @@ class OriginStateDistributorTest
         }
       }
     }
-
-
   }
 
   override def withFixture(test: NoArgTest): Outcome = {
