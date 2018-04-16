@@ -16,6 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import akka.actor.ActorRef
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
@@ -155,8 +157,10 @@ class SatelliteStateActorTest extends
 
         And("Notifier is completed")
         assert(listenerResponse.contains(s"valueOne@$idInTest@1"))
+        assert(handlerRequest.contains(s"valueOne"))
 
         listenerResponse = None
+        handlerRequest = None
 
         When("We repeat messages")
 
@@ -174,7 +178,29 @@ class SatelliteStateActorTest extends
 
         And("Notifier is completed")
         assert(listenerResponse.contains(s"valueOne@$idInTest@1"))
+        And("Handler is not called")
+        assert(handlerRequest.isEmpty)
 
+      }
+
+    }
+
+    scenario("Can handle proper changeState even when hanges come quickly we do not let handler to work twice") {
+      new WithService(my) {
+
+
+        Given("A new shard storing string values named test1")
+        private val idInTest = "id4xxxx"
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne' done twice")
+        private val change1StatusA = service.slowHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 4))
+        private val change1StatusB = service.slowHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 4))
+
+        Then("Should respond ok for both")
+        assert(Await.result(change1StatusA, to * 4).isInstanceOf[StateChangeOk])
+        assert(Await.result(change1StatusB, to).isInstanceOf[StateChangeOk])
+
+        And("Handler should be called only once")
+        assert(service.slowHandlerCounter.get() == 1)
       }
 
     }
@@ -186,8 +212,7 @@ class SatelliteStateActorTest extends
         Given("A new shard storing string values named test1")
         private val idInTest = "id4aa"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val change1Status = service.validationFailedHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to*20))
-
+        private val change1Status = service.validationFailedHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 20))
 
 
         Then("Should respond with validation failed")
@@ -231,7 +256,7 @@ class SatelliteStateActorTest extends
         Given("A new shard storing string values named test1")
         private val idInTest = "id4aaxx"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val change1Status = service.rejectingHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to*2))
+        private val change1Status = service.rejectingHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 2))
 
         Then("Should respond with ok")
         assert(Await.result(change1Status, to * 2).isInstanceOf[StateChangeOk])
@@ -279,7 +304,7 @@ class SatelliteStateActorTest extends
         Given("A new shard storing string values named test1")
         private val idInTest = "id4aayy"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val change1Status = service.failedHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to*2))
+        private val change1Status = service.failedHandler.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 2))
 
         Then("Should respond with not ok")
         assert(Await.result(change1Status, to * 2).isInstanceOf[StateChangeNotOk])
@@ -326,8 +351,7 @@ class SatelliteStateActorTest extends
         Given("A new shard storing string values named test1")
         private val idInTest = "id4aamp"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
-        private val change1Status = service.validationFailedHandler.asRemote.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to*20))
-
+        private val change1Status = service.validationFailedHandler.asRemote.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 20))
 
 
         Then("Should respond with validation failed")
@@ -540,8 +564,21 @@ class SatelliteStateActorTest extends
     with BgSatelliteStateService {
 
     lazy val rejectingHandler: SatelliteStateActor.Protocol[String, String] = {
-      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestRejectingHandler", d => {
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestRejectingHandler", (d: String) => {
         handlerRequest = Some(d)
+        Left(None)
+      })
+      context.addGlobalListener("l", successListener)
+      context.enable()
+      context.satelliteStateActor
+    }
+    @volatile var slowHandlerCounter: AtomicInteger = new AtomicInteger(0)
+    lazy val slowHandler: SatelliteStateActor.Protocol[String, String] = {
+
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestSlowHandler", (d: String) => {
+        handlerRequest = Some(d)
+        slowHandlerCounter.incrementAndGet()
+        Thread.sleep(2000)
         Left(None)
       })
       context.addGlobalListener("l", successListener)
@@ -550,7 +587,7 @@ class SatelliteStateActorTest extends
     }
 
     lazy val validationFailedHandler: SatelliteStateActor.Protocol[String, String] = {
-      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestValidationFailedHandler", d => {
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestValidationFailedHandler", (d: String) => {
         handlerRequest = Some(d)
         Right(ValidationError(Seq("No!")))
       })
@@ -560,7 +597,7 @@ class SatelliteStateActorTest extends
     }
 
     lazy val failedHandler: SatelliteStateActor.Protocol[String, String] = {
-      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestFailedHandler", d => {
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestFailedHandler", (d: String) => {
         handlerRequest = Some(d)
         throw new Exception("!")
       })
@@ -571,7 +608,7 @@ class SatelliteStateActorTest extends
 
 
     lazy val successSatellite: SatelliteStateActor.Protocol[String, String] = {
-      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestSuccess", d => {
+      val context = createSatelliteStateFactory[String, String]("SatelliteStateActorTestSuccess", (d: String) => {
         handlerRequest = Some(d)
         Left(Some(d))
       })

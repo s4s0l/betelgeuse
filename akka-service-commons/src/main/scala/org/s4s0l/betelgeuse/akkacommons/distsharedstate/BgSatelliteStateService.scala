@@ -16,12 +16,15 @@
 
 package org.s4s0l.betelgeuse.akkacommons.distsharedstate
 
+
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedState.SatelliteContext
-import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor.HandlerResult
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor.{HandlerResult, SatelliteValueHandler}
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.BgPersistenceJournal
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 
 /**
@@ -32,15 +35,19 @@ trait BgSatelliteStateService {
     with BgClusteringReceptionist
     with BgClusteringSharding =>
 
-  def createSatelliteStateFactory[I, V](name: String, handler: (I) => HandlerResult[V])
+  def createSatelliteStateFactory[I, V](name: String, handler: SatelliteValueHandler[I, V])
                                        (implicit classTag: ClassTag[I])
   : SatelliteContext[I, V] = {
-    DistributedSharedState.createSatelliteStateDistribution(name, handler)
+    DistributedSharedState.createSatelliteStateDistribution[I, V](name, handler)
   }
 
   def createSimpleSatelliteStateFactory[I](name: String)
                                           (implicit classTag: ClassTag[I])
   : SatelliteContext[I, I] = {
-    DistributedSharedState.createSatelliteStateDistribution(name, it => Left(Some(it)))
+    DistributedSharedState.createSatelliteStateDistribution(name, new SatelliteValueHandler[I, I] {
+      override def handle(versionedId: VersionedId, input: I)(implicit executionContext: ExecutionContext): Future[HandlerResult[I]] = {
+        Future.successful(Left(Some(input)))
+      }
+    })
   }
 }

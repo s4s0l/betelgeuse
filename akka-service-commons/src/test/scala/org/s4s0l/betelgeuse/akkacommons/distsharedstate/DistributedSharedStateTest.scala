@@ -24,11 +24,11 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClient
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedState.VersionedCache
-import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedStateTest.ListeningLogger
+import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedStateTest._
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.NewVersionedValueListener.NewVersionResult
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
-import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor.HandlerResult
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor.SatelliteValueHandler
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{SetValue, SetValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
@@ -90,7 +90,7 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
 
     override protected def initialize(): Unit = {
       super.initialize()
-      val dist = createSatelliteStateFactory[String, String]("state", DistributedSharedStateTest.handler1)
+      val dist = createSatelliteStateFactory[String, String]("state", handler1)
       val cache = dist.createCache("listenerOne", it => Future(s"enriched:$it"), 10.minutes)
       consumer = new ListeningLogger(cache)
       cache.addListener(consumer)
@@ -112,7 +112,7 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
 
     override protected def initialize(): Unit = {
       super.initialize()
-      val dist = createSatelliteStateFactory[String, String]("state", DistributedSharedStateTest.handler2)
+      val dist = createSatelliteStateFactory[String, String]("state", handler2)
       val cache = dist.createCache("listenerOne", it => Future(s"enriched:$it"), 10.minutes)
       consumer = new ListeningLogger(cache)
       cache.addListener(consumer)
@@ -169,24 +169,25 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
       Given("One of the listeners fails")
       satellite2.service.consumer.nextSuccess()
       satellite1.service.consumer.nextSuccess()
-      DistributedSharedStateTest.handler1 = _ => Right(ValidationError(Seq("fuck")))
+      handler1 = (i: String) => {
+        handler1CalledPromise.complete(util.Success(i))
+        Right(ValidationError(Seq("fuck")))
+      }
       When("new version is published")
       val value = SetValue("3", "valueThree")
       origin.service.origin.setValueMsg(value)(origin.execContext, origin.self)
       Then("We get confirmation from origin")
       origin.testKit.expectMsg(SetValueOk(value.messageId, VersionedId("3", 1)))
       And("All handlers were called")
-      assert(DistributedSharedStateTest.getHandler1PromisedValue(4 second) == "valueThree")
-      assert(DistributedSharedStateTest.getHandler2PromisedValue(4 second) == "valueThree")
+      assert(getHandler1PromisedValue(4 second) == "valueThree")
+      assert(getHandler2PromisedValue(4 second) == "valueThree")
       resetHandlers()
 
       When("we wait till redelivery occurs")
       Thread.sleep(3000)
       Then("After that no more calls")
-      assertThrows[Exception](DistributedSharedStateTest.getHandler1PromisedValue(5 second))
-      assertThrows[Exception](DistributedSharedStateTest.getHandler1PromisedValue(1 second))
-
-
+      assertThrows[Exception](getHandler1PromisedValue(5 second))
+      assertThrows[Exception](getHandler1PromisedValue(1 second))
 
 
     }
@@ -198,12 +199,7 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
     super.withFixture(test)
   }
 
-  private def resetHandlers(): Unit = {
-    DistributedSharedStateTest.handler1 = i => Left(Some(i.toUpperCase))
-    DistributedSharedStateTest.handler2 = i => Left(Some(i.toLowerCase()))
-    DistributedSharedStateTest.handler2CalledPromise = Promise[String]()
-    DistributedSharedStateTest.handler1CalledPromise = Promise[String]()
-  }
+
 }
 
 
@@ -211,15 +207,26 @@ object DistributedSharedStateTest {
 
   var handler1CalledPromise: Promise[String] = Promise[String]()
   var handler2CalledPromise: Promise[String] = Promise[String]()
-  var handler1: (String) => HandlerResult[String] = i => {
-    handler1CalledPromise.complete(util.Success(i))
-    Left(Some(i.toUpperCase))
+  var handler1: SatelliteValueHandler[String, String] = _
+  var handler2: SatelliteValueHandler[String, String] = _
+
+  private def resetHandlers(): Unit = {
+    handler1CalledPromise = Promise[String]()
+    handler2CalledPromise = Promise[String]()
+    handler1 = (i: String) => {
+      handler1CalledPromise.complete(util.Success(i))
+      Left(Some(i.toUpperCase()))
+    }
+    handler2 = (i: String) => {
+      handler2CalledPromise.complete(util.Success(i))
+      Left(Some(i.toLowerCase()))
+    }
   }
-  var handler2: (String) => HandlerResult[String] = i => {
-    handler2CalledPromise.complete(util.Success(i))
-    Left(Some(i.toLowerCase()))
-  }
+
+  resetHandlers()
+
   def getHandler1PromisedValue(duration: FiniteDuration): String = Await.result(handler1CalledPromise.future, duration)
+
   def getHandler2PromisedValue(duration: FiniteDuration): String = Await.result(handler2CalledPromise.future, duration)
 
   class ListeningLogger(val cache: VersionedCache[String]) extends NewVersionedValueListener[String] {

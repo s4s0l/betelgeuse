@@ -37,8 +37,8 @@ import org.s4s0l.betelgeuse.akkacommons.utils.QA.Uuid
 
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.{ExecutionContext, Future}
-import scala.language.postfixOps
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+import scala.language.{implicitConversions, postfixOps}
 import scala.reflect.ClassTag
 
 /**
@@ -63,9 +63,33 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
 
   implicit val messageForward: Message.ForwardHeaderProvider = Message.defaultForward
 
+  private var stateChangeHandlingInProgress: Boolean = false
 
   override def processEvent(recover: Boolean): PartialFunction[Event, Unit] =
-    super.processEvent(recover) orElse processStateChangeEvents(recover, identity)
+    super.processEvent(recover) orElse processStateChangeEvents(recover, identity, self)
+
+  private def processStateChangeEvents(recover: Boolean, responseFactory: (StateChangeResult) => Any, senderProvider: => ActorRef)
+  : PartialFunction[Event, Unit] = {
+    case x@StateChangedEvent(version, _, _, msgId) =>
+      x.toHandlerResult match {
+        case Left(None) =>
+          stateChangesProcessed(version) = Left(false)
+          if (!recover) {
+            senderProvider ! responseFactory(StateChangeOk(msgId))
+          }
+        case Left(Some(value)) =>
+          saveValueEvent(ValueEvent[V](msgId, version, value.asInstanceOf[V]))
+          stateChangesProcessed(version) = Left(true)
+          if (!recover) {
+            senderProvider ! responseFactory(StateChangeOk(msgId))
+          }
+        case Right(errors) =>
+          stateChangesProcessed(version) = Right(errors)
+          if (!recover) {
+            senderProvider ! responseFactory(StateChangeOkWithValidationError(msgId, errors))
+          }
+      }
+  }
 
   override def receiveCommand: Receive = super.receiveCommand orElse {
 
@@ -98,6 +122,21 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
           msg.response("distribution-complete-ok", "")
       }
 
+
+    case AsyncHandleResult(originalSender, msg, handled, responseFactory) =>
+      stateChangeHandlingInProgress = false
+      logg("Handle result processing.", msg.versionedId)
+      unstashAll()
+      persist(StateChangedEvent(msg.versionedId, handled, msg.messageId)) {
+        processStateChangeEvents(recover = false, responseFactory, originalSender)
+      }
+
+    case AsyncHandleFailed(originalSender, msg, ex, responseFactory) =>
+      stateChangeHandlingInProgress = false
+      unstashAll()
+      logge("Handle result was failure, responding not ok", msg.versionedId, ex)
+      originalSender ! responseFactory(StateChangeNotOk(msg.messageId, ex))
+
   }
 
   private def handleStateDistributedCommand(msg: DistributionComplete)(responseFactory: (DistributionCompleteResult) => Any) = {
@@ -105,79 +144,89 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
     stateChangesProcessed.get(version) match {
       case None | Some(Right(_)) =>
         // we never seen it all seen but validation failed
+        logg("Distribution request skipped as not ok.", msg.versionedId)
         sender() ! responseFactory(DistributionCompleteNotOk(msgId, new Exception(s"No value at version $version")))
       case Some(Left(false)) =>
         //we seen it and accepted it before but not saved it, so no need to call listeners
+        logg("Distribution request skipped as ok.", msg.versionedId)
         sender() ! responseFactory(DistributionCompleteOk(msgId))
       case Some(Left(true)) =>
         //we seen it and accepted it before, notifying listeners
+
         import context.dispatcher
         import org.s4s0l.betelgeuse.utils.AllUtils._
         val senderTmp = sender()
-
+        logg("Starting distribution completed notification.", msg.versionedId)
         val request = SatelliteStateListener.StateChanged(version, getValueAtVersion(version).getOrElse(throw new IllegalStateException()), exp)
         settings.listener.configurationChanged(request)
           .map {
-            case SatelliteStateListener.StateChangedOk(_) => responseFactory(DistributionCompleteOk(msgId))
-            case SatelliteStateListener.StateChangedNotOk(_, ex) => responseFactory(DistributionCompleteNotOk(msgId, ex))
+            case SatelliteStateListener.StateChangedOk(_) =>
+              logg("Distribution completed notification was ok.", msg.versionedId)
+              responseFactory(DistributionCompleteOk(msgId))
+            case SatelliteStateListener.StateChangedNotOk(_, ex) =>
+              logge("Distribution completed notification failed ok.", msg.versionedId, ex)
+              responseFactory(DistributionCompleteNotOk(msgId, ex))
           }
           .recover { case it: Throwable =>
+            logge("Distribution completed notification failed ok.", msg.versionedId, it)
             responseFactory(DistributionCompleteNotOk(msgId, it))
           }
-          .pipeToWithTimeout(senderTmp, exp,
-            responseFactory(DistributionCompleteNotOk(msgId, new Exception("Timeout!!!"))),
-            context.system.scheduler)
+          .pipeToWithTimeout(senderTmp, exp, {
+            val exception = new Exception("Timeout!!!")
+            logge("Distribution completed notification failed ok.", msg.versionedId, exception)
+            responseFactory(DistributionCompleteNotOk(msgId, exception))
+          }, context.system.scheduler)
     }
+  }
+
+  private def logge(msg: String, versionedId: VersionedId, ex: Throwable): Unit = {
+    log.info("Satellite state={}, entity={} {}", settings.name, versionedId, msg, ex)
   }
 
   private def handleStateChangeCommand(msg: StateChange[I])(responseFactory: (StateChangeResult) => Any)
   : Unit = {
-    stateChangesProcessed.get(msg.versionedId) match {
-      case Some(Right(errorS)) =>
-        //we seen it with errors before
-        sender() ! responseFactory(StateChangeOkWithValidationError(msg.messageId, errorS))
-      case Some(Left(true)) =>
-        //we seen it and accepted it before
-        sender() ! responseFactory(StateChangeOk(msg.messageId))
-      case Some(Left(false)) =>
-        //we seen it and accepted it before but not saved it
-        sender() ! responseFactory(StateChangeOk(msg.messageId))
-      case None =>
-        //we see it first time
-        try {
-          val handled = settings.handler(msg.value)
-          persist(StateChangedEvent(msg.versionedId, handled, msg.messageId)) {
-            processStateChangeEvents(recover = false, responseFactory)
-          }
-        } catch {
-          case ex: Exception =>
-            log.error(s"Handler failed for $persistenceId", ex)
-            sender() ! responseFactory(StateChangeNotOk(msg.messageId, ex))
-        }
+    if (stateChangeHandlingInProgress) {
+      logg("Got StateChange, but stashing.", msg.versionedId)
+      stash()
+    } else {
+
+
+      logg("Got StateChange, processing...", msg.versionedId)
+      stateChangesProcessed.get(msg.versionedId) match {
+        case Some(Right(errorS)) =>
+          //we seen it with errors before
+          logg("Returning cached validation errors.", msg.versionedId)
+          sender() ! responseFactory(StateChangeOkWithValidationError(msg.messageId, errorS))
+        case Some(Left(true)) =>
+          //we seen it and accepted it before
+          logg("Returning cached ok.", msg.versionedId)
+          sender() ! responseFactory(StateChangeOk(msg.messageId))
+        case Some(Left(false)) =>
+          //we seen it and accepted it before but not saved it
+          logg("Returning cached not ok.", msg.versionedId)
+          sender() ! responseFactory(StateChangeOk(msg.messageId))
+        case None =>
+          //we see it first time
+          implicit val execContext: ExecutionContextExecutor = context.dispatcher
+          import org.s4s0l.betelgeuse.utils.AllUtils._
+          stateChangeHandlingInProgress = true //todo: jakiś timer co to wyłączy, albo wierzymy pipeTo...
+        val originalSender = sender()
+          logg("Handle processing started.", msg.versionedId)
+          settings.handler.handle(msg.versionedId, msg.value)
+            .map(x => {
+              logg("Handle processing ended.", msg.versionedId)
+              AsyncHandleResult[I, V](originalSender, msg, x, responseFactory)
+            })
+            .recover { case ex: Exception => AsyncHandleFailed(originalSender, msg, new Exception(ex), responseFactory) }
+            .pipeToWithTimeout(self, msg.expectedConfirmIn, AsyncHandleFailed(originalSender, msg, new Exception("Timeout"), responseFactory), context.system.scheduler)
+
+
+      }
     }
   }
 
-  private def processStateChangeEvents(recover: Boolean, responseFactory: (StateChangeResult) => Any)
-  : PartialFunction[Event, Unit] = {
-    case x@StateChangedEvent(version, _, _, msgId) =>
-      x.toHandlerResult match {
-        case Left(None) =>
-          stateChangesProcessed(version) = Left(false)
-          if (!recover) {
-            sender() ! responseFactory(StateChangeOk(msgId))
-          }
-        case Left(Some(value)) =>
-          saveValueEvent(ValueEvent[V](msgId, version, value.asInstanceOf[V]))
-          stateChangesProcessed(version) = Left(true)
-          if (!recover) {
-            sender() ! responseFactory(StateChangeOk(msgId))
-          }
-        case Right(errors) =>
-          stateChangesProcessed(version) = Right(errors)
-          if (!recover) {
-            sender() ! responseFactory(StateChangeOkWithValidationError(msgId, errors))
-          }
-      }
+  private def logg(msg: String, versionedId: VersionedId): Unit = {
+    log.info("Satellite state={}, entity={} {}", settings.name, versionedId, msg)
   }
 
   /**
@@ -189,7 +238,6 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
 
 object SatelliteStateActor {
 
-  type HandlerResult[V] = Either[Option[V], ValidationError]
 
   def startSharded[I, V](settings: Settings[I, V],
                          propsMapper: Props => Props = identity,
@@ -220,6 +268,16 @@ object SatelliteStateActor {
 
   private def getRemoteName(name: String): String = s"/user/satellite-state-$name"
 
+  type HandlerResult[V] = Either[Option[V], ValidationError]
+
+  trait SatelliteValueHandler[I, V] {
+    def handle(versionedId: VersionedId, input: I)
+              (implicit executionContext: ExecutionContext): Future[HandlerResult[V]]
+  }
+
+  private trait AsyncHandleResponse
+
+
   trait Protocol[I, V] extends ProtocolGetters[V] with
     SatelliteProtocol[I] {
     def asRemote(implicit simpleSerializer: SimpleSerializer): SatelliteProtocol[I]
@@ -237,7 +295,7 @@ object SatelliteStateActor {
     * @tparam V stored type
     */
   final case class Settings[I, V](name: String,
-                                  handler: (I) => HandlerResult[V],
+                                  handler: SatelliteValueHandler[I, V],
                                   listener: SatelliteStateListener[V])
 
   /**
@@ -345,5 +403,28 @@ object SatelliteStateActor {
     }
 
   }
+
+  private case class AsyncHandleResult[I, V](originalSender: ActorRef, originalMessage: StateChange[I], result: HandlerResult[V], responseFactory: (StateChangeResult) => Any) extends AsyncHandleResponse
+
+  private case class AsyncHandleFailed[I, V](originalSender: ActorRef, originalMessage: StateChange[I], ex: Exception, responseFactory: (StateChangeResult) => Any) extends AsyncHandleResponse
+
+  object SatelliteValueHandler {
+    implicit def simple[I, V](func: I => HandlerResult[V]): SatelliteValueHandler[I, V] = new SatelliteValueHandler[I, V] {
+      override def handle(versionedId: VersionedId, input: I)
+                         (implicit executionContext: ExecutionContext)
+      : Future[HandlerResult[V]] = Future {
+        func(input)
+      }
+    }
+
+    implicit def identity[I](): SatelliteValueHandler[I, I] = new SatelliteValueHandler[I, I] {
+      override def handle(versionedId: VersionedId, input: I)
+                         (implicit executionContext: ExecutionContext)
+      : Future[HandlerResult[I]] = Future {
+        Left(Some(input))
+      }
+    }
+  }
+
 
 }
