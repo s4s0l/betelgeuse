@@ -26,7 +26,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Proto
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor._
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, SimpleSerializer}
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 import org.s4s0l.betelgeuse.utils.AllUtils.{listOfFuturesToFutureOfList, _}
 
@@ -207,7 +207,7 @@ object OriginStateDistributor {
 
     case class OriginStateChangedNotOk(correlationId: Long, ex: Throwable) extends OriginStateChangedResult with NotOkResult[Long, VersionedId]
 
-    case class ValidationError(validationErrors: Seq[String]) {
+    case class ValidationError(validationErrors: Seq[String]) extends JacksonJsonSerializable {
       @JsonIgnore
       def isEmpty: Boolean = validationErrors.isEmpty
     }
