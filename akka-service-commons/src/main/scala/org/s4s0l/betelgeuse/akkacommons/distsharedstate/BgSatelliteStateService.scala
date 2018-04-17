@@ -30,10 +30,10 @@ import scala.reflect.ClassTag
 /**
   * @author Marcin Wielgus
   */
-trait BgSatelliteStateService {
-  this: BgPersistenceJournal
-    with BgClusteringReceptionist
-    with BgClusteringSharding =>
+trait BgSatelliteStateService
+  extends BgClusteringReceptionist
+    with BgClusteringSharding {
+  this: BgPersistenceJournal =>
 
   def createSatelliteStateFactory[I, V](name: String, handler: SatelliteValueHandler[I, V])
                                        (implicit classTag: ClassTag[I])

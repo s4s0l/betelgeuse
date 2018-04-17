@@ -28,10 +28,11 @@ import scala.concurrent.duration.{FiniteDuration, _}
 /**
   * @author Marcin Wielgus
   */
-trait BgOriginStateService {
-  this: BgClusteringSharding
-    with BgClusteringClient
-    with BgSerialization =>
+trait BgOriginStateService
+  extends BgClusteringSharding
+    with BgClusteringClient {
+  this: BgSerialization =>
+
 
   def createOriginState[I](name: String,
                            distributor: OriginStateDistributor.Protocol[I],
