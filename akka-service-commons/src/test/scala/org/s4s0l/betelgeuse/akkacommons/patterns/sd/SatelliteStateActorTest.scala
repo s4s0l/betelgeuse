@@ -26,10 +26,11 @@ import org.s4s0l.betelgeuse.akkacommons.distsharedstate.NewVersionedValueListene
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.{BgSatelliteStateService, NewVersionedValueListener}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
-import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{GetValue, GetValueNotOk}
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActorTest.Dummy
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{GetValue, GetValueNotOk, GetValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
-import org.s4s0l.betelgeuse.akkacommons.serialization.{BgSerialization, BgSerializationJackson, SimpleSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization._
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 import org.scalatest.Outcome
@@ -40,9 +41,43 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
+
+
 class SatelliteStateActorTest extends
   BgTestRoach with BgTestJackson {
 
+
+  feature("Satellite State actor can persist anything handler gives it") {
+    scenario("Object mapping example") {
+      val idInTest = "id4asdfas"
+      new WithService(my) {
+
+        Given("A new shard storing string values named test1")
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status = service.handlerObject.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 2))
+
+        Then("Version returned should have value == 0")
+        assert(Await.result(change1Status, to * 20).isInstanceOf[StateChangeOk])
+
+        When("Confirm Distribution is send")
+        private val changeDistributed = service.handlerObject.distributionComplete(DistributionComplete(VersionedId(s"$idInTest", 1), to))
+
+        Then("Distribution confirmation is received")
+        assert(Await.result(changeDistributed, to).isInstanceOf[DistributionCompleteOk])
+
+      }
+      When("We restart")
+      restartServices()
+      new WithService(my) {
+
+        Then("We see previously stored data")
+        private val gotValue = service.handlerObject.getValue(GetValue(VersionedId(s"$idInTest", 1)))
+        assert(Await.result(gotValue, to * 2) == GetValueOk(VersionedId(s"$idInTest", 1), Dummy("valueOne")))
+
+      }
+
+    }
+  }
 
   feature("Satellite State actor is an VersionedEntityActor with ability to confirm distribution") {
 
@@ -547,6 +582,8 @@ class SatelliteStateActorTest extends
       }
     }
   }
+
+
   val timeoutListener: NewVersionedValueListener[String] = new NewVersionedValueListener[String] {
 
     override def onNewVersionAsk(versionedId: VersionedId, aValue: String)
@@ -572,6 +609,19 @@ class SatelliteStateActorTest extends
       context.enable()
       context.satelliteStateActor
     }
+
+    lazy val handlerObject: SatelliteStateActor.Protocol[String, Dummy] = {
+      val context = createSatelliteStateFactory[String, Dummy]("SatelliteStateActorTestObjectHandler", (d: String) => {
+        Left(Some(Dummy(d)))
+      })
+      context.addGlobalListener("l", new NewVersionedValueListener[Dummy] {
+        override def onNewVersionAsk(versionedId: VersionedId, aValue: Dummy)(implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout): Future[NewVersionedValueListener.NewVersionResult] =
+          Future.successful(NewVersionOk(versionedId))
+      })
+      context.enable()
+      context.satelliteStateActor
+    }
+
     @volatile var slowHandlerCounter: AtomicInteger = new AtomicInteger(0)
     lazy val slowHandler: SatelliteStateActor.Protocol[String, String] = {
 
@@ -648,4 +698,13 @@ class SatelliteStateActorTest extends
     handlerRequest = None
     super.withFixture(test)
   }
+
+}
+
+
+object SatelliteStateActorTest {
+
+
+  case class Dummy(value: String) extends JacksonJsonSerializable
+
 }

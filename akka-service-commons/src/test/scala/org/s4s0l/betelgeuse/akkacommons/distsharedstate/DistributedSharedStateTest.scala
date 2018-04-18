@@ -26,11 +26,11 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedState.VersionedCache
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedStateTest._
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.NewVersionedValueListener.NewVersionResult
-import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor.Protocol
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor.Protocol.{GetPublicationStatus, GetPublicationStatusOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
-import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor.{HandlerResult, SatelliteValueHandler}
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteValueHandler.HandlerResult
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateActor, SatelliteValueHandler}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{SetValue, SetValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach

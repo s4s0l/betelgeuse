@@ -18,7 +18,6 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
 import akka.actor.{ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
-import com.fasterxml.jackson.annotation.JsonTypeInfo
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClientExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionistExtension
@@ -27,11 +26,12 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.message.{Message, Payload}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor._
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteValueHandler.HandlerResult
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events.{Event, ValueEvent}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.ProtocolGetters
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
-import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JsonAnyWrapper, SimpleSerializer}
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 import org.s4s0l.betelgeuse.akkacommons.utils.QA.Uuid
 
@@ -95,6 +95,10 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
             senderProvider ! responseFactory(StateChangeOkWithValidationError(msgId, errors))
           }
       }
+  }
+
+  private def logg(msg: String, versionedId: VersionedId): Unit = {
+    log.info("Satellite state={}, entity={} {}", settings.name, versionedId, msg)
   }
 
   override def receiveCommand: Receive = super.receiveCommand orElse {
@@ -189,11 +193,6 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
     log.error(ex, "Satellite state={}, entity={} {}", settings.name, versionedId, msg)
   }
 
-
-  private def logg(msg: String, versionedId: VersionedId): Unit = {
-    log.info("Satellite state={}, entity={} {}", settings.name, versionedId, msg)
-  }
-
   private def handleStateChangeCommand(msg: StateChange[I])(responseFactory: (StateChangeResult) => Any)
   : Unit = {
     if (stateChangeHandlingInProgress) {
@@ -263,33 +262,26 @@ object SatelliteStateActor {
     case a: IncomingMessage => (a.entityId, a)
     case a: DistributionComplete => (a.versionedId.id, a)
     case a: StateChange[I] => (a.versionedId.id, a)
-    case a@Message("distribution-complete" | "state-change", _, _, _) if a.get("versionedId").isDefined => (VersionedId(a("versionedId")).id, a)
+    case a@Message("distribution-complete" | "state-change", _, _, _)
+      if a.get("versionedId").isDefined
+    => (VersionedId(a("versionedId")).id, a)
   }
 
   def getRemote[I](name: String, serviceId: BgServiceId)
                   (implicit clientExt: BgClusteringClientExtension,
                    simpleSerializer: SimpleSerializer)
-  : SatelliteProtocol[I]
-  = {
+  : SatelliteProtocol[I] =
     new RemoteSatelliteProtocol(clientExt.client(serviceId).toActorTarget(getRemoteName(name)))
-  }
+
 
   private def getRemoteName(name: String): String = s"/user/satellite-state-$name"
-
-  type HandlerResult[V] = Either[Option[V], ValidationError]
-
-  trait SatelliteValueHandler[I, V] {
-    def handle(versionedId: VersionedId, input: I)
-              (implicit executionContext: ExecutionContext): Future[HandlerResult[V]]
-  }
-
-  private trait AsyncHandleResponse
-
 
   trait Protocol[I, V] extends ProtocolGetters[V] with
     SatelliteProtocol[I] {
     def asRemote(implicit simpleSerializer: SimpleSerializer): SatelliteProtocol[I]
   }
+
+  private trait AsyncHandleResponse
 
   /**
     *
@@ -298,13 +290,24 @@ object SatelliteStateActor {
     *                 value, can return None then incoming value will be confirmed but not stored locally
     *                 only marked as received
     *                 or mapped value then it will store the value
-    * @param listener to be called on distribution complete
+    * @param listener to be called on dist complete
     * @tparam I incoming type
     * @tparam V stored type
     */
   final case class Settings[I, V](name: String,
                                   handler: SatelliteValueHandler[I, V],
                                   listener: SatelliteStateListener[V])
+
+  case class StateChangedEvent[V](versionedId: VersionedId,
+                                  handlerValue: JsonAnyWrapper,
+                                  validationError: ValidationError,
+                                  messageId: Uuid) extends Event {
+    def toHandlerResult: HandlerResult[V] =
+      if (validationError.isEmpty)
+        Left(handlerValue)
+      else
+        Right(validationError)
+  }
 
   /**
     * An protocol for [[SatelliteStateActor]]
@@ -336,65 +339,13 @@ object SatelliteStateActor {
     }
   }
 
+  private case class AsyncHandleResult[I, V](originalSender: ActorRef, originalMessage: StateChange[I], result: HandlerResult[V], responseFactory: (StateChangeResult) => Any) extends AsyncHandleResponse
 
-  /**
-    * Adapts satellite protocol for remote message passing via [[org.s4s0l.betelgeuse.akkacommons.patterns.message.Message]] pattern
-    *
-    * @param actorTarget      actor to ask, should respond with Messages also
-    * @param simpleSerializer serializer to be used for marshalling T
-    */
-  private class RemoteSatelliteProtocol[T](actorTarget: ActorTarget)
-                                          (implicit simpleSerializer: SimpleSerializer)
-    extends SatelliteProtocol[T] {
-    /**
-      * distributes state change
-      */
-    override def stateChange(stateChangeMessage: StateChange[T])
-                            (implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[StateChangeResult] = {
-      actorTarget.?(stateChangeMessage.toMessage)(stateChangeMessage.expectedConfirmIn, sender).map {
-        case msg@Message("state-change-ok", _, _, _) =>
-          StateChangeOk(msg.correlationId)
-        case msg@Message("state-change-validation-ok", _, _, _) =>
-          StateChangeOkWithValidationError(msg.correlationId, msg.payload.asObject[ValidationError])
-        case msg@Message("state-change-not-ok", _, _, _) =>
-          StateChangeNotOk(msg.correlationId, new Exception(s"Remote satelliteError: ${msg.failedOpt.getOrElse(-1)}, message was: ${msg.payload.asString}"))
-        case _ =>
-          StateChangeNotOk(stateChangeMessage.messageId, new Exception(s"Remote satellite unknown response error."))
-      }.recover { case ex: Throwable => StateChangeNotOk(stateChangeMessage.messageId, new Exception(ex)) }
-    }
-
-    /**
-      * informs that all destinations confirmed
-      */
-    override def distributionComplete(distributionCompleteMessage: DistributionComplete)(implicit executionContext: ExecutionContext, sender: ActorRef)
-    : Future[DistributionCompleteResult] = {
-
-      actorTarget.?(distributionCompleteMessage.toMessage)(distributionCompleteMessage.expectedConfirmIn, sender).map {
-        case msg@Message("distribution-complete-ok", _, _, _) =>
-          DistributionCompleteOk(msg.correlationId)
-        case msg@Message("distribution-complete-not-ok", _, _, _) =>
-          DistributionCompleteNotOk(msg.correlationId, new Exception(s"Remote satelliteError: ${msg.failedOpt.getOrElse(-1)}, message was: ${msg.payload.asString}"))
-        case _ =>
-          DistributionCompleteNotOk(distributionCompleteMessage.messageId, new Exception(s"Remote satellite unknown response error."))
-      }.recover { case ex: Throwable => DistributionCompleteNotOk(distributionCompleteMessage.messageId, new Exception(ex)) }
-    }
-  }
-
-
-  private case class StateChangedEvent[V](versionedId: VersionedId,
-                                          @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.EXTERNAL_PROPERTY, property = "type")
-                                          handlerValue: Option[V],
-                                          validationError: ValidationError,
-                                          messageId: Uuid) extends Event {
-    def toHandlerResult: HandlerResult[V] = if (validationError.isEmpty) Left(handlerValue) else Right(validationError)
-  }
+  private case class AsyncHandleFailed[I, V](originalSender: ActorRef, originalMessage: StateChange[I], ex: Exception, responseFactory: (StateChangeResult) => Any) extends AsyncHandleResponse
 
   private object StateChangedEvent {
 
-
     def apply[V](versionedId: VersionedId,
-                 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.EXTERNAL_PROPERTY, property = "type")
                  handlerValue: HandlerResult[V],
                  messageId: Uuid): StateChangedEvent[V] = {
       val value = if (handlerValue.isLeft) {
@@ -410,28 +361,6 @@ object SatelliteStateActor {
       new StateChangedEvent(versionedId, value, err, messageId)
     }
 
-  }
-
-  private case class AsyncHandleResult[I, V](originalSender: ActorRef, originalMessage: StateChange[I], result: HandlerResult[V], responseFactory: (StateChangeResult) => Any) extends AsyncHandleResponse
-
-  private case class AsyncHandleFailed[I, V](originalSender: ActorRef, originalMessage: StateChange[I], ex: Exception, responseFactory: (StateChangeResult) => Any) extends AsyncHandleResponse
-
-  object SatelliteValueHandler {
-    implicit def simple[I, V](func: I => HandlerResult[V]): SatelliteValueHandler[I, V] = new SatelliteValueHandler[I, V] {
-      override def handle(versionedId: VersionedId, input: I)
-                         (implicit executionContext: ExecutionContext)
-      : Future[HandlerResult[V]] = Future {
-        func(input)
-      }
-    }
-
-    implicit def identity[I](): SatelliteValueHandler[I, I] = new SatelliteValueHandler[I, I] {
-      override def handle(versionedId: VersionedId, input: I)
-                         (implicit executionContext: ExecutionContext)
-      : Future[HandlerResult[I]] = Future {
-        Left(Some(input))
-      }
-    }
   }
 
 

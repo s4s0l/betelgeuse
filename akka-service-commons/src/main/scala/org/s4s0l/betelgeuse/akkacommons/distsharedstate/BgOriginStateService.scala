@@ -21,7 +21,7 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClient
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateActor, OriginStateDistributor, SatelliteProtocol}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerialization
+import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 
 import scala.concurrent.duration.{FiniteDuration, _}
 
@@ -30,8 +30,8 @@ import scala.concurrent.duration.{FiniteDuration, _}
   */
 trait BgOriginStateService
   extends BgClusteringSharding
+    with BgSerializationJackson
     with BgClusteringClient {
-  this: BgSerialization =>
 
 
   def createOriginState[I](name: String,

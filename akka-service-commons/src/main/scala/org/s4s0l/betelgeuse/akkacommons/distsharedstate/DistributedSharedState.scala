@@ -26,8 +26,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.GetCacheValue
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade.{OwnerValueNotOk, OwnerValueOk, OwnerValueResult}
-import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor.SatelliteValueHandler
-import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateDistributor, SatelliteStateActor}
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateDistributor, SatelliteStateActor, SatelliteValueHandler}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{GetLatestValue, GetValueNotOk, GetValueOk, GetValueVersion}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JournalReader, PersistenceId}
