@@ -123,7 +123,7 @@ class OriginStatePublishingRestProtocolTest extends
       aService.testKit.expectMsg(ValueVersionResult("123", VersionedId(id, 1)))
       aService.testKit.lastSender ! PoisonPill
 
-
+      Thread.sleep(1000)
       And("If we ask for publication status")
       Get(s"/v1/objects/test3/$id/actions/publication-status/invoke") ~> route ~> check {
         status shouldEqual StatusCodes.OK

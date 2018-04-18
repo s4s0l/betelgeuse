@@ -1,17 +1,17 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -26,6 +26,7 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
+import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestCrate
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 
@@ -39,6 +40,7 @@ class CrateJournalReaderTest extends
 
 
   private val aService = testWith(new BgPersistenceJournalCrate
+    with BgSerializationJackson
     with BgClusteringSharding {
   })
 
@@ -46,7 +48,8 @@ class CrateJournalReaderTest extends
     scenario("Can be asked for latest version") {
       new WithService(aService) {
         Given("A new shard storing string values named reader1")
-        private val protocol = VersionedEntityActor.startSharded[String](Settings("reader1"))(service.clusteringShardingExtension)
+        private val protocol = VersionedEntityActor
+          .startSharded[String](Settings("reader1"))(service.clusteringShardingExtension, service.serializationJackson)
         When("We store 2 values in entity 'id1' via SetValue")
         assert(Await.result(protocol.setValue(SetValue("id1", "sth1"))(execContext, self, to * 3), to * 3).isOk)
         assert(Await.result(protocol.setValue(SetValue("id1", "sth2")), to * 3).isOk)

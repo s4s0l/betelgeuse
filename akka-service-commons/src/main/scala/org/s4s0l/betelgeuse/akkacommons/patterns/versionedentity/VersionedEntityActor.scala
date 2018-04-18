@@ -20,12 +20,11 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.persistence.RecoveryCompleted
 import akka.util.Timeout
-import com.fasterxml.jackson.annotation.JsonTypeInfo
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, JsonAnyWrapper}
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, QA, TimeoutShardedActor}
 
@@ -84,7 +83,7 @@ class VersionedEntityActor[T](settings: Settings[T]) extends Actor
         val v = VersionedId(id, currentVersion + 1)
         validateNewVersionValue(v, newValue.asInstanceOf[T]) match {
           case Left(value) =>
-            persist(ValueEvent(cmd.messageId, v, value.asInstanceOf[T]))(processEvent(false))
+            persist(ValueEvent(cmd.messageId, v, Some(value.asInstanceOf[T])))(processEvent(false))
           case Right(ex) =>
             confirmValidationError(cmd.messageId, ex)
         }
@@ -94,7 +93,7 @@ class VersionedEntityActor[T](settings: Settings[T]) extends Actor
         if (isVersionAccepted(v)) {
           validateNewVersionValue(v, newValue.asInstanceOf[T]) match {
             case Left(value) =>
-              persist(ValueEvent(cmd.messageId, v, value))(processEvent(false))
+              persist(ValueEvent(cmd.messageId, v, Some(value)))(processEvent(false))
             case Right(ex) =>
               confirmValidationError(cmd.messageId, ex)
           }
@@ -131,20 +130,21 @@ class VersionedEntityActor[T](settings: Settings[T]) extends Actor
   protected def isVersionAccepted(version: VersionedId): Boolean = version.version == currentVersion + 1
 
   def processEvent(recover: Boolean): PartialFunction[Event, Unit] = {
-    case ve@ValueEvent(uuid, versionedId, _) =>
-      saveValueEvent(ve.asInstanceOf[ValueEvent[T]])
+    case ve@ValueEvent(uuid, versionedId, jsonAnyWrapper) =>
+      val extracted: Option[T] = jsonAnyWrapper
+      saveValueEvent(versionedId, extracted.get)
       if (!recover)
         confirmUpdated(uuid, versionedId)
   }
 
-  protected def saveValueEvent(ve: ValueEvent[T]): Unit = {
-    val ValueEvent(_, versionedId, value) = ve
+  protected def saveValueEvent(versionedId: VersionedId, value: T): Unit = {
+
     if (versionedId.version > currentVersion) {
       currentVersion = versionedId.version
-      currentValue = Some(value.asInstanceOf[T])
+      currentValue = Some(value)
     }
-    versionMap = versionMap + (versionedId.version -> value.asInstanceOf[T])
-    valueUpdated(versionedId, value.asInstanceOf[T])
+    versionMap = versionMap + (versionedId.version -> value)
+    valueUpdated(versionedId, value)
   }
 
   /**
@@ -179,7 +179,10 @@ class VersionedEntityActor[T](settings: Settings[T]) extends Actor
 object VersionedEntityActor {
 
   def startSharded[T](settings: Settings[T], propsMapper: Props => Props = identity)
-                     (implicit shardingExt: BgClusteringShardingExtension)
+                     (implicit shardingExt: BgClusteringShardingExtension,
+                      //this way we force the requirement that Jackson Serialization must be used
+                      //but its not needed as an instance here
+                      serializationJackson: JacksonJsonSerializer)
   : Protocol[T] = {
     val ref = shardingExt.start(settings.name, props[T](settings), entityExtractor)
     Protocol(ref, settings.name)
@@ -356,10 +359,9 @@ object VersionedEntityActor {
 
     trait Event extends JacksonJsonSerializable
 
-    case class ValueEvent[T](uuid: Uuid,
-                             versionedId: VersionedId,
-                             @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.EXTERNAL_PROPERTY, property = "type")
-                             value: T) extends Event
+    case class ValueEvent(uuid: Uuid,
+                          versionedId: VersionedId,
+                          value: JsonAnyWrapper) extends Event
 
   }
 

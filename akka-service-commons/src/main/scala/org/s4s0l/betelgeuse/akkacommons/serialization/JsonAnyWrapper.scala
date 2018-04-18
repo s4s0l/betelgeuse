@@ -17,7 +17,7 @@
 package org.s4s0l.betelgeuse.akkacommons.serialization
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
-import org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper.NullWrapper
+import org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper.ErrorWrapper
 
 import scala.language.implicitConversions
 
@@ -26,7 +26,7 @@ import scala.language.implicitConversions
   */
 case class JsonAnyWrapper private(
                                    @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS,
-                                     defaultImpl = classOf[NullWrapper],
+                                     defaultImpl = classOf[ErrorWrapper],
                                      include = JsonTypeInfo.As.EXTERNAL_PROPERTY)
                                    wrapped: AnyRef)
   extends JacksonJsonSerializable {
@@ -40,6 +40,7 @@ object JsonAnyWrapper {
     jsonAnyWrapper.wrapped match {
       case NullWrapper() => None
       case StringWrapper(s) => Some(s.asInstanceOf[T])
+      case ErrorWrapper() => throw new IllegalStateException("Missing @class attribute in json???")
       case x => Some(x.asInstanceOf[T])
     }
   }
@@ -61,5 +62,7 @@ object JsonAnyWrapper {
   case class StringWrapper(stringValue: String)
 
   case class NullWrapper()
+
+  case class ErrorWrapper()
 
 }

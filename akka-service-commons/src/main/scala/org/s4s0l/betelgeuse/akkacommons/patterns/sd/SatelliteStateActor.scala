@@ -27,7 +27,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Proto
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteStateActor._
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteValueHandler.HandlerResult
-import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events.{Event, ValueEvent}
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Events.Event
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.ProtocolGetters
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
@@ -81,7 +81,7 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
           }
         case Left(Some(value)) =>
           logg("Handling state change event as mapped", version)
-          saveValueEvent(ValueEvent[V](msgId, version, value.asInstanceOf[V]))
+          saveValueEvent(version, value.asInstanceOf[V])
           stateChangesProcessed(version) = Left(true)
           if (!recover) {
             logg("Responding ok", version)

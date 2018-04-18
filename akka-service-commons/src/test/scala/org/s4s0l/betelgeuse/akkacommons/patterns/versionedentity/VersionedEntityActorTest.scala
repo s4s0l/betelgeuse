@@ -20,9 +20,10 @@ import akka.pattern._
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
-import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
+import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
+import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
-import org.s4s0l.betelgeuse.akkacommons.test.{BgTestCrate, BgTestJackson}
+import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -31,10 +32,11 @@ import scala.language.postfixOps
   * @author Marcin Wielgus
   */
 class VersionedEntityActorTest extends
-  BgTestCrate with BgTestJackson {
+  BgTestRoach with BgTestJackson {
 
 
-  private val aService = testWith(new BgPersistenceJournalCrate
+  private val aService = testWith(new BgPersistenceJournalRoach
+    with BgSerializationJackson
     with BgClusteringSharding {
   })
   aService.to = 5 seconds
@@ -46,7 +48,8 @@ class VersionedEntityActorTest extends
       new WithService(aService) {
 
         Given("A new shard storing string values named test1")
-        private val protocol = VersionedEntityActor.startSharded[String](Settings("test1"))(service.clusteringShardingExtension)
+        private val protocol = VersionedEntityActor
+          .startSharded[String](Settings("test1"))(service.clusteringShardingExtension, service.serializationJackson)
         When("Getting version for non existing entity id1")
         private val getValueVersion = GetValueVersion("id1")
         protocol.getVersion(getValueVersion).pipeTo(self)
@@ -72,7 +75,8 @@ class VersionedEntityActorTest extends
       new WithService(aService) {
 
         Given("A new shard storing string values named test17")
-        private val protocol = VersionedEntityActor.startSharded[String](Settings("test17"))(service.clusteringShardingExtension)
+        private val protocol = VersionedEntityActor
+          .startSharded[String](Settings("test17"))(service.clusteringShardingExtension, service.serializationJackson)
 
         When("We store value 'sth' in entity 'id1' via SetValue")
         private val setValue1 = SetValue("id1", "sth")
@@ -105,7 +109,8 @@ class VersionedEntityActorTest extends
       new WithService(aService) {
 
         Given("A new shard storing string values named test3")
-        private val protocol = VersionedEntityActor.startSharded[String](Settings("test3"))(service.clusteringShardingExtension)
+        private val protocol = VersionedEntityActor
+          .startSharded[String](Settings("test3"))(service.clusteringShardingExtension, service.serializationJackson)
         Given("entity 'id1' has value 'sth' in version 2")
         private val value1 = SetValue("id1", "sth1")
         protocol.setValue(value1).pipeTo(self)
@@ -137,7 +142,8 @@ class VersionedEntityActorTest extends
       new WithService(aService) {
 
         Given("A new shard storing string values named test2")
-        private val protocol = VersionedEntityActor.startSharded[String](Settings("test2"))(service.clusteringShardingExtension)
+        private val protocol = VersionedEntityActor
+          .startSharded[String](Settings("test2"))(service.clusteringShardingExtension, service.serializationJackson)
         Given("entity 'id1' has value 'sth' in version 2")
         private val setValue1 = SetValue("id1", "sth")
         protocol.setValue(setValue1).pipeTo(self)
