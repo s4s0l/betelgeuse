@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,9 @@ class RichFuture[T](wrappedFuture: Future[T]) {
                        (implicit executionContext: ExecutionContext, sender: ActorRef = Actor.noSender):
   Future[T] = {
     import akka.pattern.after
-    val future: Future[T] = Future.successful(timeoutMessage)
+    val future: Future[T] = Future{
+      timeoutMessage
+    }
     val afterFuture: Future[T] = after(timeout, using)(future)(executionContext)
     val eventualT = Future.firstCompletedOf(Seq(wrappedFuture, afterFuture))
     import akka.pattern.pipe

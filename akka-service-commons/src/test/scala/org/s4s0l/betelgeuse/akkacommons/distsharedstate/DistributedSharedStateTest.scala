@@ -16,6 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.distsharedstate
 
+import java.util.concurrent.atomic.AtomicReference
+
 import akka.actor.ActorRef
 import akka.actor.Status.{Failure, Status, Success}
 import akka.util.Timeout
@@ -25,7 +27,7 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringRece
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedState.VersionedCache
 import org.s4s0l.betelgeuse.akkacommons.distsharedstate.DistributedSharedStateTest._
-import org.s4s0l.betelgeuse.akkacommons.distsharedstate.NewVersionedValueListener.NewVersionResult
+import org.s4s0l.betelgeuse.akkacommons.distsharedstate.NewVersionedValueListener.{NewVersionOk, NewVersionResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor.Protocol
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateActor.Protocol.{GetPublicationStatus, GetPublicationStatusOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
@@ -50,7 +52,6 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
 
   concurentRun = true
 
-
   private val origin = testWith(new BgService
     with BgPersistenceJournalRoach
     with BgClusteringReceptionist
@@ -63,7 +64,6 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
     override protected def portBase: Int = 1
 
     var origin: OriginStateActor.Protocol[String] = _
-
 
     override def customizeConfiguration: Config =
       super.customizeConfiguration
@@ -84,25 +84,43 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
     with BgClusteringSharding
     with BgClusteringClient
     with BgSatelliteStateService {
+
     override protected def systemName: String = "satellite1"
 
     override protected def portBase: Int = 2
 
     var consumer: ListeningLogger = _
+    var cache: VersionedCache[String] = _
+    var startupNotifier: DistributedSharedState.ListenerStartupNotifier = _
+    var globalNotifier: DistributedSharedState.ListenerStartupNotifier = _
+    val lastGlobalListenerCall: AtomicReference[List[String]] = new AtomicReference[List[String]](List())
 
     override protected def initialize(): Unit = {
       super.initialize()
       val dist = createSatelliteStateFactory[String, String]("state", new SatelliteValueHandler[String, String] {
-        override def handle(versionedId: VersionedId, input: String)(implicit executionContext: ExecutionContext): Future[HandlerResult[String]] =
+        override def handle(versionedId: VersionedId, input: String)(implicit executionContext: ExecutionContext)
+        : Future[HandlerResult[String]] =
           handler1.handle(versionedId, input)
       })
-      val cache = dist.createCache("listenerOne", it => Future(s"enriched:$it"), 10.minutes)
-      consumer = new ListeningLogger(cache)
-      cache.addListener(consumer)
+      cache = dist.createCache("listenerOne", it => Future(s"enriched:$it"), 10.minutes)
+      consumer = new ListeningLogger()
+      globalNotifier = dist.addGlobalListener("xxx", new NewVersionedValueListener[String] {
+        override def onNewVersionAsk(versionedId: VersionedId, aValue: String)
+                                    (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
+        : Future[NewVersionResult] = {
+          println("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG" + aValue)
+          lastGlobalListenerCall.accumulateAndGet(List(aValue), (t: List[String], u: List[String]) => {
+            t ++ u
+          })
+          Future.successful(NewVersionOk(versionedId))
+        }
+      })
+      startupNotifier = cache.addListener(consumer)
       dist.enable()
     }
 
   })
+
   private val satellite2 = testWith(new BgService
     with BgPersistenceJournalRoach
     with BgClusteringReceptionist
@@ -114,16 +132,19 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
     override protected def portBase: Int = 3
 
     var consumer: ListeningLogger = _
+    var cache: VersionedCache[String] = _
+    var startupNotifier: DistributedSharedState.ListenerStartupNotifier = _
 
     override protected def initialize(): Unit = {
       super.initialize()
       val dist = createSatelliteStateFactory[String, String]("state", new SatelliteValueHandler[String, String] {
-        override def handle(versionedId: VersionedId, input: String)(implicit executionContext: ExecutionContext): Future[HandlerResult[String]] =
+        override def handle(versionedId: VersionedId, input: String)(implicit executionContext: ExecutionContext)
+        : Future[HandlerResult[String]] =
           handler2.handle(versionedId, input)
       })
-      val cache = dist.createCache("listenerOne", it => Future(s"enriched:$it"), 10.minutes)
-      consumer = new ListeningLogger(cache)
-      cache.addListener(consumer)
+      cache = dist.createCache("listenerOne", it => Future(s"enriched:$it"), 10.minutes)
+      consumer = new ListeningLogger()
+      startupNotifier = cache.addListener(consumer)
       dist.enable()
     }
   })
@@ -132,18 +153,51 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
   feature("Setting up a distributed shared state is doable in < 6 lines of code") {
     scenario("Origin value change is propagated to all parties and can be accessed at satellite side") {
 
-
       satellite1.service.consumer.nextSuccess()
       satellite2.service.consumer.nextSuccess()
       val value = SetValue("1", "valueOne")
       origin.service.origin.setValueMsg(value)(origin.execContext, origin.self)
       origin.testKit.expectMsg(SetValueOk(value.messageId, VersionedId("1", 1)))
       assert(satellite1.service.consumer.getPromisedValue(4 second) == (VersionedId("1", 1), "enriched:VALUEONE"))
-      assert(Await.result(satellite1.service.consumer.cache.getVersion("1")(satellite1.execContext, satellite1.self), 4 second) == VersionedId("1", 1))
-      assert(Await.result(satellite1.service.consumer.cache.getVersion("2")(satellite1.execContext, satellite1.self), 4 second) == VersionedId("2", 0))
-      assert(Await.result(satellite1.service.consumer.cache.getValue(VersionedId("1", 1))(satellite1.execContext, satellite1.self, 1 second), 1 second) == "enriched:VALUEONE")
-      assertThrows[Exception](Await.result(satellite1.service.consumer.cache.getValue(VersionedId("2", 1))(satellite1.execContext, satellite1.self, 1 second), 1 second))
+      assert(Await.result(satellite1.service.cache
+        .getVersion("1")(satellite1.execContext, satellite1.self), 4 second) == VersionedId("1", 1))
+      assert(Await.result(satellite1.service.cache
+        .getVersion("2")(satellite1.execContext, satellite1.self), 4 second) == VersionedId("2", 0))
+      assert(Await.result(satellite1.service.cache
+        .getValue(VersionedId("1", 1))(satellite1.execContext, satellite1.self, 1 second), 1 second) == "enriched:VALUEONE")
+      assertThrows[Exception](Await.result(satellite1.service
+        .cache.getValue(VersionedId("2", 1))(satellite1.execContext, satellite1.self, 1 second), 1 second))
       assert(satellite2.service.consumer.getPromisedValue(2 second) == (VersionedId("1", 1), "enriched:valueone"))
+    }
+
+    scenario("Cache Listeners and global listeners are notified on satellite") {
+      val id = VersionedId("xxxx", 1)
+
+      Given("Satellites accept values")
+      satellite1.service.consumer.nextSuccess()
+      satellite2.service.consumer.nextSuccess()
+      When("We set a value")
+      val value = SetValue("xxxx", "valueXxx")
+      origin.service.origin.setValueMsg(value)(origin.execContext, origin.self)
+      origin.testKit.expectMsg(4 seconds ,SetValueOk(value.messageId, id))
+
+      Then("Listeners are notified")
+      assert(satellite1.service.consumer.getPromisedValue(4 second) == (id, "enriched:VALUEXXX"))
+      assert(satellite2.service.consumer.getPromisedValue(4 second) == (id, "enriched:valuexxx"))
+
+      When("We startup notify")
+      satellite1.service.consumer.nextSuccess()
+      satellite2.service.consumer.nextSuccess()
+      satellite1.service.lastGlobalListenerCall.set(List())
+
+      Await.result(satellite1.service.globalNotifier.notifyStartupValues(satellite1.service.executor, 14 second, ActorRef.noSender), 10 seconds)
+      Await.result(satellite1.service.startupNotifier.notifyStartupValues(satellite1.service.executor, 14 second, ActorRef.noSender), 10 seconds)
+      Await.result(satellite2.service.startupNotifier.notifyStartupValues(satellite2.service.executor, 14 second, ActorRef.noSender), 10 seconds)
+
+      Then("Listeners are notified")
+      assert(satellite1.service.consumer.totalCalls.get.contains("enriched:VALUEXXX"))
+      assert(satellite2.service.consumer.totalCalls.get.contains("enriched:valuexxx"))
+      assert(satellite1.service.lastGlobalListenerCall.get.contains("VALUEXXX"))
 
     }
 
@@ -203,18 +257,14 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
       assert(res.asInstanceOf[GetPublicationStatusOk].value.statuses.size == 1)
       assert(res.asInstanceOf[GetPublicationStatusOk].value.statuses.head.completed)
       assert(res.asInstanceOf[GetPublicationStatusOk].value.statuses.head.validationError.validationErrors.head == "fuck")
-
-
     }
-
   }
 
   override def withFixture(test: NoArgTest): Outcome = {
     resetHandlers()
+
     super.withFixture(test)
   }
-
-
 }
 
 
@@ -244,13 +294,12 @@ object DistributedSharedStateTest {
 
   def getHandler2PromisedValue(duration: FiniteDuration): String = Await.result(handler2CalledPromise.future, duration)
 
-  class ListeningLogger(val cache: VersionedCache[String]) extends NewVersionedValueListener[String] {
+  class ListeningLogger() extends NewVersionedValueListener[String] {
     var receivedValues: List[(VersionedId, String)] = List()
     @volatile
     var receivedPromise: Promise[(VersionedId, String)] = Promise()
-
+    val totalCalls: AtomicReference[List[String]] = new AtomicReference[List[String]](List())
     private var next: Future[Status] = Future.successful(Success(1))
-
 
     def getPromisedValue(duration: FiniteDuration): (VersionedId, String) = Await.result(receivedPromise.future, duration)
 
@@ -259,6 +308,10 @@ object DistributedSharedStateTest {
     : Future[NewVersionResult] = {
       synchronized {
         receivedValues = (versionedId, richValue) :: receivedValues
+        println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" + richValue)
+        totalCalls.accumulateAndGet(List(richValue), (t: List[String], u: List[String]) => {
+          t ++ u
+        })
         receivedPromise.complete(util.Success((versionedId, richValue)))
         next.map {
           case Success(_) => NewVersionedValueListener.NewVersionOk(versionedId)
@@ -279,6 +332,7 @@ object DistributedSharedStateTest {
       synchronized {
         next = Future.failed(new Exception("ex!"))
         receivedPromise = Promise()
+        totalCalls.set(List())
       }
     }
 
@@ -286,9 +340,9 @@ object DistributedSharedStateTest {
       synchronized {
         next = Future.successful(Success(1))
         receivedPromise = Promise()
+        totalCalls.set(List())
       }
     }
-
   }
 
 }

@@ -181,8 +181,8 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
             logge("Distribution completed notification failed.", msg.versionedId, it)
             responseFactory(DistributionCompleteNotOk(msgId, it))
           }
-          .pipeToWithTimeout(senderTmp, exp, {
-            val exception = new Exception("Timeout!!!")
+          .pipeToWithTimeout(senderTmp, exp, () => {
+            val exception = new Exception(s"Timeout!!! waited $exp ")
             logge("Distribution completed notification failed.", msg.versionedId, exception)
             responseFactory(DistributionCompleteNotOk(msgId, exception))
           }, context.system.scheduler)
@@ -213,7 +213,7 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
           sender() ! responseFactory(StateChangeOk(msg.messageId))
         case Some(Left(false)) =>
           //we seen it and accepted it before but not saved it
-          logg("Returning cached not ok.", msg.versionedId)
+          logg("Returning cached ignored but ok.", msg.versionedId)
           sender() ! responseFactory(StateChangeOk(msg.messageId))
         case None =>
           //we see it first time

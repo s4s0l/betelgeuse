@@ -20,6 +20,7 @@ import akka.actor.{ActorRef, ActorRefFactory}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionistExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
+import org.s4s0l.betelgeuse.akkacommons.distsharedstate.NewVersionedValueListener.NewVersionNotOk
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.DelayedSubsActor.Protocol.{Publish, PublishNotOk, PublishOk, PublishResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor
@@ -27,7 +28,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Prot
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade.{OwnerValueNotOk, OwnerValueOk, OwnerValueResult}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateDistributor, SatelliteStateActor, SatelliteValueHandler}
-import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{GetLatestValue, GetValueNotOk, GetValueOk, GetValueVersion}
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JournalReader, PersistenceId}
 import org.s4s0l.betelgeuse.utils.AllUtils
@@ -142,7 +143,15 @@ object DistributedSharedState {
           actorFinder.allActorsAsync(s"satellite-state-$name")
             .flatMap { idsFound =>
               val listOfFutures = idsFound.map { id =>
-                val statusUpdate = satelliteStateActor.getLatestValue(GetLatestValue(id.uniqueId))
+                val statusUpdate = for (
+                  valueResult <- satelliteStateActor.getLatestValue(GetLatestValue(id.uniqueId));
+                  status <- valueResult match {
+                    case GetLatestValueOk(_, ver, value) =>
+                      onNewVersion.onNewVersionAsk(ver, value)
+                    case GetLatestValueNotOk(_, ver, ex) =>
+                      Future.successful(NewVersionNotOk(ver, ex))
+                  }
+                ) yield status
                 statusUpdate
                   .map(status => id -> status)
                   .recover { case ex: Throwable => id -> NewVersionedValueListener.NewVersionNotOk(VersionedId("", -1), ex) }
@@ -196,6 +205,7 @@ object DistributedSharedState {
           : Future[Map[PersistenceId, Throwable]] = {
             actorFinder.allActorsAsync(s"satellite-state-$name")
               .flatMap { idsFound =>
+                println("YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY " + idsFound)
                 val listOfFutures = idsFound.map { id =>
                   val statusUpdate = for (
                     version <- getVersion(id.uniqueId);
