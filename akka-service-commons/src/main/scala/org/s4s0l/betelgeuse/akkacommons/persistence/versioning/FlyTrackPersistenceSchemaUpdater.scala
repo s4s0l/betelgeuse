@@ -1,17 +1,17 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 
@@ -46,11 +46,12 @@ class FlyTrackPersistenceSchemaUpdater(config: Config) extends PersistenceSchema
   config.entrySet().forEach { it =>
     if (!additional.contains(it.getKey)) maps("flyway." + it.getKey) = config.getString(it.getKey)
   }
-
+  //maps("flyway.validateOnMigrate") = "false"
 
   private val connectionAcquireRetries = if (config.hasPath("connectionAcquireRetries")) config.getInt("connectionAcquireRetries") else 60
   private val connectionAcquireDelay = if (config.hasPath("connectionAcquireDelay")) config.getInt("connectionAcquireDelay") else 1000
-  private val connectionAcquireValidationQuery = if (config.hasPath("connectionAcquireValidationQuery")) config.getString("connectionAcquireValidationQuery") else "select 1"
+  private val connectionAcquireValidationQuery = if (config.hasPath("connectionAcquireValidationQuery"))
+    config.getString("connectionAcquireValidationQuery") else "select 1"
 
 
   ft.configure(maps.asJava)

@@ -14,20 +14,25 @@
  * limitations under the License.
  */
 
-
-
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelegeuseDbFlywayErrorTestBase, BetelgeuseDb}
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.SessionCustomizer
+import scalikejdbc.DBSession
 
-class BetelegeuseDbFlywayErrorTestRoach extends BetelegeuseDbFlywayErrorTestBase{
+/**
+  * @author Marcin Wielgus
+  */
+class RoachSessionCustomizer extends SessionCustomizer {
 
-  override def afterEach() {
-    import scalikejdbc._
-    LOGGER.info("calling AFTER EACH!")
-    scalike.localTx { implicit session =>
-      sql"drop database if EXISTS $TEST_TABLE_SCHEMA".execute().apply()
-    }
-    scalike.closeAll()
+  override def onReadOnly(implicit session: DBSession)
+  : Option[String] => String = {
+    case None => throw new Exception("No default scheme for read only session.")
+    case Some(_) =>
+      session.connection.setSchema("public")
+      "public"
   }
+
+
+  override def onLocalTx(implicit session: DBSession)
+  : Option[String] => String = onReadOnly
 }

@@ -4,8 +4,10 @@ db.${datasource} {
   poolConnectionTimeoutMillis = 1000
   poolValidationQuery = "select 1 as one"
   poolFactoryName = "commons-dbcp2"
-
   migrations.enabled=true
+
+  sessionCustomizer = "org.s4s0l.betelgeuse.akkacommons.persistence.utils.DefaultSessionCustomizer"
+
 
   flyway {
     #needed for internal mechanizms schema migration (versions < 1.0)

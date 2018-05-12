@@ -16,16 +16,18 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
+import org.flywaydb.core.internal.database.postgresql.PostgreSQLSqlStatementBuilder
 import org.flywaydb.core.internal.database.{Delimiter, ExecutableSqlScript, SqlStatementBuilder}
-import org.flywaydb.core.internal.util.scanner.Resource
+import org.flywaydb.core.internal.util.PlaceholderReplacer
+import org.flywaydb.core.internal.util.scanner.{LoadableResource, Resource}
 
 /**
   * @author Marcin Wielgus
   */
-class CrateSqlScript(sqlScriptResource: Resource, sqlScriptSource: String, mixed: Boolean)
-  extends ExecutableSqlScript(sqlScriptResource, sqlScriptSource, mixed) {
+class CrateSqlScript(resource: LoadableResource, placeholderReplacer: PlaceholderReplacer, mixed: Boolean)
+  extends ExecutableSqlScript(resource, placeholderReplacer, mixed) {
 
   override protected def createSqlStatementBuilder: SqlStatementBuilder = {
-    new SqlStatementBuilder(Delimiter.SEMICOLON)
+    new PostgreSQLSqlStatementBuilder(Delimiter.SEMICOLON)
   }
 }

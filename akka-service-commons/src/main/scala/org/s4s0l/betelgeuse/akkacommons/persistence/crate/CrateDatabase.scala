@@ -21,28 +21,30 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 import java.sql
 import java.sql.Types
 
-import org.flywaydb.core.api.configuration.FlywayConfiguration
+import org.flywaydb.core.api.configuration.{Configuration, FlywayConfiguration}
 import org.flywaydb.core.internal.database._
-import org.flywaydb.core.internal.util.StringUtils
+import org.flywaydb.core.internal.util.{PlaceholderReplacer, StringUtils}
 import org.flywaydb.core.internal.util.jdbc.JdbcTemplate
-import org.flywaydb.core.internal.util.scanner.Resource
+import org.flywaydb.core.internal.util.scanner.{LoadableResource, Resource}
 import org.slf4j.{Logger, LoggerFactory}
 
 
 /**
   * @author Marcin Wielgus
   */
-class CrateDatabase(jdbcTemplate: JdbcTemplate, conf: FlywayConfiguration, nullType: Int = Types.NULL)
-  extends Database[CrateDbConnection](conf, jdbcTemplate.getConnection, nullType) {
+class CrateDatabase(jdbcTemplate: JdbcTemplate, conf: Configuration)
+  extends Database[CrateDbConnection](conf, jdbcTemplate.getConnection) {
 
   val LOGGER: Logger = LoggerFactory.getLogger(getClass)
 
-  override def getConnection(connection: sql.Connection, nullType: Int) = new CrateDbConnection(conf, this, jdbcTemplate, nullType)
+  override def getConnection(connection: sql.Connection) = new CrateDbConnection(conf, this, jdbcTemplate)
 
   // TODO check version or something?
   override def ensureSupported(): Unit = {}
 
   override def supportsDdlTransactions(): Boolean = false
+
+  override def supportsChangingCurrentSchema(): Boolean = true
 
   override def getBooleanTrue: String = "true"
 
@@ -50,8 +52,8 @@ class CrateDatabase(jdbcTemplate: JdbcTemplate, conf: FlywayConfiguration, nullT
 
   override def catalogIsSchema() = false
 
-  override protected def doCreateSqlScript(sqlScriptResource: Resource, sqlScriptSource: String, mixed: Boolean) =
-    new CrateSqlScript(sqlScriptResource, sqlScriptSource, mixed)
+  override protected def doCreateSqlScript(resource: LoadableResource, placeholderReplacer: PlaceholderReplacer, mixed: Boolean) =
+    new CrateSqlScript(resource, placeholderReplacer, mixed)
 
   override def doQuote(identifier: String): String = "\"" + StringUtils.replaceAll(identifier, "\"", "\"\"") + "\""
 
