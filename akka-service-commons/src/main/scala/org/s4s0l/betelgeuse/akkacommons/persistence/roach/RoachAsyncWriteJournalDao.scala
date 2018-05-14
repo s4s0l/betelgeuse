@@ -1,29 +1,28 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import java.nio.charset.Charset
-import java.util.Base64
-
+import akka.actor.{Actor, ActorRef}
 import akka.persistence.PersistentRepr
-import org.s4s0l.betelgeuse.akkacommons.persistence.roach.PostgresScalikeJdbcImports._
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
+import akka.serialization.Serialization
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{PersistenceId, ScalikeAsyncWriteJournalDao}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper.StringWrapper
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, JsonAnyWrapper, SimpleSerializer}
 import org.slf4j.LoggerFactory
 import scalikejdbc._
 
@@ -32,40 +31,50 @@ import scala.collection.immutable
 /**
   * @author Marcin Wielgus
   */
-class RoachAsyncWriteJournalDao(serialization: Option[JacksonJsonSerializer])
+class RoachAsyncWriteJournalDao(resolveActorRef: String => ActorRef, serialization: JacksonJsonSerializer)
   extends ScalikeAsyncWriteJournalDao[RoachAsyncWriteJournalEntity] {
 
   private val e = RoachAsyncWriteJournalEntity.syntax("e")
   private val column = RoachAsyncWriteJournalEntity.column
+  private val simpleSerializer: SimpleSerializer = serialization
 
 
-  override def createEntity(persistenceIdTag: String, uniqueId: String,
-                            sequenceNr: Long, serializedRepr: Array[Byte],
-                            representation: PersistentRepr): RoachAsyncWriteJournalEntity = {
-    val representationEncoded = Base64.getEncoder.encodeToString(serializedRepr)
-    val crateObject = None // Roach doesnt support object type
-    val jsonObject = toJson(representation)
-    new RoachAsyncWriteJournalEntity(persistenceIdTag, uniqueId,
-      sequenceNr,
-      representationEncoded,
-      crateObject,
-      jsonObject,
-      None
+  override def createEntity(representation: PersistentRepr): RoachAsyncWriteJournalEntity = {
+    val persistenceId = PersistenceId.fromString(representation.persistenceId)
+    val actorPath = if (representation.sender == Actor.noSender) "" else
+      Serialization.serializedActorPath(representation.sender)
+    val (eventClassName, serializedEvent) = representation.payload match {
+      case jsonCapableValue: JacksonJsonSerializable =>
+        (representation.payload.getClass.getName,
+          simpleSerializer.toString(jsonCapableValue))
+      case stringValue: String =>
+        (
+          classOf[JsonAnyWrapper].getName,
+          simpleSerializer.toString(JsonAnyWrapper(Some(stringValue)))
+        )
+      case _ => throw new ClassCastException(s"Event of class ${representation.payload.getClass.getName} does not implement JacksonJsonSerializable!!!")
+    }
+
+
+    new RoachAsyncWriteJournalEntity(
+      persistenceId.tag,
+      persistenceId.uniqueId,
+      representation.sequenceNr,
+      representation.manifest,
+      representation.writerUuid,
+      actorPath,
+      serializedEvent,
+      eventClassName,
+      representation.deleted
     )
   }
 
 
-  def toJson(p: PersistentRepr): Option[String] = {
-    serialization
-      .find(_ => classOf[JacksonJsonSerializable].isAssignableFrom(p.payload.getClass))
-      .map(serializetion => serializetion.toBinary(p.payload.asInstanceOf[AnyRef]))
-      .map(bytes => new String(bytes, Charset.forName("UTF-8")))
-  }
-
   private val LOGGER = LoggerFactory.getLogger(getClass)
 
   override def replayMessages(tag: String, uniqueId: String, fromSequenceNr: Long,
-                              toSequenceNr: Long, max: Long)(cb: (RoachAsyncWriteJournalEntity) => Unit)
+                              toSequenceNr: Long, max: Long)
+                             (cb: (RoachAsyncWriteJournalEntity, PersistentRepr) => Unit)
                              (implicit session: DBSession): Unit = {
     LOGGER.info(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
     withSQL {
@@ -80,7 +89,24 @@ class RoachAsyncWriteJournalDao(serialization: Option[JacksonJsonSerializer])
       //        .limit(100)
     }.foreach { rs =>
       val entity = RoachAsyncWriteJournalEntity.apply(e.resultName)(rs)
-      cb.apply(entity)
+      val eventClass = Class.forName(entity.eventClass).asInstanceOf[Class[AnyRef]]
+      val event = simpleSerializer.fromStringToClass(entity.event, eventClass) match {
+        case JsonAnyWrapper(StringWrapper(value)) => value
+        case x: JacksonJsonSerializable => x
+      }
+      val persistenceId = PersistenceId(entity.tag, entity.id)
+      val senderRef = if (entity.sender == "") ActorRef.noSender else
+        resolveActorRef(entity.sender)
+      val persistentRepr = PersistentRepr.apply(
+        event,
+        entity.seq,
+        persistenceId.toString,
+        entity.manifest,
+        entity.deleted,
+        senderRef,
+        entity.writerUuid
+      )
+      cb.apply(entity, persistentRepr)
     }
   }
 
@@ -93,8 +119,12 @@ class RoachAsyncWriteJournalDao(serialization: Option[JacksonJsonSerializer])
             column.tag -> e.tag,
             column.id -> e.id,
             column.seq -> e.seq,
-            column.serialized -> e.serialized,
-            column.json -> e.json.orNull
+            column.manifest -> e.manifest,
+            column.writerUuid -> e.writerUuid,
+            column.sender -> e.sender,
+            column.event -> e.event,
+            column.eventClass -> e.eventClass,
+            column.deleted -> e.deleted
           )
       }.update().apply()
     } else {
@@ -104,11 +134,24 @@ class RoachAsyncWriteJournalDao(serialization: Option[JacksonJsonSerializer])
             column.tag -> sqls.?,
             column.id -> sqls.?,
             column.seq -> sqls.?,
-            column.serialized -> sqls.?,
-            column.json -> sqls.?
+            column.manifest -> sqls.?,
+            column.writerUuid -> sqls.?,
+            column.sender -> sqls.?,
+            column.event -> sqls.?,
+            column.eventClass -> sqls.?,
+            column.deleted -> sqls.?
           )
       }.batch(l.map { e =>
-        Seq(e.tag, e.id, e.seq, e.serialized, e.json.orNull)
+        Seq(
+          e.tag,
+          e.id,
+          e.seq,
+          e.manifest,
+          e.writerUuid,
+          e.sender,
+          e.event,
+          e.eventClass,
+          e.deleted)
       }: _*).apply()
     }
   }

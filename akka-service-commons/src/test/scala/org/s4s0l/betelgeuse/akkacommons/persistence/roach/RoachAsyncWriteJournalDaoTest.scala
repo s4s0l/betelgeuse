@@ -1,21 +1,22 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
+import akka.actor.ActorRef
 import akka.persistence.PersistentRepr
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachAsyncWriteJournalDaoTest._
 import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
@@ -30,81 +31,43 @@ import scala.collection.{immutable, mutable}
 /**
   * @author Marcin Wielgus
   */
-class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with DbRoachTest with MockFactory with ScalaFutures {
+class RoachAsyncWriteJournalDaoTest
+  extends FeatureSpec
+    with GivenWhenThen
+    with DbRoachTest
+    with MockFactory
+    with ScalaFutures {
 
   feature("Akka journal can be saved in roach db") {
-    scenario("Regular Events are saved and retrieved") {
-      localTx { implicit session =>
-        Given("Crate async writer dao with no serializer")
-        val dao = new RoachAsyncWriteJournalDao(None)
-        And("Some regular event")
-        val event = RegularEvent("s", 1, Seq("a"))
-        When("Entity is created")
-        val entity = dao.createEntity("tag", "123", 1, Array[Byte](1, 2, 3), PersistentRepr.apply(
-          payload = event, sequenceNr = 1, persistenceId = "tag/123", deleted = false
-        ))
-        Then("It has all fields set as in request")
-        assert(entity.tag == "tag")
-        assert(entity.id == "123")
-        assert(entity.seq == 1)
-        assert(entity.event.isEmpty)
-        assert(entity.json.isEmpty)
-        assert(entity.created.isEmpty)
-        assert(entity.serialized == "AQID")
-        assert(entity.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
-
-        When("This entity is persisted")
-        dao.save(immutable.Seq(entity))
-
-        Then("Max seq returns inserted value")
-        assert(dao.getMaxSequenceNumber("tag", "123", -1) == 1)
-
-        When("Replaying this entity")
-
-        val replayedMessages = mutable.Buffer[RoachAsyncWriteJournalEntity]()
-
-        dao.replayMessages("tag", "123", -1, 100, 100) { e =>
-          replayedMessages += e
-        }
-
-        Then("We get the one created earlier")
-        assert(replayedMessages.lengthCompare(1) == 0)
-        assert(replayedMessages.head.tag == "tag")
-        assert(replayedMessages.head.id == "123")
-        assert(replayedMessages.head.seq == 1)
-        assert(replayedMessages.head.event.isEmpty)
-        assert(replayedMessages.head.json.isEmpty)
-        assert(replayedMessages.head.created.isDefined)
-        assert(replayedMessages.head.serialized == "AQID")
-        assert(replayedMessages.head.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
-
-      }
-    }
-
 
     scenario("Json serializable Events are saved and retrieved") {
       localTx { implicit session =>
-        Given("Crate async writer dao with no serializer")
+        Given("Roach async writer dao with no serializer")
 
-        val jjs = mock[JacksonJsonSerializer]
-        (jjs.toBinary _).expects(*).returning(Array[Byte](0x41, 0x42, 0x43))
-
-        val dao = new RoachAsyncWriteJournalDao(Some(jjs))
+        val dao = new RoachAsyncWriteJournalDao(refFactory, new JacksonJsonSerializer())
         And("Some regular event")
         val event = JsonEvent("s", 1, Seq("a"))
+        val persRepr = PersistentRepr.apply(
+          payload = event,
+          sequenceNr = 1,
+          persistenceId = "tag2/123",
+          deleted = false,
+          manifest = "manifa",
+          sender = ActorRef.noSender,
+          writerUuid = "writerOne"
+        )
         When("Entity is created")
-        val entity = dao.createEntity("tag2", "123", 1, Array[Byte](1, 2, 3), PersistentRepr.apply(
-          payload = event, sequenceNr = 1, persistenceId = "tag2/123", deleted = false
-        ))
+        val entity = dao.createEntity(persRepr)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag2")
         assert(entity.id == "123")
         assert(entity.seq == 1)
-        assert(entity.event.isEmpty)
-        assert(entity.json.get == "ABC")
-        assert(entity.created.isEmpty)
-        assert(entity.serialized == "AQID")
-        assert(entity.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(entity.eventClass == event.getClass.getName)
+        assert(entity.event == """{"s":"s","i":1,"seq":["a"]}""")
+        assert(entity.writerUuid == "writerOne")
+        assert(entity.sender == "")
+        assert(!entity.deleted)
+        assert(entity.manifest == "manifa")
 
         When("This entity is persisted")
         dao.save(immutable.Seq(entity))
@@ -114,75 +77,124 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
         When("Replaying this entity")
 
-        val replayedMessages = mutable.Buffer[RoachAsyncWriteJournalEntity]()
+        val replayedEntities = mutable.Buffer[RoachAsyncWriteJournalEntity]()
+        val replayedRepresentations = mutable.Buffer[PersistentRepr]()
 
-        dao.replayMessages("tag2", "123", -1, 100, 100) { e =>
-          replayedMessages += e
+        dao.replayMessages("tag2", "123", -1, 100, 100) {
+          (e, p) =>
+            replayedEntities += e
+            replayedRepresentations += p
         }
 
         Then("We get the one created earlier")
-        assert(replayedMessages.lengthCompare(1) == 0)
-        assert(replayedMessages.head.tag == "tag2")
-        assert(replayedMessages.head.id == "123")
-        assert(replayedMessages.head.seq == 1)
-        assert(replayedMessages.head.event.isEmpty)
-        assert(replayedMessages.head.json.get == "ABC")
-        assert(replayedMessages.head.created.isDefined)
-        assert(replayedMessages.head.serialized == "AQID")
-        assert(replayedMessages.head.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(replayedEntities.lengthCompare(1) == 0)
+        assert(replayedEntities.head.tag == "tag2")
+        assert(replayedEntities.head.id == "123")
+        assert(replayedEntities.head.seq == 1)
+        assert(replayedEntities.head.eventClass == entity.eventClass)
+        assert(replayedEntities.head.event == """{"i": 1, "s": "s", "seq": ["a"]}""")
+        assert(replayedEntities.head.writerUuid == entity.writerUuid)
+        assert(replayedEntities.head.sender == entity.sender)
+        assert(replayedEntities.head.deleted == entity.deleted)
+        assert(replayedEntities.head.manifest == entity.manifest)
 
+
+        assert(replayedRepresentations.lengthCompare(1) == 0)
+        assert(replayedRepresentations.head.persistenceId == "tag2/123")
+        assert(replayedRepresentations.head.sequenceNr == 1)
+        assert(replayedRepresentations.head.payload == event)
+        assert(replayedRepresentations.head.writerUuid == entity.writerUuid)
+        assert(replayedRepresentations.head.sender == ActorRef.noSender)
+        assert(replayedRepresentations.head.deleted == entity.deleted)
+        assert(replayedRepresentations.head.manifest == entity.manifest)
       }
     }
 
 
-    scenario("Roach serializable Events are passed but not saved and they don't trip") {
+    scenario("String Events are saved and retrieved") {
       localTx { implicit session =>
-        Given("Crate async writer dao with no serializer")
+        Given("Roach async writer dao")
 
-        val jjs = mock[JacksonJsonSerializer]
-        (jjs.toBinary _).expects(*).never()
-
-        val dao = new RoachAsyncWriteJournalDao(Some(jjs))
-        And("Some regular event")
-        val event = CrateEvent("s", 1, Seq("a"))
+        val dao = new RoachAsyncWriteJournalDao(refFactory, new JacksonJsonSerializer())
+        And("Some string event")
+        val event = "a string value"
+        val persRepr = PersistentRepr.apply(
+          payload = event,
+          sequenceNr = 1,
+          persistenceId = "tag9/123",
+          deleted = false,
+          manifest = "manifa",
+          sender = ActorRef.noSender,
+          writerUuid = "writerOne"
+        )
         When("Entity is created")
-        val entity = dao.createEntity("tag3", "123", 1, Array[Byte](1, 2, 3), PersistentRepr.apply(
-          payload = event, sequenceNr = 1, persistenceId = "tag3/123", deleted = false
-        ))
+        val entity = dao.createEntity(persRepr)
         Then("It has all fields set as in request")
-        assert(entity.tag == "tag3")
+        assert(entity.tag == "tag9")
         assert(entity.id == "123")
         assert(entity.seq == 1)
-        assert(entity.event.isEmpty)
-        assert(entity.json.isEmpty)
-        assert(entity.created.isEmpty)
-        assert(entity.serialized == "AQID")
-        assert(entity.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(entity.eventClass == "org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper")
+        assert(entity.event == """{"wrapped":{"stringValue":"a string value"},"@class":"org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper$StringWrapper"}""")
+        assert(entity.writerUuid == "writerOne")
+        assert(entity.sender == "")
+        assert(!entity.deleted)
+        assert(entity.manifest == "manifa")
 
         When("This entity is persisted")
         dao.save(immutable.Seq(entity))
 
         Then("Max seq returns inserted value")
-        assert(dao.getMaxSequenceNumber("tag3", "123", -1) == 1)
+        assert(dao.getMaxSequenceNumber("tag9", "123", -1) == 1)
 
         When("Replaying this entity")
 
-        val replayedMessages = mutable.Buffer[RoachAsyncWriteJournalEntity]()
+        val replayedEntities = mutable.Buffer[RoachAsyncWriteJournalEntity]()
+        val replayedRepresentations = mutable.Buffer[PersistentRepr]()
 
-        dao.replayMessages("tag3", "123", -1, 100, 100) { e =>
-          replayedMessages += e
+        dao.replayMessages("tag9", "123", -1, 100, 100) {
+          (e, p) =>
+            replayedEntities += e
+            replayedRepresentations += p
         }
 
-        Then("We get the one created earlier but without event")
-        assert(replayedMessages.lengthCompare(1) == 0)
-        assert(replayedMessages.head.tag == "tag3")
-        assert(replayedMessages.head.id == "123")
-        assert(replayedMessages.head.seq == 1)
-        assert(replayedMessages.head.event.isEmpty)
-        assert(replayedMessages.head.json.isEmpty)
-        assert(replayedMessages.head.created.isDefined)
-        assert(replayedMessages.head.serialized == "AQID")
-        assert(replayedMessages.head.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        Then("We get the one created earlier")
+        assert(replayedEntities.lengthCompare(1) == 0)
+        assert(replayedEntities.head.tag == "tag9")
+        assert(replayedEntities.head.id == "123")
+        assert(replayedEntities.head.seq == 1)
+        assert(replayedEntities.head.eventClass == entity.eventClass)
+        assert(replayedEntities.head.event == """{"@class": "org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper$StringWrapper", "wrapped": {"stringValue": "a string value"}}""")
+        assert(replayedEntities.head.writerUuid == entity.writerUuid)
+        assert(replayedEntities.head.sender == entity.sender)
+        assert(replayedEntities.head.deleted == entity.deleted)
+        assert(replayedEntities.head.manifest == entity.manifest)
+
+
+        assert(replayedRepresentations.lengthCompare(1) == 0)
+        assert(replayedRepresentations.head.persistenceId == "tag9/123")
+        assert(replayedRepresentations.head.sequenceNr == 1)
+        assert(replayedRepresentations.head.payload == event)
+        assert(replayedRepresentations.head.writerUuid == entity.writerUuid)
+        assert(replayedRepresentations.head.sender == ActorRef.noSender)
+        assert(replayedRepresentations.head.deleted == entity.deleted)
+        assert(replayedRepresentations.head.manifest == entity.manifest)
+      }
+    }
+
+    scenario("Non json serializable events fail") {
+      localTx { implicit session =>
+        Given("Crate async writer dao with no serializer")
+        val dao = new RoachAsyncWriteJournalDao(refFactory, new JacksonJsonSerializer())
+        And("Some regular event")
+        val event = CrateEvent("s", 1, Seq("a"))
+        When("Entity is created")
+        intercept[ClassCastException](dao.createEntity(PersistentRepr.apply(
+          payload = event, sequenceNr = 1, persistenceId = "tag3/123",
+          deleted = false,
+          manifest = "manifa",
+          sender = ActorRef.noSender,
+          writerUuid = "writerOne"
+        )))
 
       }
     }
@@ -195,7 +207,7 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
       localTx { implicit session =>
 
         Given("Crate async writer dao with no serializer")
-        val dao = new RoachAsyncWriteJournalDao(None)
+        val dao = new RoachAsyncWriteJournalDao(refFactory, new JacksonJsonSerializer())
         And("3 events are setup")
         setup3Events(dao, "5")
 
@@ -207,8 +219,9 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
         val replayedMessagesAfterCleaning = mutable.Buffer[RoachAsyncWriteJournalEntity]()
 
-        dao.replayMessages("tag", "5", -1, 100, 100) { e =>
-          replayedMessagesAfterCleaning += e
+        dao.replayMessages("tag", "5", -1, 100, 100) {
+          (e, _) =>
+            replayedMessagesAfterCleaning += e
         }
 
         Then("Only last message is returned")
@@ -216,10 +229,12 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         assert(replayedMessagesAfterCleaning.head.tag == "tag")
         assert(replayedMessagesAfterCleaning.head.id == "5")
         assert(replayedMessagesAfterCleaning.head.seq == 3)
-        assert(replayedMessagesAfterCleaning.head.event.isEmpty)
-        assert(replayedMessagesAfterCleaning.head.json.isEmpty)
-        assert(replayedMessagesAfterCleaning.head.created.isDefined)
-        assert(replayedMessagesAfterCleaning.head.getSerializedRepresentation.toSeq == Array[Byte](7, 8, 9).toSeq)
+        assert(replayedMessagesAfterCleaning.head.eventClass == classOf[RegularEvent].getName)
+        assert(replayedMessagesAfterCleaning.head.event == """{"i": 3, "s": "s", "seq": ["c"]}""")
+        assert(replayedMessagesAfterCleaning.head.writerUuid == "writerOne")
+        assert(replayedMessagesAfterCleaning.head.sender == "")
+        assert(!replayedMessagesAfterCleaning.head.deleted)
+        assert(replayedMessagesAfterCleaning.head.manifest == "manifa")
       }
 
     }
@@ -227,7 +242,8 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     scenario("Deleting upTo sequence number > max throws") {
       localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
-        val dao = new RoachAsyncWriteJournalDao(None)
+
+        val dao = new RoachAsyncWriteJournalDao(refFactory, new JacksonJsonSerializer())
         And("3 events are setup")
         setup3Events(dao, "4")
 
@@ -238,8 +254,9 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         When("We check the state of events")
         val replayedMessagesAfterCleaning = mutable.Buffer[RoachAsyncWriteJournalEntity]()
 
-        dao.replayMessages("tag", "4", -1, 100, 100) { e =>
-          replayedMessagesAfterCleaning += e
+        dao.replayMessages("tag", "4", -1, 100, 100) {
+          (e, _) =>
+            replayedMessagesAfterCleaning += e
         }
 
         Then("None were deleted")
@@ -248,23 +265,35 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
       }
     }
   }
-
+  val refFactory: String => ActorRef = _ => throw new Exception("Should not be called")
 
   def setup3Events(dao: RoachAsyncWriteJournalDao, id: String)(implicit session: DBSession): Unit = {
     val event1 = RegularEvent("s", 1, Seq("a"))
     val event2 = RegularEvent("s", 2, Seq("b"))
     val event3 = RegularEvent("s", 3, Seq("c"))
     When("Entities are created")
-    val entity1 = dao.createEntity("tag", id, 1, Array[Byte](1, 2, 3), PersistentRepr.apply(
-      payload = event1, sequenceNr = 1, persistenceId = s"tag/$id", deleted = false
+    val entity1 = dao.createEntity(PersistentRepr.apply(
+      payload = event1, sequenceNr = 1, persistenceId = s"tag/$id",
+      deleted = false,
+      manifest = "manifa",
+      sender = ActorRef.noSender,
+      writerUuid = "writerOne"
     ))
 
-    val entity2 = dao.createEntity("tag", id, 2, Array[Byte](4, 5, 6), PersistentRepr.apply(
-      payload = event2, sequenceNr = 2, persistenceId = s"tag/$id", deleted = false
+    val entity2 = dao.createEntity(PersistentRepr.apply(
+      payload = event2, sequenceNr = 2, persistenceId = s"tag/$id",
+      deleted = false,
+      manifest = "manifa",
+      sender = ActorRef.noSender,
+      writerUuid = "writerOne"
     ))
 
-    val entity3 = dao.createEntity("tag", id, 3, Array[Byte](7, 8, 9), PersistentRepr.apply(
-      payload = event3, sequenceNr = 2, persistenceId = s"tag/$id", deleted = false
+    val entity3 = dao.createEntity(PersistentRepr.apply(
+      payload = event3, sequenceNr = 3, persistenceId = s"tag/$id",
+      deleted = false,
+      manifest = "manifa",
+      sender = ActorRef.noSender,
+      writerUuid = "writerOne"
     ))
 
     When("This entities are persisted")
@@ -280,8 +309,9 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
     val replayedMessages = mutable.Buffer[RoachAsyncWriteJournalEntity]()
 
-    dao.replayMessages("tag", id, -1, 100, 100) { e =>
-      replayedMessages += e
+    dao.replayMessages("tag", id, -1, 100, 100) {
+      (e, _) =>
+        replayedMessages += e
     }
 
     Then("We get all messages and last is what we expected")
@@ -289,18 +319,19 @@ class RoachAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     assert(replayedMessages.last.tag == "tag")
     assert(replayedMessages.last.id == id)
     assert(replayedMessages.last.seq == 3)
-    assert(replayedMessages.last.event.isEmpty)
-    assert(replayedMessages.last.json.isEmpty)
-    assert(replayedMessages.last.created.isDefined)
-    assert(replayedMessages.last.getSerializedRepresentation.toSeq == Array[Byte](7, 8, 9).toSeq)
+    assert(replayedMessages.last.eventClass == classOf[RegularEvent].getName)
+    assert(replayedMessages.last.event == """{"i": 3, "s": "s", "seq": ["c"]}""")
+    assert(replayedMessages.last.writerUuid == "writerOne")
+    assert(replayedMessages.last.sender == "")
+    assert(!replayedMessages.last.deleted)
+    assert(replayedMessages.last.manifest == "manifa")
   }
-
 }
 
 
 object RoachAsyncWriteJournalDaoTest {
 
-  case class RegularEvent(s: String, i: Int, seq: Seq[String])
+  case class RegularEvent(s: String, i: Int, seq: Seq[String]) extends JacksonJsonSerializable
 
   case class JsonEvent(s: String, i: Int, seq: Seq[String]) extends JacksonJsonSerializable
 

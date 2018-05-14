@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.{BgClusteringSharding, BgClusteringShardingExtension}
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoachTest._
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithRoachDb
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
 
@@ -116,12 +117,15 @@ class BgPersistenceJournalRoachTest extends BgTestWithRoachDb[BgPersistenceJourn
       Thread.sleep(10000)
       shard ! CmdSharded(1, "ala")
       LOGGER.info("Message sent")
-      testKit.expectMsg(5 seconds,List("ala"))
+      testKit.expectMsg(5 seconds, List((testKit.self, "ala")))
       testKit.expectMsg(20 seconds, "down")
       shard ! CmdSharded(1, "ma")
-      testKit.expectMsg(2 seconds,List("ala","ma"))
+      testKit.expectMsg(2 seconds, List((testKit.system.deadLetters, "ala"), (testKit.self, "ma")))
       shard ! CmdSharded(1, "kota")
-      testKit.expectMsg(2 seconds,List("ala","ma", "kota"))
+      testKit.expectMsg(2 seconds, List(
+        (testKit.system.deadLetters, "ala"),
+        (testKit.self, "ma"),
+        (testKit.self, "kota")))
 
     }
 
@@ -134,7 +138,7 @@ object BgPersistenceJournalRoachTest {
 
   case class Cmd(data: String)
 
-  case class Evt(data: String)
+  case class Evt(data: String) extends JacksonJsonSerializable
 
   case class ExampleState(events: List[String] = Nil) {
 
@@ -156,7 +160,7 @@ object BgPersistenceJournalRoachTest {
     lazy val receiveCommand: Receive = {
       case Cmd(data) =>
         val sndr = sender()
-        LOGGER.info("received {}",data)
+        LOGGER.info("received {}", data)
         persist(Evt(s"$data-$numEvents")) { event =>
           LOGGER.info("persisted {}", event)
           updateState(event)
@@ -189,7 +193,7 @@ object BgPersistenceJournalRoachTest {
 
   case class CmdSharded(num: Int, data: String)
 
-  case class EvtSharded(num: Int, data: String)
+  case class EvtSharded(num: Int, data: String) extends JacksonJsonSerializable
 
 
   class ExamplePersistentShardedActor extends utils.PersistentShardedActor with TimeoutShardedActor {
@@ -197,7 +201,7 @@ object BgPersistenceJournalRoachTest {
     import scala.concurrent.duration._
 
     override val timeoutTime: FiniteDuration = 10 seconds
-    private var dataReceived = List[String]()
+    private var dataReceived = List[(ActorRef, String)]()
     private var lastSender: ActorRef = _
 
     override def onPassivationCallback(): Unit = {
@@ -206,14 +210,14 @@ object BgPersistenceJournalRoachTest {
 
     override def receiveRecover: Receive = {
       case EvtSharded(_, s) =>
-        dataReceived = s :: dataReceived
+        dataReceived = (sender(), s) :: dataReceived
     }
 
     override def receiveCommand: Receive = {
       case CmdSharded(i, data) =>
         lastSender = sender()
         persist(EvtSharded(i, data)) { _ =>
-          dataReceived = data :: dataReceived
+          dataReceived = (sender(), data) :: dataReceived
           lastSender ! dataReceived.reverse
         }
     }

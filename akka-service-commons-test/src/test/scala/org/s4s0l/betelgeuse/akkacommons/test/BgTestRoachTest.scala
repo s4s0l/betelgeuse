@@ -21,6 +21,7 @@ import akka.persistence.{PersistentActor, SnapshotOffer}
 import org.s4s0l.betelgeuse.akkacommons.BgServiceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.persistence.{BgPersistenceExtension, utils}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoachTest._
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
@@ -130,7 +131,7 @@ object BgTestRoachTest {
 
   case class Cmd(data: String)
 
-  case class Evt(data: String)
+  case class Evt(data: String) extends JacksonJsonSerializable
 
   case class ExampleState(events: List[String] = Nil) {
 
@@ -185,7 +186,7 @@ object BgTestRoachTest {
 
   case class CmdSharded(num: Int, data: String)
 
-  case class EvtSharded(num: Int, data: String)
+  case class EvtSharded(num: Int, data: String) extends JacksonJsonSerializable
 
 
   class ExamplePersistentShardedActor extends utils.PersistentShardedActor with TimeoutShardedActor {

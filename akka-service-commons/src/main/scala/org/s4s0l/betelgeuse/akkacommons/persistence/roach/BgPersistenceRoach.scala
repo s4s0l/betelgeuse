@@ -18,11 +18,12 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistence
+import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 
 /**
   * @author Maciej Flak
   */
-trait BgPersistenceRoach extends BgPersistence {
+trait BgPersistenceRoach extends BgPersistence with BgSerializationJackson {
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgPersistenceRoach])
 
