@@ -16,11 +16,15 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
+import java.nio.charset.Charset
 import java.sql.SQLException
+import java.util.Base64
 
+import akka.persistence.PersistentRepr
 import akka.serialization.{Serialization, SerializationExtension}
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JurnalDuplicateKeyException, ScalikeAsyncWriteJournal}
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
+import org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateScalikeJdbcImports.CrateDbObject
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JurnalDuplicateKeyException, PersistenceId, ScalikeAsyncWriteJournal}
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
 import org.slf4j.LoggerFactory
 import scalikejdbc.DBSession
 
@@ -34,12 +38,21 @@ class CrateAsyncWriteJournal()
 
   private val LOGGER = LoggerFactory.getLogger(getClass)
 
-  private val serialization: Serialization = SerializationExtension.get(context.system)
-  override val dao: CrateAsyncWriteJournalDao =
-    new CrateAsyncWriteJournalDao(serialization, JacksonJsonSerializer.get(serialization))
+  override val dao: CrateAsyncWriteJournalDao = new CrateAsyncWriteJournalDao()
+  private val reprSerialization: Serialization = SerializationExtension.get(context.system)
+  private val jsonSerialization: Option[JacksonJsonSerializer] = JacksonJsonSerializer.get(reprSerialization)
 
   override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
     Future.failed(new UnsupportedOperationException("message deletion is not supported, it could mess up consistency."))
+  }
+
+  override def createEntity(representation: PersistentRepr): CrateAsyncWriteJournalEntity = {
+    CrateAsyncWriteJournal.createEntity(representation, reprSerialization, jsonSerialization)
+  }
+
+
+  override def createRepresentation(entity: CrateAsyncWriteJournalEntity): PersistentRepr = {
+    CrateAsyncWriteJournal.createRepresentation(entity, reprSerialization)
   }
 
   override def mapExceptions(session: DBSession): PartialFunction[Exception, Exception] = {
@@ -52,5 +65,56 @@ class CrateAsyncWriteJournal()
           LOGGER.error("Unable to refresh table on duplicate key exception")
       }
       new JurnalDuplicateKeyException("Key duplicated", sql)
+  }
+}
+
+object CrateAsyncWriteJournal {
+  def createEntity(representation: PersistentRepr,
+                   reprSerialization: Serialization,
+                   jsonSerialization: Option[JacksonJsonSerializer])
+  : CrateAsyncWriteJournalEntity = {
+    val persistenceId = PersistenceId.fromString(representation.persistenceId)
+    val persistenceIdTag = persistenceId.tag
+    val uniqueId = persistenceId.uniqueId
+    val sequenceNr = representation.sequenceNr
+    val serializedRepr: Array[Byte] = reprSerialization.serialize(representation).get
+    val representationEncoded = Base64.getEncoder.encodeToString(serializedRepr)
+
+    val crateObject = representation.payload match {
+      case a: CrateDbObject => Some(AnyRefObject(a))
+      case _ => None
+    }
+    val jsonObject = crateObject match {
+      case None => toJson(representation, jsonSerialization)
+      case _ => None
+    }
+    new CrateAsyncWriteJournalEntity(persistenceIdTag, uniqueId,
+      sequenceNr,
+      representationEncoded,
+      crateObject,
+      jsonObject,
+      None
+    )
+  }
+
+  def toJson(p: PersistentRepr, jsonSerialization: Option[JacksonJsonSerializer]): Option[String] = {
+    jsonSerialization
+      .find(_ => classOf[JacksonJsonSerializable].isAssignableFrom(p.payload.getClass))
+      .map(jsonSerialization => jsonSerialization.toBinary(p.payload.asInstanceOf[AnyRef]))
+      .map(bytes => new String(bytes, Charset.forName("UTF-8")))
+  }
+
+  def createRepresentation(entity: CrateAsyncWriteJournalEntity,
+                           reprSerialization: Serialization)
+  : PersistentRepr = {
+    reprSerialization
+      .serializerFor(classOf[PersistentRepr])
+      .fromBinary(entity.getSerializedRepresentation)
+      .asInstanceOf[PersistentRepr]
+      .update(
+        sequenceNr = entity.getSequenceNumber,
+        deleted = false,
+        persistenceId = PersistenceId(entity.tag, entity.id).toString
+      )
   }
 }

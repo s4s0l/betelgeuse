@@ -43,7 +43,9 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     scenario("Regular Events are saved and retrieved") {
       localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
-        val dao = new CrateAsyncWriteJournalDao(SerializationExtension.get(actorSystem), None)
+        val reprSerialization = SerializationExtension.get(actorSystem)
+        val jsonSerialization: Option[JacksonJsonSerializer] = None
+        val dao = new CrateAsyncWriteJournalDao()
         And("Some regular event")
         val event = RegularEvent("s", 1, Seq("a"))
         When("Entity is created")
@@ -52,7 +54,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
           persistenceId = "tag/123",
           deleted = false
         )
-        val entity = dao.createEntity(repr)
+        val entity = CrateAsyncWriteJournal.createEntity(repr, reprSerialization, jsonSerialization)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag")
         assert(entity.id == "123")
@@ -75,7 +77,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         val replayedMessages = mutable.Buffer[CrateAsyncWriteJournalEntity]()
 
         dao.replayMessages("tag", "123", -1, 100, 100) {
-          (e, _) =>
+          e =>
             replayedMessages += e
         }
 
@@ -97,13 +99,16 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     scenario("Json serializable Events are saved and retrieved") {
       localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
-        val dao = new CrateAsyncWriteJournalDao(SerializationExtension.get(actorSystem), Some(new JacksonJsonSerializer()))
+        val reprSerialization = SerializationExtension.get(actorSystem)
+        val jsonSerialization: Option[JacksonJsonSerializer] = Some(new JacksonJsonSerializer())
+        val dao = new CrateAsyncWriteJournalDao()
         And("Some regular event")
         val event = JsonEvent("s", 1, Seq("a"))
         When("Entity is created")
-        val entity = dao.createEntity(PersistentRepr.apply(
+        val repr = PersistentRepr.apply(
           payload = event, sequenceNr = 1, persistenceId = "tag2/123", deleted = false
-        ))
+        )
+        val entity = CrateAsyncWriteJournal.createEntity(repr, reprSerialization, jsonSerialization)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag2")
         assert(entity.id == "123")
@@ -126,7 +131,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         val replayedMessages = mutable.Buffer[CrateAsyncWriteJournalEntity]()
 
         dao.replayMessages("tag2", "123", -1, 100, 100) {
-          (e, _) =>
+          e =>
             replayedMessages += e
         }
 
@@ -148,16 +153,19 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     scenario("Crate serializable Events are saved and retrieved") {
       localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
-        val dao = new CrateAsyncWriteJournalDao(SerializationExtension.get(actorSystem), Some(new JacksonJsonSerializer()))
+        val reprSerialization = SerializationExtension.get(actorSystem)
+        val jsonSerialization: Option[JacksonJsonSerializer] = None
+        val dao = new CrateAsyncWriteJournalDao()
         And("Some regular event")
         val event = new CrateEvent("s", 1, Seq("a"))
         When("Entity is created")
-        val entity = dao.createEntity(PersistentRepr.apply(
+        val repr = PersistentRepr.apply(
           payload = event,
           sequenceNr = 1,
           persistenceId = "tag3/123",
           deleted = false
-        ))
+        )
+        val entity = CrateAsyncWriteJournal.createEntity(repr, reprSerialization, jsonSerialization)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag3")
         assert(entity.id == "123")
@@ -180,7 +188,7 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         val replayedMessages = mutable.Buffer[CrateAsyncWriteJournalEntity]()
 
         dao.replayMessages("tag3", "123", -1, 100, 100) {
-          (e, _) =>
+          e =>
             replayedMessages += e
         }
 

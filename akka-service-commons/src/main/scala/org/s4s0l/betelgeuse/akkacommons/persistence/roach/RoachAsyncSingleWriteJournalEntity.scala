@@ -16,38 +16,20 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalEntity
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseEntityObject
 import scalikejdbc.WrappedResultSet
 
 /**
   * @author Marcin Wielgus
   */
-case class RoachAsyncWriteJournalEntity(
-                                         tag: String,
-                                         id: String,
-                                         seq: Long,
-                                         manifest: String,
-                                         writerUuid: String,
-                                         event: String,
-                                         eventClass: String,
-                                         deleted: Boolean)
+object RoachAsyncSingleWriteJournalEntity
+  extends BetelgeuseEntityObject[RoachAsyncWriteJournalEntity] {
 
-  extends ScalikeAsyncWriteJournalEntity {
+  override def tableName: String = "journal_single_events"
 
-  override def getPersistenceIdTag: String = tag
-
-  override def getPersistenceUniqueId: String = id
-
-  override def getSequenceNumber: Long = seq
-
-}
-
-object RoachAsyncWriteJournalEntity extends BetelgeuseEntityObject[RoachAsyncWriteJournalEntity] {
-
-  override def tableName: String = "journal_events"
-
-  override def apply(m: scalikejdbc.ResultName[RoachAsyncWriteJournalEntity])(rs: WrappedResultSet): RoachAsyncWriteJournalEntity = {
+  override def apply(m: scalikejdbc.ResultName[RoachAsyncWriteJournalEntity])
+                    (rs: WrappedResultSet)
+  : RoachAsyncWriteJournalEntity = {
     new RoachAsyncWriteJournalEntity(
       rs.string(m.tag),
       rs.string(m.id),
@@ -60,3 +42,6 @@ object RoachAsyncWriteJournalEntity extends BetelgeuseEntityObject[RoachAsyncWri
     )
   }
 }
+
+
+

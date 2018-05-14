@@ -14,26 +14,16 @@
  * limitations under the License.
  */
 
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-
-package org.s4s0l.betelgeuse.akkacommons.persistence.utils
-
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
-import org.s4s0l.betelgeuse.akkacommons.utils.ShardedActor
-
+import akka.persistence.PersistentActor
 
 /**
   * @author Marcin Wielgus
   */
-trait PersistentShardedActor
-  extends akka.persistence.PersistentActor
-    with ShardedActor {
+trait SingleEventPersistence
+  extends PersistentActor {
 
-  override def persistenceId: String = {
-    getPersistenceId.toString
-  }
+  override def journalPluginId = "persistence-journal-roach-single"
 
-  def getPersistenceId: PersistenceId = {
-    PersistenceId(shardName, shardedActorId)
-  }
 }

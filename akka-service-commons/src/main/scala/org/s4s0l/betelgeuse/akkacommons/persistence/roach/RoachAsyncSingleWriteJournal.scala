@@ -14,26 +14,17 @@
  * limitations under the License.
  */
 
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-
-package org.s4s0l.betelgeuse.akkacommons.persistence.utils
-
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
-import org.s4s0l.betelgeuse.akkacommons.utils.ShardedActor
-
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
 
 /**
   * @author Marcin Wielgus
   */
-trait PersistentShardedActor
-  extends akka.persistence.PersistentActor
-    with ShardedActor {
+class RoachAsyncSingleWriteJournal
+  extends RoachAsyncWriteJournal() {
 
-  override def persistenceId: String = {
-    getPersistenceId.toString
-  }
+  override val dao: ScalikeAsyncWriteJournalDao[RoachAsyncWriteJournalEntity]
+  = new RoachAsyncSingleWriteJournalDao()
 
-  def getPersistenceId: PersistenceId = {
-    PersistenceId(shardName, shardedActorId)
-  }
 }

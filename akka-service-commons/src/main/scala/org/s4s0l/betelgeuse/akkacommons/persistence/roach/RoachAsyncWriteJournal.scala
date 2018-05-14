@@ -18,10 +18,12 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import java.sql.SQLException
 
-import akka.persistence.Persistence
-import akka.serialization.{Serialization, SerializationExtension}
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JurnalDuplicateKeyException, PersistenceId, ScalikeAsyncWriteJournal}
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
+import akka.actor.{ActorRef, ActorSystem}
+import akka.persistence.PersistentRepr
+import akka.serialization.SerializationExtension
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JurnalDuplicateKeyException, PersistenceId, ScalikeAsyncWriteJournal, ScalikeAsyncWriteJournalDao}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper.StringWrapper
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, JsonAnyWrapper, SimpleSerializer}
 import scalikejdbc.DBSession
 
 import scala.concurrent.Future
@@ -31,17 +33,21 @@ import scala.concurrent.Future
   */
 class RoachAsyncWriteJournal
   extends ScalikeAsyncWriteJournal[RoachAsyncWriteJournalEntity]() {
-  val extension = Persistence(context.system)
-  private val serialization: Serialization = SerializationExtension.get(context.system)
-  override val dao: RoachAsyncWriteJournalDao = new RoachAsyncWriteJournalDao(
-    stringRef => extension.system.provider.resolveActorRef(stringRef),
-    JacksonJsonSerializer.get(serialization).get
-  )
+
+  override val dao: ScalikeAsyncWriteJournalDao[RoachAsyncWriteJournalEntity] = new RoachAsyncWriteJournalDao()
+  private val jsonSerializer = RoachAsyncWriteJournal.jsonSerializer(context.system)
+
+  override def mapExceptions(session: DBSession)
+  : PartialFunction[Exception, Exception] = RoachAsyncWriteJournal.mapExceptions(session)
 
 
-  override def mapExceptions(session: DBSession): PartialFunction[Exception, Exception] = {
-    case sql: SQLException if sql.getMessage.contains("duplicate key value") =>
-      new JurnalDuplicateKeyException("Key duplicated", sql)
+  override def createEntity(representation: PersistentRepr): RoachAsyncWriteJournalEntity = {
+    RoachAsyncWriteJournal.createEntity(representation, jsonSerializer)
+  }
+
+  override def createRepresentation(entity: RoachAsyncWriteJournalEntity)
+  : PersistentRepr = {
+    RoachAsyncWriteJournal.createRepresentation(entity, jsonSerializer)
   }
 
   /**
@@ -59,4 +65,65 @@ class RoachAsyncWriteJournal
   }
 
 
+}
+
+private[roach] object RoachAsyncWriteJournal {
+
+  def mapExceptions(session: DBSession): PartialFunction[Exception, Exception] = {
+    case sql: SQLException if sql.getMessage.contains("duplicate key value") =>
+      new JurnalDuplicateKeyException("Key duplicated", sql)
+  }
+
+  def jsonSerializer(system: ActorSystem): JacksonJsonSerializer = {
+    JacksonJsonSerializer.get(SerializationExtension.get(system)).get
+  }
+
+  def createEntity(representation: PersistentRepr, serializer: JacksonJsonSerializer)
+  : RoachAsyncWriteJournalEntity = {
+    val jsonSerializer: SimpleSerializer = serializer
+    val persistenceId = PersistenceId.fromString(representation.persistenceId)
+    val (eventClassName, serializedEvent) = representation.payload match {
+      case jsonCapableValue: JacksonJsonSerializable =>
+        (representation.payload.getClass.getName,
+          jsonSerializer.toString(jsonCapableValue))
+      case stringValue: String =>
+        (
+          classOf[JsonAnyWrapper].getName,
+          jsonSerializer.toString(JsonAnyWrapper(Some(stringValue)))
+        )
+      case _ => throw new ClassCastException(s"Event of class ${representation.payload.getClass.getName} does not implement JacksonJsonSerializable!!!")
+    }
+    new RoachAsyncWriteJournalEntity(
+      persistenceId.tag,
+      persistenceId.uniqueId,
+      representation.sequenceNr,
+      representation.manifest,
+      representation.writerUuid,
+      serializedEvent,
+      eventClassName,
+      representation.deleted
+    )
+  }
+
+  def createRepresentation(entity: RoachAsyncWriteJournalEntity,
+                           serializer: JacksonJsonSerializer)
+  : PersistentRepr = {
+
+    val jsonSerializer: SimpleSerializer = serializer
+    val eventClass = Class.forName(entity.eventClass).asInstanceOf[Class[AnyRef]]
+    val event = jsonSerializer.fromStringToClass(entity.event, eventClass) match {
+      case JsonAnyWrapper(StringWrapper(value)) => value
+      case x: JacksonJsonSerializable => x
+    }
+    val persistenceId = PersistenceId(entity.tag, entity.id)
+    PersistentRepr.apply(
+      event,
+      entity.seq,
+      persistenceId.toString,
+      entity.manifest,
+      entity.deleted,
+      ActorRef.noSender,
+      entity.writerUuid
+    )
+  }
 }

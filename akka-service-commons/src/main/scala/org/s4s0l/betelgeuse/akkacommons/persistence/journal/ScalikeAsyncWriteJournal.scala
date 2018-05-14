@@ -44,16 +44,21 @@ abstract class ScalikeAsyncWriteJournal[T <: ScalikeAsyncWriteJournalEntity]
 
   val dbAccess: DbAccess = BgPersistenceExtension.apply(context.system).dbAccess
 
+
+  def createEntity(representation: PersistentRepr): T
+
+  def createRepresentation(entity: T): PersistentRepr
+
   override def asyncWriteMessages(messages: immutable.Seq[AtomicWrite]): Future[immutable.Seq[Try[Unit]]] = {
     Future {
-      dbAccess.update { implicit session =>
-        //just to be sure it exists?
-        session.connection
-        messages.map {
-          atomicWrite =>
+      messages.map {
+        atomicWrite =>
+          dbAccess.update { implicit session =>
+            //just to be sure it exists?
+            session.connection
             val retTry = Try {
               try {
-                dao.save(atomicWrite.payload.map(dao.createEntity))
+                dao.save(atomicWrite.payload.map(it => createEntity(it)))
               } catch {
                 case e: Exception if mapExceptions(session).isDefinedAt(e) => throw mapExceptions(session).apply(e)
               }
@@ -65,7 +70,7 @@ abstract class ScalikeAsyncWriteJournal[T <: ScalikeAsyncWriteJournalEntity]
               case _ =>
             }
             retTry
-        }
+          }
       }
     }
   }
@@ -83,7 +88,10 @@ abstract class ScalikeAsyncWriteJournal[T <: ScalikeAsyncWriteJournalEntity]
       dbAccess.query { implicit session =>
         val persistenceIdObject: PersistenceId = PersistenceId.fromString(persistenceId)
         dao.replayMessages(persistenceIdObject.tag, persistenceIdObject.uniqueId, fromSequenceNr, toSequenceNr, max) {
-          (entity: ScalikeAsyncWriteJournalEntity, persistentRepresentation: PersistentRepr) =>
+          entity: T =>
+
+            val persistentRepresentation: PersistentRepr = createRepresentation(entity)
+
             val migratedToNewVersion = persistentRepresentation.payload match {
               case callback: DepricatedTypeWithMigrationInfo =>
                 val updatedPayload = callback.convertToMigratedType()
@@ -91,7 +99,6 @@ abstract class ScalikeAsyncWriteJournal[T <: ScalikeAsyncWriteJournalEntity]
               case _ =>
                 persistentRepresentation
             }
-
 
             val updatedRepresentation: PersistentRepr = migratedToNewVersion.payload match {
               case callback: JournalCallback =>

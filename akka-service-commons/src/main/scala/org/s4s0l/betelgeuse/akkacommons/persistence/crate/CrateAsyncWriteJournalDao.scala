@@ -17,14 +17,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import java.nio.charset.Charset
-import java.util.Base64
-
-import akka.persistence.PersistentRepr
-import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateScalikeJdbcImports._
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{PersistenceId, ScalikeAsyncWriteJournalDao}
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
 import org.slf4j.LoggerFactory
 import scalikejdbc._
 
@@ -33,52 +27,23 @@ import scala.collection.immutable
 /**
   * @author Marcin Wielgus
   */
-class CrateAsyncWriteJournalDao(reprSerialization: Serialization,
-                                serialization: Option[JacksonJsonSerializer])
+class CrateAsyncWriteJournalDao()
   extends ScalikeAsyncWriteJournalDao[CrateAsyncWriteJournalEntity] {
 
   private val e = CrateAsyncWriteJournalEntity.syntax("e")
   private val column = CrateAsyncWriteJournalEntity.column
 
 
-  override def createEntity(representation: PersistentRepr): CrateAsyncWriteJournalEntity = {
-    val persistenceId = PersistenceId.fromString(representation.persistenceId)
-    val persistenceIdTag = persistenceId.tag
-    val uniqueId = persistenceId.uniqueId
-    val sequenceNr = representation.sequenceNr
-    val serializedRepr: Array[Byte] = reprSerialization.serialize(representation).get
-    val representationEncoded = Base64.getEncoder.encodeToString(serializedRepr)
-
-    val crateObject = representation.payload match {
-      case a: CrateDbObject => Some(AnyRefObject(a))
-      case _ => None
-    }
-    val jsonObject = crateObject match {
-      case None => toJson(representation)
-      case _ => None
-    }
-    new CrateAsyncWriteJournalEntity(persistenceIdTag, uniqueId,
-      sequenceNr,
-      representationEncoded,
-      crateObject,
-      jsonObject,
-      None
-    )
-  }
-
-
-  def toJson(p: PersistentRepr): Option[String] = {
-    serialization
-      .find(_ => classOf[JacksonJsonSerializable].isAssignableFrom(p.payload.getClass))
-      .map(serialization => serialization.toBinary(p.payload.asInstanceOf[AnyRef]))
-      .map(bytes => new String(bytes, Charset.forName("UTF-8")))
-  }
-
   private val LOGGER = LoggerFactory.getLogger(getClass)
+
+  override def deleteUpTo(tag: String, id: String, toSeqNum: Long)
+                         (implicit session: DBSession): Int = {
+    new UnsupportedOperationException("Deletion of events from journal is unsupported in crate")
+  }
 
   override def replayMessages(tag: String, uniqueId: String, fromSequenceNr: Long,
                               toSequenceNr: Long, max: Long)
-                             (cb: (CrateAsyncWriteJournalEntity, PersistentRepr) => Unit)
+                             (cb: CrateAsyncWriteJournalEntity => Unit)
                              (implicit session: DBSession)
   : Unit = {
     LOGGER.info(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
@@ -94,16 +59,8 @@ class CrateAsyncWriteJournalDao(reprSerialization: Serialization,
       //        .limit(100)
     }.foreach { rs =>
       val entity = CrateAsyncWriteJournalEntity.apply(e.resultName)(rs)
-      val persistentRepresentation = reprSerialization
-        .serializerFor(classOf[PersistentRepr])
-        .fromBinary(entity.getSerializedRepresentation)
-        .asInstanceOf[PersistentRepr]
-        .update(
-          sequenceNr = entity.getSequenceNumber,
-          deleted = false,
-          persistenceId = PersistenceId(entity.tag, entity.id).toString
-        )
-      cb.apply(entity, persistentRepresentation)
+
+      cb.apply(entity)
     }
   }
 

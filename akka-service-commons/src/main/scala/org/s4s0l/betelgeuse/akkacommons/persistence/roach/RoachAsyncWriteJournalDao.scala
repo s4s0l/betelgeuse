@@ -17,12 +17,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import akka.actor.{Actor, ActorRef}
-import akka.persistence.PersistentRepr
-import akka.serialization.Serialization
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{PersistenceId, ScalikeAsyncWriteJournalDao}
-import org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper.StringWrapper
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, JsonAnyWrapper, SimpleSerializer}
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
 import org.slf4j.LoggerFactory
 import scalikejdbc._
 
@@ -31,50 +26,17 @@ import scala.collection.immutable
 /**
   * @author Marcin Wielgus
   */
-class RoachAsyncWriteJournalDao(resolveActorRef: String => ActorRef, serialization: JacksonJsonSerializer)
+class RoachAsyncWriteJournalDao()
   extends ScalikeAsyncWriteJournalDao[RoachAsyncWriteJournalEntity] {
 
   private val e = RoachAsyncWriteJournalEntity.syntax("e")
   private val column = RoachAsyncWriteJournalEntity.column
-  private val simpleSerializer: SimpleSerializer = serialization
-
-
-  override def createEntity(representation: PersistentRepr): RoachAsyncWriteJournalEntity = {
-    val persistenceId = PersistenceId.fromString(representation.persistenceId)
-    val actorPath = if (representation.sender == Actor.noSender) "" else
-      Serialization.serializedActorPath(representation.sender)
-    val (eventClassName, serializedEvent) = representation.payload match {
-      case jsonCapableValue: JacksonJsonSerializable =>
-        (representation.payload.getClass.getName,
-          simpleSerializer.toString(jsonCapableValue))
-      case stringValue: String =>
-        (
-          classOf[JsonAnyWrapper].getName,
-          simpleSerializer.toString(JsonAnyWrapper(Some(stringValue)))
-        )
-      case _ => throw new ClassCastException(s"Event of class ${representation.payload.getClass.getName} does not implement JacksonJsonSerializable!!!")
-    }
-
-
-    new RoachAsyncWriteJournalEntity(
-      persistenceId.tag,
-      persistenceId.uniqueId,
-      representation.sequenceNr,
-      representation.manifest,
-      representation.writerUuid,
-      actorPath,
-      serializedEvent,
-      eventClassName,
-      representation.deleted
-    )
-  }
-
 
   private val LOGGER = LoggerFactory.getLogger(getClass)
 
   override def replayMessages(tag: String, uniqueId: String, fromSequenceNr: Long,
                               toSequenceNr: Long, max: Long)
-                             (cb: (RoachAsyncWriteJournalEntity, PersistentRepr) => Unit)
+                             (cb: RoachAsyncWriteJournalEntity => Unit)
                              (implicit session: DBSession): Unit = {
     LOGGER.info(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
     withSQL {
@@ -89,24 +51,7 @@ class RoachAsyncWriteJournalDao(resolveActorRef: String => ActorRef, serializati
       //        .limit(100)
     }.foreach { rs =>
       val entity = RoachAsyncWriteJournalEntity.apply(e.resultName)(rs)
-      val eventClass = Class.forName(entity.eventClass).asInstanceOf[Class[AnyRef]]
-      val event = simpleSerializer.fromStringToClass(entity.event, eventClass) match {
-        case JsonAnyWrapper(StringWrapper(value)) => value
-        case x: JacksonJsonSerializable => x
-      }
-      val persistenceId = PersistenceId(entity.tag, entity.id)
-      val senderRef = if (entity.sender == "") ActorRef.noSender else
-        resolveActorRef(entity.sender)
-      val persistentRepr = PersistentRepr.apply(
-        event,
-        entity.seq,
-        persistenceId.toString,
-        entity.manifest,
-        entity.deleted,
-        senderRef,
-        entity.writerUuid
-      )
-      cb.apply(entity, persistentRepr)
+      cb.apply(entity)
     }
   }
 
@@ -121,7 +66,6 @@ class RoachAsyncWriteJournalDao(resolveActorRef: String => ActorRef, serializati
             column.seq -> e.seq,
             column.manifest -> e.manifest,
             column.writerUuid -> e.writerUuid,
-            column.sender -> e.sender,
             column.event -> e.event,
             column.eventClass -> e.eventClass,
             column.deleted -> e.deleted
@@ -136,7 +80,6 @@ class RoachAsyncWriteJournalDao(resolveActorRef: String => ActorRef, serializati
             column.seq -> sqls.?,
             column.manifest -> sqls.?,
             column.writerUuid -> sqls.?,
-            column.sender -> sqls.?,
             column.event -> sqls.?,
             column.eventClass -> sqls.?,
             column.deleted -> sqls.?
@@ -148,7 +91,6 @@ class RoachAsyncWriteJournalDao(resolveActorRef: String => ActorRef, serializati
           e.seq,
           e.manifest,
           e.writerUuid,
-          e.sender,
           e.event,
           e.eventClass,
           e.deleted)
@@ -157,7 +99,8 @@ class RoachAsyncWriteJournalDao(resolveActorRef: String => ActorRef, serializati
   }
 
 
-  def deleteUpTo(tag: String, id: String, toSeqNum: Long)(implicit session: DBSession): Int = {
+  override def deleteUpTo(tag: String, id: String, toSeqNum: Long)
+                         (implicit session: DBSession): Int = {
     val maxSeq = getMaxSequenceNumber(tag, id, -1)
     if (maxSeq >= toSeqNum) {
       withSQL {
@@ -173,7 +116,9 @@ class RoachAsyncWriteJournalDao(resolveActorRef: String => ActorRef, serializati
   }
 
 
-  override def getMaxSequenceNumber(tag: String, id: String, from: Long)(implicit session: DBSession): Long = {
+  override def getMaxSequenceNumber(tag: String, id: String, from: Long)
+                                   (implicit session: DBSession)
+  : Long = {
     val sql = sql"select max(seq) from ${RoachAsyncWriteJournalEntity.table} where tag = $tag and id = $id and seq >= $from"
 
     val v: Option[Option[Long]] = sql
