@@ -38,7 +38,7 @@ class CrateAsyncWriteJournalDao()
 
   override def deleteUpTo(tag: String, id: String, toSeqNum: Long)
                          (implicit session: DBSession): Int = {
-    new UnsupportedOperationException("Deletion of events from journal is unsupported in crate")
+    throw new UnsupportedOperationException("Deletion of events from journal is unsupported in crate")
   }
 
   override def replayMessages(tag: String, uniqueId: String, fromSequenceNr: Long,
