@@ -1,17 +1,17 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.test
@@ -21,10 +21,12 @@ import akka.persistence.{PersistentActor, SnapshotOffer}
 import org.s4s0l.betelgeuse.akkacommons.BgServiceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.persistence.{BgPersistenceExtension, utils}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoachTest._
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
 import scalikejdbc._
+import scalikejdbc.interpolation.SQLSyntax
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -66,8 +68,10 @@ class BgTestRoachTest extends BgTestService with BgTestRoach {
         val expectedSchema: String = BgServiceExtension(system).serviceInfo.id.systemName.toLowerCase
         assert(extension.defaultSchemaName == expectedSchema)
         assert(extension.dbAccess.query { implicit session =>
-          sql"select table_schema from information_schema.tables where table_schema=$expectedSchema and table_name='test_table1'".map(_.string(1)).first().apply()
-        }.get == expectedSchema)
+          val unsafeSchema = SQLSyntax.createUnsafely(expectedSchema)
+          sql"""show tables from $unsafeSchema.public"""
+            .map(_.string(1)).list.apply()
+        }.contains("test_table1"))
       }
 
       new WithService(serviceTwo) {
@@ -86,8 +90,10 @@ class BgTestRoachTest extends BgTestService with BgTestRoach {
         val expectedSchema: String = BgServiceExtension(system).serviceInfo.id.systemName.toLowerCase
         assert(extension.defaultSchemaName == expectedSchema)
         assert(extension.dbAccess.query { implicit session =>
-          sql"select table_schema from information_schema.tables where table_schema=$expectedSchema and table_name='test_table2'".map(_.string(1)).first().apply()
-        }.get == expectedSchema)
+          val unsafeSchema = SQLSyntax.createUnsafely(expectedSchema)
+          sql"""show tables from $unsafeSchema.public"""
+            .map(_.string(1)).list.apply()
+        }.contains("test_table2"))
       }
     }
 
@@ -125,7 +131,7 @@ object BgTestRoachTest {
 
   case class Cmd(data: String)
 
-  case class Evt(data: String)
+  case class Evt(data: String) extends JacksonJsonSerializable
 
   case class ExampleState(events: List[String] = Nil) {
 
@@ -180,7 +186,7 @@ object BgTestRoachTest {
 
   case class CmdSharded(num: Int, data: String)
 
-  case class EvtSharded(num: Int, data: String)
+  case class EvtSharded(num: Int, data: String) extends JacksonJsonSerializable
 
 
   class ExamplePersistentShardedActor extends utils.PersistentShardedActor with TimeoutShardedActor {

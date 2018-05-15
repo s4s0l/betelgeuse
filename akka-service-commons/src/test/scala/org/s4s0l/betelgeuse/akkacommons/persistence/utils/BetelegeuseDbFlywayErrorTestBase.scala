@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,19 @@ import akka.testkit.TestKit
 import com.miguno.akka.testing.VirtualTime
 import com.typesafe.config.{Config, ConfigFactory}
 import org.flywaydb.core.api.FlywayException
+import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachDbLocks
+import org.s4s0l.betelgeuse.utils.AllUtils
 import org.scalatest._
 import org.slf4j.{Logger, LoggerFactory}
 import scalikejdbc.interpolation.SQLSyntax
 
 import scala.concurrent.{ExecutionContext, Future}
 
-abstract class BetelegeuseDbFlywayErrorTestBase extends TestKit(ActorSystem("TestKit")) with FeatureSpecLike with BeforeAndAfterEach with GivenWhenThen {
+abstract class BetelegeuseDbFlywayErrorTestBase
+  extends TestKit(ActorSystem("TestKit"))
+    with FeatureSpecLike
+    with BeforeAndAfterEach
+    with GivenWhenThen {
 
   protected val LOGGER: Logger = LoggerFactory.getLogger(getClass)
 
@@ -73,8 +79,11 @@ abstract class BetelegeuseDbFlywayErrorTestBase extends TestKit(ActorSystem("Tes
         scalike.setup(Symbol(name))
       }(system.dispatcher)
 
+      And("We wait until locks are available")
+      waitForMigrationLocks(name)
+
       And("We wait until it starts (200ms until lock rolling)")
-      Thread.sleep(300)
+      Thread.sleep(100)
 
       Then("1 lock is placed")
       val lock_0 = getCurrentLockTimestamp(scalike)
@@ -96,6 +105,19 @@ abstract class BetelegeuseDbFlywayErrorTestBase extends TestKit(ActorSystem("Tes
       assert(lock_1 isBefore lock_2)
     }
 
+  }
+
+  private def waitForMigrationLocks(name: String): Unit = {
+    AllUtils.tryNTimes(100, waitTimeMs = 10) {
+      val locks = scalike.getLocks(name)
+      locks.executor.doInTx {
+        implicit session =>
+          if (!locks.support.isLocked("FlywayMigration")) {
+            throw new Exception()
+          }
+      }
+
+    }
   }
 
   def refresh(db: BetelgeuseDb, table: String = "locks", schema: String = "locks"): Unit = {}

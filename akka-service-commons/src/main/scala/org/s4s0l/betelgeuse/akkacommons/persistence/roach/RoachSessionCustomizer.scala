@@ -14,24 +14,25 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.persistence.journal
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
+
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.SessionCustomizer
+import scalikejdbc.DBSession
 
 /**
   * @author Marcin Wielgus
   */
+class RoachSessionCustomizer extends SessionCustomizer {
 
-trait ScalikeAsyncWriteJournalEntity {
-  def getPersistenceIdTag: String
+  override def onReadOnly(implicit session: DBSession)
+  : Option[String] => String = {
+    case None => throw new Exception("No default scheme for read only session.")
+    case Some(_) =>
+      session.connection.setSchema("public")
+      "public"
+  }
 
-  def getPersistenceUniqueId: String
 
-  def getSequenceNumber: Long
-
+  override def onLocalTx(implicit session: DBSession)
+  : Option[String] => String = onReadOnly
 }
-
-
-
-
-
-
-

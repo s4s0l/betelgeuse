@@ -1,30 +1,24 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import java.nio.charset.Charset
-import java.util.Base64
-
-import akka.persistence.PersistentRepr
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateScalikeJdbcImports._
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
 import org.slf4j.LoggerFactory
 import scalikejdbc._
 
@@ -33,47 +27,25 @@ import scala.collection.immutable
 /**
   * @author Marcin Wielgus
   */
-class CrateAsyncWriteJournalDao(serialization: Option[JacksonJsonSerializer])
+class CrateAsyncWriteJournalDao()
   extends ScalikeAsyncWriteJournalDao[CrateAsyncWriteJournalEntity] {
 
   private val e = CrateAsyncWriteJournalEntity.syntax("e")
   private val column = CrateAsyncWriteJournalEntity.column
 
 
-  override def createEntity(persistenceIdTag: String, uniqueId: String,
-                            sequenceNr: Long, serializedRepr: Array[Byte],
-                            representation: PersistentRepr): CrateAsyncWriteJournalEntity = {
-    val representationEncoded = Base64.getEncoder.encodeToString(serializedRepr)
-    val crateObject = representation.payload match {
-      case a: CrateDbObject => Some(AnyRefObject(a))
-      case _ => None
-    }
-    val jsonObject = crateObject match {
-      case None => toJson(representation)
-      case _ => None
-    }
-    new CrateAsyncWriteJournalEntity(persistenceIdTag, uniqueId,
-      sequenceNr,
-      representationEncoded,
-      crateObject,
-      jsonObject,
-      None
-    )
-  }
-
-
-  def toJson(p: PersistentRepr): Option[String] = {
-    serialization
-      .find(_ => classOf[JacksonJsonSerializable].isAssignableFrom(p.payload.getClass))
-      .map(serializetion => serializetion.toBinary(p.payload.asInstanceOf[AnyRef]))
-      .map(bytes => new String(bytes, Charset.forName("UTF-8")))
-  }
-
   private val LOGGER = LoggerFactory.getLogger(getClass)
 
+  override def deleteUpTo(tag: String, id: String, toSeqNum: Long)
+                         (implicit session: DBSession): Int = {
+    throw new UnsupportedOperationException("Deletion of events from journal is unsupported in crate")
+  }
+
   override def replayMessages(tag: String, uniqueId: String, fromSequenceNr: Long,
-                              toSequenceNr: Long, max: Long)(cb: (CrateAsyncWriteJournalEntity) => Unit)
-                             (implicit session: DBSession): Unit = {
+                              toSequenceNr: Long, max: Long)
+                             (cb: CrateAsyncWriteJournalEntity => Unit)
+                             (implicit session: DBSession)
+  : Unit = {
     LOGGER.info(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
     withSQL {
       select.from(CrateAsyncWriteJournalEntity as e)
@@ -87,6 +59,7 @@ class CrateAsyncWriteJournalDao(serialization: Option[JacksonJsonSerializer])
       //        .limit(100)
     }.foreach { rs =>
       val entity = CrateAsyncWriteJournalEntity.apply(e.resultName)(rs)
+
       cb.apply(entity)
     }
   }

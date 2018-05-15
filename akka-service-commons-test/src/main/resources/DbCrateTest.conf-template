@@ -4,4 +4,5 @@ db.${testName} {
     user = ""
     password = ""
     locksProvider = "org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateDbLocks"
+    sessionCustomizer = "org.s4s0l.betelgeuse.akkacommons.persistence.utils.DefaultSessionCustomizer"
 }

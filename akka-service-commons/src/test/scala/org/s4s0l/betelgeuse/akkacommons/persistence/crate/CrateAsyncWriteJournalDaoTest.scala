@@ -1,22 +1,26 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
+import java.io.Serializable
+
+import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
+import akka.serialization.SerializationExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateAsyncWriteJournalDaoTest._
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateScalikeJdbcImports.{CrateDbObject, CrateDbObjectMapper, classTag, _}
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.Internals.Wrapper
@@ -33,17 +37,24 @@ import scala.reflect.ClassTag
   */
 class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with DbCrateTest with MockFactory {
 
+  val actorSystem = ActorSystem(getClass.getSimpleName)
+
   feature("Akka journal can be saved in crate db") {
     scenario("Regular Events are saved and retrieved") {
       localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
-        val dao = new CrateAsyncWriteJournalDao(None)
+        val reprSerialization = SerializationExtension.get(actorSystem)
+        val jsonSerialization: Option[JacksonJsonSerializer] = None
+        val dao = new CrateAsyncWriteJournalDao()
         And("Some regular event")
         val event = RegularEvent("s", 1, Seq("a"))
         When("Entity is created")
-        val entity = dao.createEntity("tag", "123", 1, Array[Byte](1, 2, 3), PersistentRepr.apply(
-          payload = event, sequenceNr = 1, persistenceId = "tag/123", deleted = false
-        ))
+        val repr = PersistentRepr.apply(
+          payload = event, sequenceNr = 1,
+          persistenceId = "tag/123",
+          deleted = false
+        )
+        val entity = CrateAsyncWriteJournal.createEntity(repr, reprSerialization, jsonSerialization)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag")
         assert(entity.id == "123")
@@ -51,8 +62,8 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         assert(entity.event.isEmpty)
         assert(entity.json.isEmpty)
         assert(entity.created.isEmpty)
-        assert(entity.serialized == "AQID")
-        assert(entity.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(entity.serialized.nonEmpty)
+        assert(entity.getSerializedRepresentation.nonEmpty)
 
         When("This entity is persisted")
         dao.save(immutable.Seq(entity))
@@ -65,8 +76,9 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
         val replayedMessages = mutable.Buffer[CrateAsyncWriteJournalEntity]()
 
-        dao.replayMessages("tag", "123", -1, 100, 100) { e =>
-          replayedMessages += e
+        dao.replayMessages("tag", "123", -1, 100, 100) {
+          e =>
+            replayedMessages += e
         }
 
         Then("We get the one created earlier")
@@ -77,8 +89,8 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         assert(replayedMessages.head.event.isEmpty)
         assert(replayedMessages.head.json.isEmpty)
         assert(replayedMessages.head.created.isDefined)
-        assert(replayedMessages.head.serialized == "AQID")
-        assert(replayedMessages.head.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(replayedMessages.head.serialized == entity.serialized)
+        assert(replayedMessages.head.getSerializedRepresentation.toSeq == entity.getSerializedRepresentation.toSeq)
 
       }
     }
@@ -87,26 +99,25 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     scenario("Json serializable Events are saved and retrieved") {
       localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
-
-        val jjs = mock[JacksonJsonSerializer]
-        (jjs.toBinary _).expects(*).returning(Array[Byte](0x41, 0x42, 0x43))
-
-        val dao = new CrateAsyncWriteJournalDao(Some(jjs))
+        val reprSerialization = SerializationExtension.get(actorSystem)
+        val jsonSerialization: Option[JacksonJsonSerializer] = Some(new JacksonJsonSerializer())
+        val dao = new CrateAsyncWriteJournalDao()
         And("Some regular event")
         val event = JsonEvent("s", 1, Seq("a"))
         When("Entity is created")
-        val entity = dao.createEntity("tag2", "123", 1, Array[Byte](1, 2, 3), PersistentRepr.apply(
+        val repr = PersistentRepr.apply(
           payload = event, sequenceNr = 1, persistenceId = "tag2/123", deleted = false
-        ))
+        )
+        val entity = CrateAsyncWriteJournal.createEntity(repr, reprSerialization, jsonSerialization)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag2")
         assert(entity.id == "123")
         assert(entity.seq == 1)
         assert(entity.event.isEmpty)
-        assert(entity.json.get == "ABC")
+        assert(entity.json.get == """{"s":"s","i":1,"seq":["a"]}""")
         assert(entity.created.isEmpty)
-        assert(entity.serialized == "AQID")
-        assert(entity.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(entity.serialized.nonEmpty)
+        assert(entity.getSerializedRepresentation.nonEmpty)
 
         When("This entity is persisted")
         dao.save(immutable.Seq(entity))
@@ -119,8 +130,9 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
         val replayedMessages = mutable.Buffer[CrateAsyncWriteJournalEntity]()
 
-        dao.replayMessages("tag2", "123", -1, 100, 100) { e =>
-          replayedMessages += e
+        dao.replayMessages("tag2", "123", -1, 100, 100) {
+          e =>
+            replayedMessages += e
         }
 
         Then("We get the one created earlier")
@@ -129,10 +141,10 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         assert(replayedMessages.head.id == "123")
         assert(replayedMessages.head.seq == 1)
         assert(replayedMessages.head.event.isEmpty)
-        assert(replayedMessages.head.json.get == "ABC")
+        assert(replayedMessages.head.json.get == entity.json.get)
         assert(replayedMessages.head.created.isDefined)
-        assert(replayedMessages.head.serialized == "AQID")
-        assert(replayedMessages.head.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(replayedMessages.head.serialized == entity.serialized)
+        assert(replayedMessages.head.getSerializedRepresentation.toSeq == entity.getSerializedRepresentation.toSeq)
 
       }
     }
@@ -141,17 +153,19 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
     scenario("Crate serializable Events are saved and retrieved") {
       localTx { implicit session =>
         Given("Crate async writer dao with no serializer")
-
-        val jjs = mock[JacksonJsonSerializer]
-        (jjs.toBinary _).expects(*).never()
-
-        val dao = new CrateAsyncWriteJournalDao(Some(jjs))
+        val reprSerialization = SerializationExtension.get(actorSystem)
+        val jsonSerialization: Option[JacksonJsonSerializer] = None
+        val dao = new CrateAsyncWriteJournalDao()
         And("Some regular event")
         val event = new CrateEvent("s", 1, Seq("a"))
         When("Entity is created")
-        val entity = dao.createEntity("tag3", "123", 1, Array[Byte](1, 2, 3), PersistentRepr.apply(
-          payload = event, sequenceNr = 1, persistenceId = "tag3/123", deleted = false
-        ))
+        val repr = PersistentRepr.apply(
+          payload = event,
+          sequenceNr = 1,
+          persistenceId = "tag3/123",
+          deleted = false
+        )
+        val entity = CrateAsyncWriteJournal.createEntity(repr, reprSerialization, jsonSerialization)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag3")
         assert(entity.id == "123")
@@ -159,8 +173,8 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         assert(entity.event.get == AnyRefObject(event))
         assert(entity.json.isEmpty)
         assert(entity.created.isEmpty)
-        assert(entity.serialized == "AQID")
-        assert(entity.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(entity.serialized.nonEmpty)
+        assert(entity.getSerializedRepresentation.nonEmpty)
 
         When("This entity is persisted")
         dao.save(immutable.Seq(entity))
@@ -173,8 +187,9 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
 
         val replayedMessages = mutable.Buffer[CrateAsyncWriteJournalEntity]()
 
-        dao.replayMessages("tag3", "123", -1, 100, 100) { e =>
-          replayedMessages += e
+        dao.replayMessages("tag3", "123", -1, 100, 100) {
+          e =>
+            replayedMessages += e
         }
 
         Then("We get the one created earlier")
@@ -185,8 +200,8 @@ class CrateAsyncWriteJournalDaoTest extends FeatureSpec with GivenWhenThen with 
         assert(replayedMessages.head.event.get == AnyRefObject(event))
         assert(replayedMessages.head.json.isEmpty)
         assert(replayedMessages.head.created.isDefined)
-        assert(replayedMessages.head.serialized == "AQID")
-        assert(replayedMessages.head.getSerializedRepresentation.toSeq == Array[Byte](1, 2, 3).toSeq)
+        assert(replayedMessages.head.serialized == entity.serialized)
+        assert(replayedMessages.head.getSerializedRepresentation.toSeq == entity.getSerializedRepresentation.toSeq)
 
       }
     }
@@ -200,9 +215,11 @@ object CrateAsyncWriteJournalDaoTest {
 
   case class RegularEvent(s: String, i: Int, seq: Seq[String])
 
-  case class JsonEvent(s: String, i: Int, seq: Seq[String]) extends JacksonJsonSerializable
+  case class JsonEvent(s: String, i: Int, seq: Seq[String])
+    extends JacksonJsonSerializable
 
-  case class CrateEvent(s: String, i: Int, seq: Seq[String]) extends CrateDbObject
+  case class CrateEvent(s: String, i: Int, seq: Seq[String])
+    extends CrateDbObject with Serializable
 
   object CrateEvent extends CrateDbObjectMapper[CrateEvent] {
     override def ctag: ClassTag[CrateEvent] = classTag[CrateEvent]

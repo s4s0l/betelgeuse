@@ -14,24 +14,17 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.persistence.journal
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
+
+import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
 
 /**
   * @author Marcin Wielgus
   */
+class RoachAsyncSingleWriteJournal
+  extends RoachAsyncWriteJournal() {
 
-trait ScalikeAsyncWriteJournalEntity {
-  def getPersistenceIdTag: String
-
-  def getPersistenceUniqueId: String
-
-  def getSequenceNumber: Long
+  override val dao: ScalikeAsyncWriteJournalDao[RoachAsyncWriteJournalEntity]
+  = new RoachAsyncSingleWriteJournalDao()
 
 }
-
-
-
-
-
-
-

@@ -85,7 +85,7 @@ object RestDomainObject {
 
   trait RestProtocol {
 
-    private[rest] val defaultPassedHeaders: Set[String] = Set("messageId")
+    protected val defaultPassedHeaders: Set[String] = Set("messageId")
 
     def createRoute(implicit executionContext: ExecutionContext, sender: ActorRef, httpMarshaller: HttpMarshalling, timeout: Timeout = 5 seconds): Route = reject
 
@@ -93,9 +93,9 @@ object RestDomainObject {
       case ex: Throwable => RestCommandNotOk[X](ex, correlationId)
     }
 
-    private[rest] def toResponseMarshallAble[X <: AnyRef](value: X)(implicit context: RestProtocolContext): ToResponseMarshallable = ToResponseMarshallable(value)(toEntityMarshaller[X])
+    protected def toResponseMarshallAble[X <: AnyRef](value: X)(implicit context: RestProtocolContext): ToResponseMarshallable = ToResponseMarshallable(value)(toEntityMarshaller[X])
 
-    private[rest] def completeWithPayload[X <: AnyRef](implicit context: RestProtocolContext): PartialFunction[Try[RestCommandResult[X]], Route] = {
+    protected def completeWithPayload[X <: AnyRef](implicit context: RestProtocolContext): PartialFunction[Try[RestCommandResult[X]], Route] = {
       case Success(RestCommandOk(value, correlationId, httpStatusCode)) =>
         respondWithHeader(headers.RawHeader("correlationId", correlationId)) {
           if (value == NoPayload)
@@ -112,7 +112,21 @@ object RestDomainObject {
       case Failure(ex) => failWith(ex)
     }
 
-    private[rest] def completeWithId(implicit context: RestProtocolContext): PartialFunction[Try[RestCommandResult[_]], Route] = {
+    protected def failureRoute[X <: AnyRef](notOk: RestCommandNotOk[X])
+                                           (implicit context: RestProtocolContext): StandardRoute = {
+      failureRouteException(notOk.httpStatusCode, notOk.ex)
+    }
+
+    protected def failureRouteException(statusCode: StatusCode, ex: Throwable)
+                                       (implicit context: RestProtocolContext): StandardRoute = {
+      implicit val toEntity: ToEntityMarshaller[FailureDto] = toEntityMarshaller[FailureDto]
+      log.error("Rest handler got exception ", ex)
+      complete(statusCode -> FailureDto(ex.getMessage))
+    }
+
+    protected def toEntityMarshaller[X <: AnyRef](implicit context: RestProtocolContext): ToEntityMarshaller[X] = context.httpMarshaller.marshaller[X]
+
+    protected def completeWithId(implicit context: RestProtocolContext): PartialFunction[Try[RestCommandResult[_]], Route] = {
       case Success(RestCommandOk(value, correlationId, httpStatusCode)) =>
         respondWithHeader(headers.RawHeader("correlationId", correlationId)) {
           implicit val toEntity: ToEntityMarshaller[Id] = toEntityMarshaller[Id]
@@ -125,28 +139,14 @@ object RestDomainObject {
       case Failure(ex) => failWith(ex)
     }
 
-    private[rest] def failureRoute[X <: AnyRef](notOk: RestCommandNotOk[X])
-                                               (implicit context: RestProtocolContext): StandardRoute = {
-      failureRouteException(notOk.httpStatusCode, notOk.ex)
-    }
-
-    private[rest] def failureRouteException(statusCode: StatusCode, ex: Throwable)
-                                           (implicit context: RestProtocolContext): StandardRoute = {
-      implicit val toEntity: ToEntityMarshaller[FailureDto] = toEntityMarshaller[FailureDto]
-      log.error("Rest handler got exception ", ex)
-      complete(statusCode -> FailureDto(ex.getMessage))
-    }
-
-    private[rest] def toEntityMarshaller[X <: AnyRef](implicit context: RestProtocolContext): ToEntityMarshaller[X] = context.httpMarshaller.marshaller[X]
-
-    private[rest] def withHeaders(acceptedHeaders: Set[String] = Set.empty)(implicit context: RestProtocolContext): Directive1[Headers] = Directives
+    protected def withHeaders(acceptedHeaders: Set[String] = Set.empty)(implicit context: RestProtocolContext): Directive1[Headers] = Directives
       .extract(_.request.headers
         .filter(it => defaultPassedHeaders.contains(it.name()) || acceptedHeaders.contains(it.name()))
         .map(it => it.name() -> it.value())
         .toMap
       )
 
-    private[rest] def completeWithNoPayload[X <: AnyRef](implicit context: RestProtocolContext): PartialFunction[Try[RestCommandResult[_]], Route] = {
+    protected def completeWithNoPayload[X <: AnyRef](implicit context: RestProtocolContext): PartialFunction[Try[RestCommandResult[_]], Route] = {
       case Success(RestCommandOk(_, correlationId, httpStatusCode)) =>
         respondWithHeader(headers.RawHeader("correlationId", correlationId)) {
           complete(httpStatusCode, HttpEntity.Empty)

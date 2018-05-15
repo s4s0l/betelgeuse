@@ -14,24 +14,16 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.persistence.journal
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
+
+import akka.persistence.PersistentActor
 
 /**
   * @author Marcin Wielgus
   */
+trait SingleEventPersistence
+  extends PersistentActor {
 
-trait ScalikeAsyncWriteJournalEntity {
-  def getPersistenceIdTag: String
-
-  def getPersistenceUniqueId: String
-
-  def getSequenceNumber: Long
+  override def journalPluginId = "persistence-journal-roach-single"
 
 }
-
-
-
-
-
-
-

@@ -258,10 +258,10 @@ object SatelliteStateActor {
     new ProtocolImpl[I, V](ref, settings.name)
   }
 
-  private def entityExtractor[I]: ShardRegion.ExtractEntityId = {
+  private def entityExtractor: ShardRegion.ExtractEntityId = {
     case a: IncomingMessage => (a.entityId, a)
     case a: DistributionComplete => (a.versionedId.id, a)
-    case a: StateChange[I] => (a.versionedId.id, a)
+    case a: StateChange[_] => (a.versionedId.id, a)
     case a@Message("distribution-complete" | "state-change", _, _, _)
       if a.get("versionedId").isDefined
     => (VersionedId(a("versionedId")).id, a)

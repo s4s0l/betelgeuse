@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,12 +49,11 @@ class BetelgeuseDbTestRoach extends FeatureSpec with BeforeAndAfterAll {
     }
     scenario("Direct usage of scalike api") {
       val tablesInSchema = scalike.readOnly { implicit session =>
-        sql"""SELECT TABLE_NAME FROM information_schema.tables
-               WHERE TABLE_NAME = 'test_schema_version' AND table_schema= '$TEST_TABLE_SCHEMA'"""
+        sql"""show tables from $TEST_TABLE_SCHEMA"""
           .map(_.string(1)).list.apply()
       }
 
-      assert(tablesInSchema.size == 1)
+      assert(tablesInSchema.size == 2) //test_table + versioning table
     }
   }
 
