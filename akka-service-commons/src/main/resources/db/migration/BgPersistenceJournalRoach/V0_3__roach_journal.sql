@@ -9,6 +9,5 @@ CREATE TABLE journal_events (
    "event_class" STRING,
    "deleted" BOOL,
    "created" TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
-   "month" INT DEFAULT  EXTRACT('month', CURRENT_TIMESTAMP()::TIMESTAMP),
-   primary key (tag,id,seq,month)
+   primary key (tag,id,seq)
 );
