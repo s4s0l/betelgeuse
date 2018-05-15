@@ -32,7 +32,10 @@ trait BgPersistenceRoach extends BgPersistence with BgSerializationJackson {
     loadResourceWithPlaceholders("persistence-datasource-roach.conf-template", Map(
       "datasource" -> dataSourceName,
       "schemaname" -> dataSourceSchema,
-      "address" -> (if (serviceInfo.docker) s"${systemName}_db" else getSystemProperty("roach.db.host", "127.0.0.1"))))
+      "address" -> getSystemProperty("roach.db.host",
+        if (serviceInfo.docker) s"${systemName}_db" else "127.0.0.1"),
+      "port" -> getSystemProperty("roach.db.port", "26257")
+    ))
       .withFallback(ConfigFactory.parseResources("persistence-roach.conf"))
       .withFallback(super.customizeConfiguration)
   }
