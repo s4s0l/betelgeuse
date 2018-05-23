@@ -64,7 +64,7 @@ trait VersionedEntityRestProtocol[T <: AnyRef, V] extends DomainObjectProtocol[S
   : Future[RestCommandResult[String]] = {
     versionedEntityActorProtocol.setValue(SetValue(msg.id, msg.value, msg.messageId)).map {
       case SetValueOk(correlationId, _) => RestCommandOk(msg.id, correlationId)
-      case SetValueValidationError(correlationId, ex) => RestCommandOk[String](ex.getMessage, correlationId, StatusCodes.BadRequest)
+      case SetValueValidationError(correlationId, ex) => RestCommandNotOk[String](ex, correlationId, StatusCodes.BadRequest)
       case SetValueNotOk(correlationId, ex) => RestCommandNotOk[String](ex, correlationId)
     }.recover { case ex: Throwable => RestCommandNotOk[String](ex, msg.messageId) }
   }
