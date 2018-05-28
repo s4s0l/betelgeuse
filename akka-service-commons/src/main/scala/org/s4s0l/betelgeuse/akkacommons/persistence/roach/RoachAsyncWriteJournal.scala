@@ -80,7 +80,7 @@ private[roach] object RoachAsyncWriteJournal {
 
   def createEntity(representation: PersistentRepr, serializer: JacksonJsonSerializer)
   : RoachAsyncWriteJournalEntity = {
-    val jsonSerializer: SimpleSerializer = serializer
+    val jsonSerializer: SimpleSerializer = serializer.asSimple
     val persistenceId = PersistenceId.fromString(representation.persistenceId)
     val (eventClassName, serializedEvent) = representation.payload match {
       case jsonCapableValue: JacksonJsonSerializable =>
@@ -109,7 +109,7 @@ private[roach] object RoachAsyncWriteJournal {
                            serializer: JacksonJsonSerializer)
   : PersistentRepr = {
 
-    val jsonSerializer: SimpleSerializer = serializer
+    val jsonSerializer: SimpleSerializer = serializer.asSimple
     val eventClass = Class.forName(entity.eventClass).asInstanceOf[Class[AnyRef]]
     val event = jsonSerializer.fromStringToClass(entity.event, eventClass) match {
       case JsonAnyWrapper(StringWrapper(value)) => value

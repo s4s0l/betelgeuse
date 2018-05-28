@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.clustering.sharding
 
-import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider, Props}
+import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider, PoisonPill, Props}
+import akka.cluster.sharding.ShardCoordinator.LeastShardAllocationStrategy
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import com.typesafe.config.{Config, ConfigObject}
 
@@ -31,16 +32,25 @@ class BgClusteringShardingExtension(private val system: ExtendedActorSystem) ext
   final def start(typeName: String,
                   entityProps: Props,
                   extractEntityId: ShardRegion.ExtractEntityId,
-                  numberOfShards: Option[Int] = None)
+                  numberOfShards: Option[Int] = None,
+                  handOffMessage: Any = PoisonPill)
   : ActorRef = {
     val config = clusterShardingConfig(typeName)
     val desiredShards = numberOfShards.getOrElse(config.getInt("number-of-shards"))
+    val shardingSettings = ClusterShardingSettings(config)
+    val allocationStrategy = new LeastShardAllocationStrategy(
+      shardingSettings.tuningParameters.leastShardAllocationRebalanceThreshold,
+      shardingSettings.tuningParameters.leastShardAllocationMaxSimultaneousRebalance)
+
     ClusterSharding(system).start(
       typeName = typeName,
       entityProps = entityProps,
-      settings = ClusterShardingSettings(config),
+      settings = shardingSettings,
       extractEntityId = extractEntityId,
-      extractShardId = startEntityShardExtractor(desiredShards, extractEntityId))
+      extractShardId = startEntityShardExtractor(desiredShards, extractEntityId),
+      handOffStopMessage = handOffMessage,
+      allocationStrategy = allocationStrategy
+    )
   }
 
   final def lookup(typeName: String): ActorRef = {
