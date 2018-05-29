@@ -83,7 +83,7 @@ abstract class BetelegeuseDbFlywayErrorTestBase
       waitForMigrationLocks(name)
 
       And("We wait until it starts (200ms until lock rolling)")
-      Thread.sleep(100)
+      Thread.sleep(50)
 
       Then("1 lock is placed")
       val lock_0 = getCurrentLockTimestamp(scalike)
