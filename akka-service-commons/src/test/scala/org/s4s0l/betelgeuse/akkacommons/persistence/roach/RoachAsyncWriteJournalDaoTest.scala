@@ -136,7 +136,7 @@ class RoachAsyncWriteJournalDaoTest
         assert(entity.tag == "tag9")
         assert(entity.id == "123")
         assert(entity.seq == 1)
-        assert(entity.eventClass == "org.s4s0l.betelgeuse.akkacommons.serialization.JsonSimpleTypeWrapper")
+        assert(entity.eventClass == "org.s4s0l.betelgeuse.akkacommons.persistence.roach.JsonSimpleTypeWrapper")
         assert(entity.event == """{"string":"a string value"}""")
         assert(entity.writerUuid == "writerOne")
 
@@ -213,6 +213,7 @@ class RoachAsyncWriteJournalDaoTest
 
         When("We delete messages up to sequence num 3")
         dao.deleteUpTo("tag", "5", 3)
+
 
         Then("Max seq returns last inserted value")
         assert(dao.getMaxSequenceNumber("tag", "5", -1) == 3)

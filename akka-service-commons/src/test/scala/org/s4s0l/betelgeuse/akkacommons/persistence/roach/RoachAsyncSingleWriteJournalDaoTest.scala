@@ -151,7 +151,7 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
         assert(entity.tag == "tag9")
         assert(entity.id == "123")
         assert(entity.seq == 1)
-        assert(entity.eventClass == "org.s4s0l.betelgeuse.akkacommons.serialization.JsonSimpleTypeWrapper")
+        assert(entity.eventClass == "org.s4s0l.betelgeuse.akkacommons.persistence.roach.JsonSimpleTypeWrapper")
         assert(entity.event == """{"string":"a string value"}""")
         assert(entity.writerUuid == "writerOne")
 

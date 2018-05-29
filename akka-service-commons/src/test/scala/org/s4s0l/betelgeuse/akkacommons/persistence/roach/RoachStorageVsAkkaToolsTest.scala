@@ -53,7 +53,7 @@ class RoachStorageVsAkkaToolsTest
     scenario("sharding remember entities") {
       val ref = aService.service.clusteringShardingExtension
         .start("sampleShard", Props(new ShardedActor {
-          val wasStarted = System.currentTimeMillis()
+          private val wasStarted = System.currentTimeMillis()
 
           override def receive: Receive = {
             case "kill" =>
@@ -82,8 +82,8 @@ class RoachStorageVsAkkaToolsTest
       Await.result(x._2 ? "kill", to)
       Thread.sleep(2500)
       val x2 = Await.result(ref ? "aaa", to).asInstanceOf[(Long, ActorRef)]
-      assert(x2._1 < 2500L)
-
+      assert(x2._1 > System.currentTimeMillis() - 2500L)
+      RoachAsyncWriteJournalDaoTest
     }
 
 
@@ -165,8 +165,6 @@ class RoachStorageVsAkkaToolsTest
         "i", "j"
       ).reverse))
 
-
-      Thread.sleep(7000)
       aService.system.stop(ref)
 
       Thread.sleep(1000)
