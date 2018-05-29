@@ -166,7 +166,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
     scenario("provides streaming capabilities source, flows and sink") {
       new WithService(aService) {
-        implicit val patienceConfig: PatienceConfig = PatienceConfig(5.second, 300.millis)
+        implicit val patienceConfig: PatienceConfig = PatienceConfig(15.second, 300.millis)
 
         val topic: String = getUniqueTopic
 
