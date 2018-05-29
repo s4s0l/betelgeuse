@@ -44,7 +44,6 @@ abstract class ScalikeAsyncWriteJournal[T <: ScalikeAsyncWriteJournalEntity]
 
   val dbAccess: DbAccess = BgPersistenceExtension.apply(context.system).dbAccess
 
-
   def createEntity(representation: PersistentRepr): T
 
   def createRepresentation(entity: T): PersistentRepr

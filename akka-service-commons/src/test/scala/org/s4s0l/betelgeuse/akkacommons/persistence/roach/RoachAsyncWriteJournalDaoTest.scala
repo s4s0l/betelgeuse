@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 import akka.actor.ActorRef
 import akka.persistence.PersistentRepr
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachAsyncWriteJournalDaoTest._
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, SimpleSerializer}
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.concurrent.ScalaFutures
@@ -37,7 +37,9 @@ class RoachAsyncWriteJournalDaoTest
     with DbRoachTest
     with MockFactory
     with ScalaFutures {
-
+  implicit val jacksonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
+  implicit val simple: SimpleSerializer = jacksonSerializer.asSimple
+  implicit val hints: BuiltInSerializerHints = new BuiltInSerializerHints()
   feature("Akka journal can be saved in roach db") {
 
     scenario("Json serializable Events are saved and retrieved") {
@@ -58,7 +60,7 @@ class RoachAsyncWriteJournalDaoTest
           writerUuid = "writerOne"
         )
         When("Entity is created")
-        val entity = RoachAsyncWriteJournal.createEntity(persRepr, serializer)
+        val entity = RoachAsyncWriteJournal.createEntity(persRepr)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag2")
         assert(entity.id == "123")
@@ -83,7 +85,7 @@ class RoachAsyncWriteJournalDaoTest
         dao.replayMessages("tag2", "123", -1, 100, 100) {
           e =>
             replayedEntities += e
-            replayedRepresentations += RoachAsyncWriteJournal.createRepresentation(e, serializer)
+            replayedRepresentations += RoachAsyncWriteJournal.createRepresentation(e)
         }
 
         Then("We get the one created earlier")
@@ -129,7 +131,7 @@ class RoachAsyncWriteJournalDaoTest
           writerUuid = "writerOne"
         )
         When("Entity is created")
-        val entity = RoachAsyncWriteJournal.createEntity(persRepr, serializer)
+        val entity = RoachAsyncWriteJournal.createEntity(persRepr)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag9")
         assert(entity.id == "123")
@@ -155,7 +157,7 @@ class RoachAsyncWriteJournalDaoTest
         dao.replayMessages("tag9", "123", -1, 100, 100) {
           e =>
             replayedEntities += e
-            replayedRepresentations += RoachAsyncWriteJournal.createRepresentation(e, serializer)
+            replayedRepresentations += RoachAsyncWriteJournal.createRepresentation(e)
         }
 
         Then("We get the one created earlier")
@@ -193,7 +195,7 @@ class RoachAsyncWriteJournalDaoTest
           manifest = "manifa",
           sender = ActorRef.noSender,
           writerUuid = "writerOne"
-        ), serializer))
+        )))
 
       }
     }
@@ -275,7 +277,7 @@ class RoachAsyncWriteJournalDaoTest
       manifest = "manifa",
       sender = ActorRef.noSender,
       writerUuid = "writerOne"
-    ), new JacksonJsonSerializer())
+    ))
 
     val entity2 = RoachAsyncWriteJournal.createEntity(PersistentRepr.apply(
       payload = event2, sequenceNr = 2, persistenceId = s"tag/$id",
@@ -283,7 +285,7 @@ class RoachAsyncWriteJournalDaoTest
       manifest = "manifa",
       sender = ActorRef.noSender,
       writerUuid = "writerOne"
-    ), new JacksonJsonSerializer())
+    ))
 
     val entity3 = RoachAsyncWriteJournal.createEntity(PersistentRepr.apply(
       payload = event3, sequenceNr = 3, persistenceId = s"tag/$id",
@@ -291,7 +293,7 @@ class RoachAsyncWriteJournalDaoTest
       manifest = "manifa",
       sender = ActorRef.noSender,
       writerUuid = "writerOne"
-    ), new JacksonJsonSerializer())
+    ))
 
     When("This entities are persisted")
     dao.save(immutable.Seq(entity1))

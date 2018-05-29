@@ -22,6 +22,9 @@ import org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper.ErrorWrappe
 import scala.language.implicitConversions
 
 /**
+  *
+  * Wraps simple types
+  *
   * @author Marcin Wielgus
   */
 case class JsonAnyWrapper private(

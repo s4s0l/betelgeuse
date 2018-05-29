@@ -14,18 +14,13 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.persistence.roach
-
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
+package org.s4s0l.betelgeuse.akkacommons.serialization
 
 /**
   * @author Marcin Wielgus
   */
-class RoachAsyncSingleWriteJournal
-  extends RoachAsyncWriteJournal() {
-
-  override val dao: ScalikeAsyncWriteJournalDao[RoachAsyncWriteJournalEntity]
-  = new RoachAsyncSingleWriteJournalDao()
-
-  override def getId: String = "persistence-journal-roach-single"
-}
+case class JsonBinaryWrapper(
+                              className: String,
+                              binary: Array[Byte]
+                            )
+  extends JacksonJsonSerializable

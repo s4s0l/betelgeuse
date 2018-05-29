@@ -16,16 +16,17 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
-
 /**
+  * if roach persistence encounters non [[org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable]]
+  * class it asks hints if it can either marshall it with json anyway
+  * or wrap its binary form in json (slow!!)
+  *
   * @author Marcin Wielgus
   */
-class RoachAsyncSingleWriteJournal
-  extends RoachAsyncWriteJournal() {
+trait RoachSerializerHints {
 
-  override val dao: ScalikeAsyncWriteJournalDao[RoachAsyncWriteJournalEntity]
-  = new RoachAsyncSingleWriteJournalDao()
+  def useJackson: PartialFunction[Any, Boolean]
 
-  override def getId: String = "persistence-journal-roach-single"
+  def useBinary: PartialFunction[Any, Boolean]
+
 }

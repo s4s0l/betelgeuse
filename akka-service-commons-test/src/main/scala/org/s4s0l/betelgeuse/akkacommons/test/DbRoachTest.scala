@@ -17,6 +17,7 @@
 package org.s4s0l.betelgeuse.akkacommons.test
 
 import com.typesafe.config.Config
+import org.flywaydb.core.internal.util.StringUtils
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
 import org.s4s0l.betelgeuse.utils
 import org.s4s0l.betelgeuse.utils.AllUtils
@@ -50,6 +51,20 @@ trait DbRoachTest extends DbTest {
 }
 
 object DbRoachTest {
+
+  def cleanEverything(config: Config): Unit = {
+    import scala.collection.JavaConverters._
+    val dbs = config.getConfig("db").root.keySet.asScala.toList
+    dbs.foreach { it =>
+      DbTest.runWithoutSchemaMigration(config, it, { db =>
+        val schemasString = db.config.getString(s"db.${db.getDefaultPoolName.get}.flyway.schemas")
+        val schemas = StringUtils.tokenizeToStringArray(schemasString, ",")
+        schemas.foreach { it =>
+          DbRoachTest.cleanUp(it)(db)
+        }
+      })
+    }
+  }
 
   def cleanUp(schemaName: String)(db: BetelgeuseDb): Unit = {
     AllUtils.tryNTimes(2) {

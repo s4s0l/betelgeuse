@@ -40,15 +40,21 @@ class RoachAsyncWriteJournalDao()
                              (implicit session: DBSession): Unit = {
     LOGGER.info(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
     withSQL {
-      select.from(RoachAsyncWriteJournalEntity as e)
+      val query: scalikejdbc.PagingSQLBuilder[RoachAsyncWriteJournalEntity] = select
+        .from(RoachAsyncWriteJournalEntity as e)
         .where
         .eq(e.tag, tag).and
         .eq(e.id, uniqueId).and
         .ge(e.seq, fromSequenceNr).and
-        .le(e.seq, toSequenceNr)
+        .le(e.seq, toSequenceNr).and
+        .eq(e.deleted, false)
         .orderBy(e.seq)
-      //TODO: loop through max with limit...
-      //        .limit(100)
+      max match {
+        case x if x == -1 => query.asInstanceOf[scalikejdbc.SQLBuilder[RoachAsyncWriteJournalEntity]]
+        case x if x > Int.MaxValue => query.asInstanceOf[scalikejdbc.SQLBuilder[RoachAsyncWriteJournalEntity]]
+        case x => query.limit(x.toInt)
+      }
+
     }.foreach { rs =>
       val entity = RoachAsyncWriteJournalEntity.apply(e.resultName)(rs)
       cb.apply(entity)
@@ -102,16 +108,27 @@ class RoachAsyncWriteJournalDao()
   override def deleteUpTo(tag: String, id: String, toSeqNum: Long)
                          (implicit session: DBSession): Int = {
     val maxSeq = getMaxSequenceNumber(tag, id, -1)
-    if (maxSeq >= toSeqNum) {
+    if (maxSeq > toSeqNum) {
       withSQL {
         delete.from(RoachAsyncWriteJournalEntity)
           .where.eq(RoachAsyncWriteJournalEntity.column.id, id)
           .and.eq(RoachAsyncWriteJournalEntity.column.tag, tag)
-          .and.lt(RoachAsyncWriteJournalEntity.column.seq, toSeqNum)
+          .and.le(RoachAsyncWriteJournalEntity.column.seq, toSeqNum)
       }.update.apply()
-    }
-    else {
-      throw new Exception(s"You tried to delete all events for tag: $tag and id $id. Max seq: $maxSeq and you tried to delete up to $toSeqNum")
+    } else {
+      val realToSeq = maxSeq - 1
+      withSQL {
+        delete.from(RoachAsyncWriteJournalEntity)
+          .where.eq(RoachAsyncWriteJournalEntity.column.id, id)
+          .and.eq(RoachAsyncWriteJournalEntity.column.tag, tag)
+          .and.le(RoachAsyncWriteJournalEntity.column.seq, realToSeq)
+      }.update.apply()
+      withSQL {
+        update(RoachAsyncWriteJournalEntity)
+          .set(RoachAsyncWriteJournalEntity.column.deleted -> true)
+          .where.eq(RoachAsyncWriteJournalEntity.column.id, id)
+          .and.eq(RoachAsyncWriteJournalEntity.column.tag, tag)
+      }.update.apply()
     }
   }
 

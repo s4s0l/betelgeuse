@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 import akka.actor.ActorRef
 import akka.persistence.PersistentRepr
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachAsyncWriteJournalDaoTest.{CrateEvent, JsonEvent}
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializer, SimpleSerializer}
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.concurrent.ScalaFutures
@@ -36,13 +36,18 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
   with MockFactory
   with ScalaFutures {
 
+  implicit val jacksonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
+  implicit val simple: SimpleSerializer = jacksonSerializer.asSimple
+  implicit val hints: BuiltInSerializerHints = new BuiltInSerializerHints()
+
+
   feature("Akka journal can be saved in roach db") {
 
     scenario("Json serializable Events are saved and retrieved") {
       localTx { implicit session =>
         Given("Roach async writer dao with no serializer")
 
-        val serializer = new JacksonJsonSerializer()
+
         val dao = new RoachAsyncSingleWriteJournalDao()
         And("Some regular event")
         val event = JsonEvent("s", 1, Seq("a"))
@@ -56,7 +61,7 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
           writerUuid = "writerOne"
         )
         When("Entity is created")
-        val entity = RoachAsyncWriteJournal.createEntity(persRepr, serializer)
+        val entity = RoachAsyncWriteJournal.createEntity(persRepr)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag2")
         assert(entity.id == "123")
@@ -84,7 +89,7 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
           sender = ActorRef.noSender,
           writerUuid = "writerTwo"
         )
-        val entity2 = RoachAsyncWriteJournal.createEntity(persRepr2, serializer)
+        val entity2 = RoachAsyncWriteJournal.createEntity(persRepr2)
         dao.save(immutable.Seq(entity2))
 
         Then("Max seq returns inserted value")
@@ -98,7 +103,7 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
         dao.replayMessages("tag2", "123", -1, 100, 100) {
           e =>
             replayedEntities += e
-            replayedRepresentations += RoachAsyncWriteJournal.createRepresentation(e, serializer)
+            replayedRepresentations += RoachAsyncWriteJournal.createRepresentation(e)
         }
 
         Then("We get the one created earlier")
@@ -128,7 +133,6 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
       localTx { implicit session =>
         Given("Roach async writer dao")
 
-        val serializer = new JacksonJsonSerializer()
         val dao = new RoachAsyncSingleWriteJournalDao()
         And("Some string event")
         val event = "a string value"
@@ -142,7 +146,7 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
           writerUuid = "writerOne"
         )
         When("Entity is created")
-        val entity = RoachAsyncWriteJournal.createEntity(persRepr, serializer)
+        val entity = RoachAsyncWriteJournal.createEntity(persRepr)
         Then("It has all fields set as in request")
         assert(entity.tag == "tag9")
         assert(entity.id == "123")
@@ -168,7 +172,7 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
         dao.replayMessages("tag9", "123", -1, 100, 100) {
           e =>
             replayedEntities += e
-            replayedRepresentations += RoachAsyncWriteJournal.createRepresentation(e, serializer)
+            replayedRepresentations += RoachAsyncWriteJournal.createRepresentation(e)
         }
 
         Then("We get the one created earlier")
@@ -199,14 +203,13 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
         Given("Some regular event")
         val event = CrateEvent("s", 1, Seq("a"))
         When("Entity is created")
-        val serializer = new JacksonJsonSerializer()
         intercept[ClassCastException](RoachAsyncWriteJournal.createEntity(PersistentRepr.apply(
           payload = event, sequenceNr = 1, persistenceId = "tag3/123",
           deleted = false,
           manifest = "manifa",
           sender = ActorRef.noSender,
           writerUuid = "writerOne"
-        ), serializer))
+        )))
 
       }
     }

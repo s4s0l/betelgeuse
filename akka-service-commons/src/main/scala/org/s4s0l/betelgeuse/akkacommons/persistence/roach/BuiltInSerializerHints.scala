@@ -16,16 +16,12 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.journal.ScalikeAsyncWriteJournalDao
 
-/**
-  * @author Marcin Wielgus
-  */
-class RoachAsyncSingleWriteJournal
-  extends RoachAsyncWriteJournal() {
+//todo handle persistent fsm statechange event and
+//snapshot (its fucking private!!
+class BuiltInSerializerHints extends RoachSerializerHints {
 
-  override val dao: ScalikeAsyncWriteJournalDao[RoachAsyncWriteJournalEntity]
-  = new RoachAsyncSingleWriteJournalDao()
+  override def useJackson: PartialFunction[Any, Boolean] = Map.empty
 
-  override def getId: String = "persistence-journal-roach-single"
+  override def useBinary: PartialFunction[Any, Boolean] = Map.empty
 }
