@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.serialization
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonInclude.Include
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 
 /**
   * @author Marcin Wielgus
@@ -29,4 +30,4 @@ case class JsonSimpleTypeWrapper(
                                   long: Option[Long],
                                   bool: Option[Boolean],
                                 )
-  extends JacksonJsonSerializable
+  extends RoachSerializerHints.HintWrapped

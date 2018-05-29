@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.serialization
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
+
+import java.util
+
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 
 /**
   * @author Marcin Wielgus
@@ -23,4 +27,14 @@ case class JsonBinaryWrapper(
                               className: String,
                               binary: Array[Byte]
                             )
-  extends JacksonJsonSerializable
+  extends RoachSerializerHints.HintWrapped {
+  override def hashCode(): Int = className.hashCode
+
+  override def equals(obj: scala.Any): Boolean = {
+    obj match {
+      case bw: JsonBinaryWrapper if bw.className == className =>
+        util.Arrays.equals(bw.binary, binary)
+      case _ => false
+    }
+  }
+}

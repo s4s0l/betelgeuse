@@ -55,7 +55,7 @@ docker service create \
     --stop-grace-period 60s \
     --publish 26257:26257 \
     --publish 18080:8080 \
-    cockroachdb/cockroach:v2.0.1 start \
+    cockroachdb/cockroach:v2.0.2 start \
     --logtostderr \
     --insecure
 ```

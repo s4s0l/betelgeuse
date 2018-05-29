@@ -17,7 +17,7 @@
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import akka.actor.ActorRef
-import akka.persistence.PersistentRepr
+import akka.persistence.{BuiltInSerializerHints, PersistentRepr}
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachAsyncWriteJournalDaoTest._
 import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, SimpleSerializer}
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest

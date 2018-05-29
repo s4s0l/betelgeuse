@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 import java.sql.SQLException
 
 import akka.actor.{ActorRef, ActorSystem}
-import akka.persistence.PersistentRepr
+import akka.persistence.{BuiltInSerializerHints, PersistentRepr}
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JurnalDuplicateKeyException, PersistenceId, ScalikeAsyncWriteJournal, ScalikeAsyncWriteJournalDao}
 import org.s4s0l.betelgeuse.akkacommons.serialization._
@@ -103,53 +103,6 @@ private[roach] object RoachAsyncWriteJournal {
     )
   }
 
-  def serialize(value: Any)
-               (implicit jsonSerializer: JacksonJsonSerializer,
-                simpleSerializer: SimpleSerializer,
-                serializerHints: RoachSerializerHints)
-  : Serialized = {
-    value match {
-      case jsonCapableValue: JacksonJsonSerializable =>
-        Serialized(
-          jsonSerializer.asSimple.toString(jsonCapableValue),
-          value.getClass.getName)
-      case stringValue: String =>
-        Serialized(jsonSerializer.asSimple.toString(JsonSimpleTypeWrapper(
-          Some(stringValue), None, None, None)),
-          classOf[JsonSimpleTypeWrapper].getName)
-      case int: Int =>
-        Serialized(jsonSerializer.asSimple.toString(JsonSimpleTypeWrapper(
-          None, Some(int), None, None)),
-          classOf[JsonSimpleTypeWrapper].getName)
-      case long: Long =>
-        Serialized(jsonSerializer.asSimple.toString(JsonSimpleTypeWrapper(
-          None, None, Some(long), None)),
-          classOf[JsonSimpleTypeWrapper].getName)
-      case bool: Boolean =>
-        Serialized(jsonSerializer.asSimple.toString(JsonSimpleTypeWrapper(
-          None, None, None, Some(bool))),
-          classOf[JsonSimpleTypeWrapper].getName)
-
-      case jsonCapableCandidate: AnyRef
-        if serializerHints.useJackson.isDefinedAt(jsonCapableCandidate)
-          && serializerHints.useJackson(jsonCapableCandidate) =>
-        Serialized(
-          jsonSerializer.asSimple.toString(jsonCapableCandidate),
-          value.getClass.getName)
-
-      case binary: AnyRef
-        if serializerHints.useJackson.isDefinedAt(binary)
-          && serializerHints.useJackson(binary) =>
-        Serialized(
-          jsonSerializer.asSimple.toString(JsonBinaryWrapper(binary.getClass.getName,
-            simpleSerializer.toBinary(binary))),
-          classOf[JsonBinaryWrapper].getName)
-
-      case _ => throw new ClassCastException(s"Event of class ${value.getClass.getName} does not implement JacksonJsonSerializable!!!")
-    }
-
-  }
-
   def createRepresentation(entity: RoachAsyncWriteJournalEntity)
                           (implicit jsonSerializer: JacksonJsonSerializer,
                            simpleSerializer: SimpleSerializer,
@@ -169,12 +122,59 @@ private[roach] object RoachAsyncWriteJournal {
     )
   }
 
+
+  def serialize(value: Any)
+               (implicit jsonSerializer: JacksonJsonSerializer,
+                simpleSerializer: SimpleSerializer,
+                serializerHints: RoachSerializerHints)
+  : Serialized = {
+    value match {
+      case jsonCapableValue: JacksonJsonSerializable =>
+        Serialized(
+          jsonSerializer.asSimple.toString(jsonCapableValue),
+          value.getClass.getName)
+
+      case wrappingCandidate
+        if serializerHints.wrap.isDefinedAt(wrappingCandidate) =>
+        val jsonSerializable = serializerHints.wrap.apply(wrappingCandidate)
+        Serialized(
+          jsonSerializer.asSimple.toString(jsonSerializable),
+          jsonSerializable.getClass.getName)
+
+      case jsonCapableCandidate: AnyRef
+        if serializerHints.useJackson.isDefinedAt(jsonCapableCandidate)
+          && serializerHints.useJackson(jsonCapableCandidate) =>
+        Serialized(
+          jsonSerializer.asSimple.toString(jsonCapableCandidate),
+          value.getClass.getName)
+
+      case binary: AnyRef
+        if serializerHints.useBinary.isDefinedAt(binary)
+          && serializerHints.useBinary(binary) =>
+        Serialized(
+          jsonSerializer.asSimple.toString(JsonBinaryWrapper(binary.getClass.getName,
+            simpleSerializer.toBinary(binary))),
+          classOf[JsonBinaryWrapper].getName)
+
+      case _ => throw new ClassCastException(s"Event of class ${value.getClass.getName} does not implement JacksonJsonSerializable!!!")
+    }
+
+  }
+
+
   def deserialize(serializedValue: String, valueClass: String)
                  (implicit jsonSerializer: JacksonJsonSerializer,
                   simpleSerializer: SimpleSerializer,
                   serializerHints: RoachSerializerHints): Any = {
     val eventClass = Class.forName(valueClass).asInstanceOf[Class[AnyRef]]
     jsonSerializer.asSimple.fromStringToClass(serializedValue, eventClass) match {
+
+      case wrapped: RoachSerializerHints.HintWrapped =>
+        if (serializerHints.unwrap.isDefinedAt(wrapped)) {
+          serializerHints.unwrap.apply(wrapped)
+        } else {
+          throw new Exception(s"Class ${wrapped.getClass.getName} is HintWrapped but hit cannot deserialize it!")
+        }
 
       case JsonSimpleTypeWrapper(Some(value), None, None, None) => value
 
@@ -196,6 +196,7 @@ private[roach] object RoachAsyncWriteJournal {
     config.string("serializerHintsClass")
       .map(Class.forName(_).asInstanceOf[Class[RoachSerializerHints]])
       .map(_.newInstance())
+      .map(_.orElse(new BuiltInSerializerHints()))
       .getOrElse(new BuiltInSerializerHints(): RoachSerializerHints)
   }
 

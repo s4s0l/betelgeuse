@@ -22,9 +22,11 @@ import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbAccess
 import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializer, SimpleSerializer}
+import org.slf4j.LoggerFactory
 import scalikejdbc._
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.util.{Failure, Success}
 
 /**
   * @author Marcin Wielgus
@@ -68,6 +70,8 @@ class RoachSnapshotStore extends SnapshotStore {
     }
   }
 
+  private val LOGGER = LoggerFactory.getLogger(getClass)
+
   override def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
     dbAccess.updateAsync { implicit session =>
       val tagAndId: PersistenceId = metadata.persistenceId
@@ -81,7 +85,11 @@ class RoachSnapshotStore extends SnapshotStore {
            |    ${metadata.timestamp}, ${serialized.value}, ${serialized.valueClass})
            """.stripMargin
         .update().apply()
-    }
+    }.andThen {
+      case Success(_) =>
+      case Failure(ex) =>
+        LOGGER.error(s"Snapshot save failed for ${metadata.persistenceId}, seq: ${metadata.sequenceNr}", ex)
+    }.map(_ => Unit)
   }
 
   override def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {

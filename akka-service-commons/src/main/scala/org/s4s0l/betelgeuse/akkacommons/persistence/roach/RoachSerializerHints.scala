@@ -16,6 +16,11 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
+import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachSerializerHints.HintWrapped
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, SimpleSerializer}
+
+import scala.language.implicitConversions
+
 /**
   * if roach persistence encounters non [[org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable]]
   * class it asks hints if it can either marshall it with json anyway
@@ -25,8 +30,60 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
   */
 trait RoachSerializerHints {
 
+  def wrap(implicit jsonSerializer: JacksonJsonSerializer,
+           simpleSerializer: SimpleSerializer): PartialFunction[Any, HintWrapped]
+
+  def unwrap(implicit jsonSerializer: JacksonJsonSerializer,
+             simpleSerializer: SimpleSerializer): PartialFunction[HintWrapped, Any]
+
   def useJackson: PartialFunction[Any, Boolean]
 
   def useBinary: PartialFunction[Any, Boolean]
+
+}
+
+object RoachSerializerHints {
+
+  trait HintWrapped extends JacksonJsonSerializable
+
+  object Never extends RoachSerializerHints {
+
+    override def wrap(implicit jsonSerializer: JacksonJsonSerializer,
+                      simpleSerializer: SimpleSerializer)
+    : PartialFunction[Any, HintWrapped] = Map.empty
+
+    override def unwrap(implicit jsonSerializer: JacksonJsonSerializer,
+                        simpleSerializer: SimpleSerializer)
+    : PartialFunction[HintWrapped, Any] = Map.empty
+
+    override def useJackson: PartialFunction[Any, Boolean] = Map.empty
+
+    override def useBinary: PartialFunction[Any, Boolean] = Map.empty
+  }
+
+  implicit def toBuilder(hints: RoachSerializerHints): Builder = new Builder(hints)
+
+  class Builder(wrapped: RoachSerializerHints, orElseHints: RoachSerializerHints = Never) extends RoachSerializerHints {
+    override def wrap(implicit jsonSerializer: JacksonJsonSerializer,
+                      simpleSerializer: SimpleSerializer)
+    : PartialFunction[Any, HintWrapped] =
+      wrapped.wrap.orElse(orElseHints.wrap)
+
+    override def unwrap(implicit jsonSerializer: JacksonJsonSerializer,
+                        simpleSerializer: SimpleSerializer)
+    : PartialFunction[HintWrapped, Any] =
+      wrapped.unwrap.orElse(orElseHints.unwrap)
+
+    override def useJackson: PartialFunction[Any, Boolean] =
+      wrapped.useJackson.orElse(orElseHints.useJackson)
+
+    override def useBinary: PartialFunction[Any, Boolean] =
+      wrapped.useBinary.orElse(orElseHints.useBinary)
+
+    def orElse(hints: RoachSerializerHints): RoachSerializerHints = {
+      new Builder(this, hints)
+    }
+  }
+
 
 }
