@@ -27,7 +27,7 @@ case class JsonBinaryWrapper(
                               className: String,
                               binary: Array[Byte]
                             )
-  extends RoachSerializerHints.HintWrapped {
+  extends JacksonJsonSerializable {
   override def hashCode(): Int = className.hashCode
 
   override def equals(obj: scala.Any): Boolean = {

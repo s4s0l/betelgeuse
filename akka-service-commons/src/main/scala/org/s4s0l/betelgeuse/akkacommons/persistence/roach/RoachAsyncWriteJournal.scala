@@ -169,6 +169,9 @@ private[roach] object RoachAsyncWriteJournal {
     val eventClass = Class.forName(valueClass).asInstanceOf[Class[AnyRef]]
     jsonSerializer.asSimple.fromStringToClass(serializedValue, eventClass) match {
 
+      case JsonBinaryWrapper(className, binary) =>
+        simpleSerializer.fromBinaryToClass[AnyRef](binary, Class.forName(className).asInstanceOf[Class[AnyRef]])
+
       case wrapped: RoachSerializerHints.HintWrapped =>
         if (serializerHints.unwrap.isDefinedAt(wrapped)) {
           serializerHints.unwrap.apply(wrapped)
@@ -176,16 +179,6 @@ private[roach] object RoachAsyncWriteJournal {
           throw new Exception(s"Class ${wrapped.getClass.getName} is HintWrapped but hit cannot deserialize it!")
         }
 
-      case JsonSimpleTypeWrapper(Some(value), None, None, None) => value
-
-      case JsonSimpleTypeWrapper(None, Some(value), None, None) => value
-
-      case JsonSimpleTypeWrapper(None, None, Some(value), None) => value
-
-      case JsonSimpleTypeWrapper(None, None, None, Some(value)) => value
-
-      case JsonBinaryWrapper(className, binary) =>
-        simpleSerializer.fromBinaryToClass[AnyRef](binary, Class.forName(className).asInstanceOf[Class[AnyRef]])
 
       case x => x
     }
