@@ -18,6 +18,8 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import java.util
 
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.JsonInclude.Include
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 
 /**
@@ -25,6 +27,8 @@ import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
   */
 case class JsonBinaryWrapper(
                               className: String,
+                              @JsonInclude(Include.NON_EMPTY)
+                              manifest: Option[String],
                               binary: Array[Byte]
                             )
   extends JacksonJsonSerializable {

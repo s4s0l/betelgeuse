@@ -19,9 +19,10 @@ package akka.persistence
 import akka.cluster.sharding.ClusterShardingSerializable
 import akka.persistence.BuiltInSerializerHints.PersistentFSMSnapshot
 import akka.persistence.fsm.PersistentFSM
+import akka.serialization.Serialization
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.{JsonSimpleTypeWrapper, RoachSerializerHints}
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, SimpleSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -39,7 +40,7 @@ class BuiltInSerializerHints extends RoachSerializerHints {
   }
 
   override def wrap(implicit jsonSerializer: JacksonJsonSerializer,
-                    simpleSerializer: SimpleSerializer)
+                    simpleSerializer: Serialization)
   : PartialFunction[Any, RoachSerializerHints.HintWrapped] = {
     case stringValue: String =>
       JsonSimpleTypeWrapper(Some(stringValue), None, None, None)
@@ -54,7 +55,7 @@ class BuiltInSerializerHints extends RoachSerializerHints {
   }
 
   override def unwrap(implicit jsonSerializer: JacksonJsonSerializer,
-                      simpleSerializer: SimpleSerializer)
+                      simpleSerializer: Serialization)
   : PartialFunction[RoachSerializerHints.HintWrapped, Any] = {
     case JsonSimpleTypeWrapper(Some(stringValue), None, None, None) =>
       stringValue

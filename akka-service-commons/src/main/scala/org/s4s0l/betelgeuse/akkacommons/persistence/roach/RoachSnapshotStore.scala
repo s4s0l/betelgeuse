@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import akka.persistence.snapshot.SnapshotStore
 import akka.persistence.{SelectedSnapshot, SnapshotMetadata, SnapshotSelectionCriteria}
+import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbAccess
@@ -38,7 +39,7 @@ class RoachSnapshotStore extends SnapshotStore {
   private val s = RoachSnapshotStoreEntity.syntax("s")
   private val column = RoachSnapshotStoreEntity.column
   private implicit val jacksonJsonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
-  private implicit val simpleSerializer: SimpleSerializer = RoachAsyncWriteJournal.simpleSerializer(context.system)
+  private implicit val simpleSerializer: Serialization = RoachAsyncWriteJournal.simpleSerializer(context.system)
   private implicit val hints: RoachSerializerHints = RoachAsyncWriteJournal
     .getSerializerHints(context.system.settings.config.getConfig("persistence-snapstore-roach"))
 

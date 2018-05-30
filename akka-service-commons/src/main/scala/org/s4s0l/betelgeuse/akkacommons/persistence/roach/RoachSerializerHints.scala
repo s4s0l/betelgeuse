@@ -16,6 +16,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
+import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachSerializerHints.HintWrapped
 import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, SimpleSerializer}
 
@@ -31,10 +32,10 @@ import scala.language.implicitConversions
 trait RoachSerializerHints {
 
   def wrap(implicit jsonSerializer: JacksonJsonSerializer,
-           simpleSerializer: SimpleSerializer): PartialFunction[Any, HintWrapped]
+           simpleSerializer: Serialization): PartialFunction[Any, HintWrapped]
 
   def unwrap(implicit jsonSerializer: JacksonJsonSerializer,
-             simpleSerializer: SimpleSerializer): PartialFunction[HintWrapped, Any]
+             simpleSerializer: Serialization): PartialFunction[HintWrapped, Any]
 
   def useJackson: PartialFunction[Any, Boolean]
 
@@ -49,11 +50,11 @@ object RoachSerializerHints {
   object Never extends RoachSerializerHints {
 
     override def wrap(implicit jsonSerializer: JacksonJsonSerializer,
-                      simpleSerializer: SimpleSerializer)
+                      simpleSerializer: Serialization)
     : PartialFunction[Any, HintWrapped] = Map.empty
 
     override def unwrap(implicit jsonSerializer: JacksonJsonSerializer,
-                        simpleSerializer: SimpleSerializer)
+                        simpleSerializer: Serialization)
     : PartialFunction[HintWrapped, Any] = Map.empty
 
     override def useJackson: PartialFunction[Any, Boolean] = Map.empty
@@ -65,12 +66,12 @@ object RoachSerializerHints {
 
   class Builder(wrapped: RoachSerializerHints, orElseHints: RoachSerializerHints = Never) extends RoachSerializerHints {
     override def wrap(implicit jsonSerializer: JacksonJsonSerializer,
-                      simpleSerializer: SimpleSerializer)
+                      simpleSerializer: Serialization)
     : PartialFunction[Any, HintWrapped] =
       wrapped.wrap.orElse(orElseHints.wrap)
 
     override def unwrap(implicit jsonSerializer: JacksonJsonSerializer,
-                        simpleSerializer: SimpleSerializer)
+                        simpleSerializer: Serialization)
     : PartialFunction[HintWrapped, Any] =
       wrapped.unwrap.orElse(orElseHints.unwrap)
 

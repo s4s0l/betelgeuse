@@ -205,7 +205,6 @@ object DistributedSharedState {
           : Future[Map[PersistenceId, Throwable]] = {
             actorFinder.allActorsAsync(s"satellite-state-$name")
               .flatMap { idsFound =>
-                println("YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY " + idsFound)
                 val listOfFutures = idsFound.map { id =>
                   val statusUpdate = for (
                     version <- getVersion(id.uniqueId);

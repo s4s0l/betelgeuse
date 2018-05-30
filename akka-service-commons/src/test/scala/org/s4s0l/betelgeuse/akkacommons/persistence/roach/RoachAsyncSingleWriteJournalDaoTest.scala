@@ -16,8 +16,9 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import akka.actor.ActorRef
+import akka.actor.{ActorRef, ActorSystem}
 import akka.persistence.{BuiltInSerializerHints, PersistentRepr}
+import akka.serialization.{Serialization, SerializationExtension}
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachAsyncWriteJournalDaoTest.{CrateEvent, JsonEvent}
 import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializer, SimpleSerializer}
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
@@ -37,7 +38,7 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
   with ScalaFutures {
 
   implicit val jacksonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
-  implicit val simple: SimpleSerializer = jacksonSerializer.asSimple
+  implicit val simple: Serialization = SerializationExtension(ActorSystem(getClass.getSimpleName))
   implicit val hints: BuiltInSerializerHints = new BuiltInSerializerHints()
 
 

@@ -16,8 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import akka.actor.{Actor, ActorRef, Props}
-import akka.cluster.sharding.ShardRegion.StartEntity
+import akka.actor.{Actor, ActorRef, Props, Terminated}
+import akka.cluster.sharding.ShardRegion.{GracefulShutdown, StartEntity}
 import akka.persistence.SaveSnapshotSuccess
 import akka.persistence.fsm.PersistentFSM
 import akka.persistence.fsm.PersistentFSM.FSMState
@@ -51,8 +51,8 @@ class RoachStorageVsAkkaToolsTest
   feature("FSM persistence works") {
 
     scenario("sharding remember entities") {
-      val ref = aService.service.clusteringShardingExtension
-        .start("sampleShard", Props(new ShardedActor {
+      def createRegion() = aService.service.clusteringShardingExtension
+        .start("sampleShardInTest", Props(new ShardedActor {
           private val wasStarted = System.currentTimeMillis()
 
           override def receive: Receive = {
@@ -65,6 +65,8 @@ class RoachStorageVsAkkaToolsTest
           case string: String => (string, string)
           case se@StartEntity(eee) => (eee, se)
         })
+
+      val ref = createRegion()
 
       import akka.pattern.ask
       implicit val ec: ExecutionContextExecutor = aService.execContext
@@ -83,7 +85,17 @@ class RoachStorageVsAkkaToolsTest
       Thread.sleep(2500)
       val x2 = Await.result(ref ? "aaa", to).asInstanceOf[(Long, ActorRef)]
       assert(x2._1 > System.currentTimeMillis() - 2500L)
-      RoachAsyncWriteJournalDaoTest
+
+      aService.testKit.watch(ref)
+      ref ! GracefulShutdown
+      aService.testKit.expectMsgClass(10.seconds, classOf[Terminated])
+
+
+      val ref2 = createRegion()
+      Thread.sleep(3000)
+      //we check if region brought entity up by itself
+      val x3 = Await.result(ref2 ? "aaa", to).asInstanceOf[(Long, ActorRef)]
+      assert(x3._1 < System.currentTimeMillis() - 2000L)
     }
 
 
