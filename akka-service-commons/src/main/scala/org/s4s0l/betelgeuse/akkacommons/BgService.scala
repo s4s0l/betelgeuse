@@ -21,6 +21,7 @@ import java.net.URI
 import java.util.UUID
 
 import akka.Done
+import akka.actor.CoordinatedShutdown.UnknownReason
 import akka.actor.{ActorSystem, CoordinatedShutdown, Props}
 import akka.stream.{ActorMaterializer, Materializer}
 import com.typesafe.config.{Config, ConfigFactory}
@@ -126,7 +127,7 @@ trait BgService {
 
   def shutdown(): Unit = {
     LOGGER.info("Ensuring coordinated shutdown is triggered...")
-    Await.result(CoordinatedShutdown(system).run(), 180 seconds)
+    Await.result(CoordinatedShutdown(system).run(UnknownReason), 180 seconds)
     Await.result(system.whenTerminated, 180 seconds)
     LOGGER.info("Actor system terminated.")
   }

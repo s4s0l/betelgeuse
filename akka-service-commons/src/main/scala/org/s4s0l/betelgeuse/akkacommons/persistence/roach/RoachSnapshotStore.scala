@@ -38,10 +38,9 @@ class RoachSnapshotStore extends SnapshotStore {
   private val dbAccess: DbAccess = BgPersistenceExtension.apply(context.system).dbAccess
   private val s = RoachSnapshotStoreEntity.syntax("s")
   private val column = RoachSnapshotStoreEntity.column
-  private implicit val jacksonJsonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
-  private implicit val simpleSerializer: Serialization = RoachAsyncWriteJournal.simpleSerializer(context.system)
-  private implicit val hints: RoachSerializerHints = RoachAsyncWriteJournal
-    .getSerializerHints(context.system.settings.config.getConfig("persistence-snapstore-roach"))
+  private val config = context.system.settings.config.getConfig("persistence-snapstore-roach")
+  private implicit val serializer: RoachSerializer = new RoachSerializer(context.system, config)
+
 
   override def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria)
   : Future[Option[SelectedSnapshot]] = {
@@ -64,7 +63,7 @@ class RoachSnapshotStore extends SnapshotStore {
             entity.seq,
             entity.snapshotTimestamp
           ),
-          RoachAsyncWriteJournal.deserialize(entity.snapshot, entity.snapshotClass)
+          serializer.deserialize(entity.snapshot, entity.snapshotClass)
         )
       }
 
@@ -76,7 +75,7 @@ class RoachSnapshotStore extends SnapshotStore {
   override def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
     dbAccess.updateAsync { implicit session =>
       val tagAndId: PersistenceId = metadata.persistenceId
-      val serialized = RoachAsyncWriteJournal.serialize(snapshot)
+      val serialized = serializer.serialize(snapshot)
       sql"""
            | upsert into ${RoachSnapshotStoreEntity.table}
            |  ( ${column.id}, ${column.tag}, ${column.seq},

@@ -108,7 +108,6 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
         override def onNewVersionAsk(versionedId: VersionedId, aValue: String)
                                     (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
         : Future[NewVersionResult] = {
-          println("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG" + aValue)
           lastGlobalListenerCall.accumulateAndGet(List(aValue), (t: List[String], u: List[String]) => {
             t ++ u
           })
@@ -308,7 +307,6 @@ object DistributedSharedStateTest {
     : Future[NewVersionResult] = {
       synchronized {
         receivedValues = (versionedId, richValue) :: receivedValues
-        println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" + richValue)
         totalCalls.accumulateAndGet(List(richValue), (t: List[String], u: List[String]) => {
           t ++ u
         })

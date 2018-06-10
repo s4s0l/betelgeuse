@@ -20,6 +20,7 @@ import java.lang.System.getProperty
 
 import akka.persistence.CapabilityFlag
 import akka.persistence.journal.JournalSpec
+import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigFactory.parseResources
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
@@ -47,6 +48,10 @@ class RoachJournalTest extends JournalSpec(
         )
       ))
       .withFallback(parseResources("persistence.conf"))
+      .withFallback(ConfigFactory.parseString(
+        s"""
+           |persistence-journal-roach.serializerHintsClass="${classOf[RoachTestHints].getName}"
+        """.stripMargin))
 ) {
 
 

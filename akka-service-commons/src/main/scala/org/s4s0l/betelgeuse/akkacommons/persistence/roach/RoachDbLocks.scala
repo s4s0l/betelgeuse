@@ -1,17 +1,17 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
@@ -81,7 +81,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
   }
 
   override def runLocked[T](lockName: String, txExecutor: TxExecutor, settings: DbLocksSettings = DbLocksSingle())
-                         (code: DBSession => T)(implicit ex: ExecutionContext, scheduler: Scheduler): T = {
+                           (code: DBSession => T)(implicit ex: ExecutionContext, scheduler: Scheduler): T = {
     @volatile var isFinished: Boolean = false
 
 
@@ -102,13 +102,14 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
 
 
     settings match {
-      case _ : DbLocksSingle => runLockedInternal()
+      case _: DbLocksSingle => runLockedInternal()
       case DbLocksRolling(duration, _, _, schedulerLockShuffle) => runLockedInternal(
         Some(
-          scheduler.schedule(duration - schedulerLockShuffle, duration, () =>
-            if (!isFinished) {
+          scheduler.schedule(duration - schedulerLockShuffle, duration, new Runnable {
+            override def run(): Unit = if (!isFinished) {
               lock(lockName, txExecutor, settings)
-            }))
+            }
+          }))
       )
     }
   }

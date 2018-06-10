@@ -89,7 +89,7 @@ abstract class BetelegeuseDbFlywayErrorTestBase
       val lock_0 = getCurrentLockTimestamp(scalike)
 
       When("lockDuration - preLockFinishProlong finishes (500ms) ")
-      Thread.sleep(400)
+      Thread.sleep(2000)
 
 
       Then("2 lock is placed")
@@ -98,7 +98,7 @@ abstract class BetelegeuseDbFlywayErrorTestBase
       assert(lock_0 isBefore lock_1)
 
       When("We wait for next lockDuration")
-      Thread.sleep(600)
+      Thread.sleep(2600)
 
       Then("next lock is placed")
       val lock_2 = getCurrentLockTimestamp(scalike)
@@ -108,7 +108,7 @@ abstract class BetelegeuseDbFlywayErrorTestBase
   }
 
   private def waitForMigrationLocks(name: String): Unit = {
-    AllUtils.tryNTimes(100, waitTimeMs = 10) {
+    AllUtils.tryNTimes(100, waitTimeMs = 100) {
       val locks = scalike.getLocks(name)
       locks.executor.doInTx {
         implicit session =>

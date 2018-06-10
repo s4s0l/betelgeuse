@@ -17,10 +17,9 @@
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import akka.actor.{ActorRef, ActorSystem}
-import akka.persistence.{BuiltInSerializerHints, PersistentRepr}
-import akka.serialization.{Serialization, SerializationExtension}
+import akka.persistence.PersistentRepr
+import com.typesafe.config.ConfigFactory
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachAsyncWriteJournalDaoTest.{CrateEvent, JsonEvent}
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializer, SimpleSerializer}
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.concurrent.ScalaFutures
@@ -37,10 +36,7 @@ class RoachAsyncSingleWriteJournalDaoTest extends FeatureSpec
   with MockFactory
   with ScalaFutures {
 
-  implicit val jacksonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
-  implicit val simple: Serialization = SerializationExtension(ActorSystem(getClass.getSimpleName))
-  implicit val hints: BuiltInSerializerHints = new BuiltInSerializerHints()
-
+  private implicit val serializer: RoachSerializer = new RoachSerializer(ActorSystem(getClass.getSimpleName), ConfigFactory.empty())
 
   feature("Akka journal can be saved in roach db") {
 
