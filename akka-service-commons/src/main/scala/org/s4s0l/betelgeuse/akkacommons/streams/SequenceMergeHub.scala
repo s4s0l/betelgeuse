@@ -63,28 +63,29 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed], killSwitch: UniqueKill
     }
   }
 
-  private def runNext(): Unit = {
-    running = dequeue()
+  private def runNext(): Unit = synchronized {
+    val tmp = dequeue()
       .map { it =>
         val (x, done) = it._1
           .watchTermination()(Keep.both)
           .to(mergeSink)
           .run()
-        val ret = (it._1, x)
+        val ret = (it._1, it._2, x)
         done.onComplete(_ => {
           runNext()
         })
-        it._2.success(x)
         ret
       }
+    running = tmp.map(it => (it._1, it._3))
+    tmp.foreach { it => it._2.success(it._3) }
   }
 
 }
 
 object SequenceMergeHub {
-  def defineSource[T, M]()(implicit ec: ExecutionContext,
-                           materializer: Materializer): Source[T, SequenceMergeHub[T, M]] =
-    MergeHub.source[T]
+  def defineSource[T, M](perProducerBufferSize: Int = 16)(implicit ec: ExecutionContext,
+                                                          materializer: Materializer): Source[T, SequenceMergeHub[T, M]] =
+    MergeHub.source[T](perProducerBufferSize)
       .viaMat(KillSwitches.single)(Keep.both)
       .mapMaterializedValue(it => new SequenceMergeHub[T, M](it._1, it._2))
 }

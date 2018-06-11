@@ -35,26 +35,29 @@ class SequenceMergeHubTest
   extends TestKit(ActorSystem("SequenceMergeHubTest"))
     with FeatureSpecLike
     with ScalaFutures {
-
+  override implicit val patienceConfig: PatienceConfig = PatienceConfig(2.second, 300.millis)
   implicit val mat: ActorMaterializer = ActorMaterializer()
   implicit val ec: ExecutionContextExecutor = system.dispatcher
   feature("Can sequence all streams dynamic") {
     scenario("simple test") {
-      val source = SequenceMergeHub.defineSource[Int, NotUsed]()
+      val source = SequenceMergeHub.defineSource[Int, NotUsed](1)
       val sink = TestSink.probe[Int]
       val (hub, eventualSeq) = source.toMat(sink)(Keep.both).run()
 
       val source1 = Source(List(1, 2, 3))
-      hub.addSource(source1)
+      val added = hub.addSource(source1)
       eventualSeq.request(1)
       eventualSeq.expectNext(1)
-
-      assert(hub.running == Some((source1, NotUsed.getInstance())))
+      whenReady(added) { _ =>
+        assert(hub.running == Some((source1, NotUsed.getInstance())))
+      }
 
       eventualSeq.request(2).expectNext(2, 3)
-      hub.addSource(Source(List()))
+      val source2 = hub.addSource(Source(List()))
       eventualSeq.request(2).expectNoMessage(1.second)
-      assert(hub.running != Some((source1, NotUsed.getInstance())))
+      whenReady(source2) { _ =>
+        assert(hub.running != Some((source1, NotUsed.getInstance())))
+      }
       hub.addSource(Source(List(4, 5)))
       eventualSeq.expectNext(4)
       eventualSeq.request(1).expectNext(5)
