@@ -18,11 +18,9 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import akka.persistence.snapshot.SnapshotStore
 import akka.persistence.{SelectedSnapshot, SnapshotMetadata, SnapshotSelectionCriteria}
-import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.PersistenceId
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbAccess
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializer, SimpleSerializer}
 import org.slf4j.LoggerFactory
 import scalikejdbc._
 

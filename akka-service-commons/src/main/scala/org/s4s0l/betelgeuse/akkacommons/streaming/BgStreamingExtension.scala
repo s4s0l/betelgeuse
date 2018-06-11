@@ -1,11 +1,5 @@
 /*
- * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
-
-/*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +14,18 @@
  * limitations under the License.
  */
 
+/*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
 package org.s4s0l.betelgeuse.akkacommons.streaming
 
 import akka.actor.{ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
 import akka.stream.ActorMaterializer
 import com.typesafe.config.Config
-import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
 import org.s4s0l.betelgeuse.utils.AllUtils._
 
 import scala.reflect.ClassTag
@@ -36,13 +36,17 @@ import scala.reflect.ClassTag
 class BgStreamingExtension(private val system: ExtendedActorSystem) extends Extension {
 
   //fixme: config can be implicit as it is implicitly provided in BgService
-  def buildStreamingAccess[K, V](config: Config)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = defaultSerializers): StreamingAccess[K, V] = {
+  def buildStreamingAccess[K <: AnyRef, V <: AnyRef](config: Config)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = defaultSerializers): StreamingAccess[K, V] = {
     implicit val systemA: ExtendedActorSystem = system
     val ec = system.dispatchers.lookup(config.string("poolName").getOrElse("streaming.context.streaming-io-dispatcher"))
     new KafkaAccess(config)(k, v, system, serializer, ec, ActorMaterializer())
   }
 
-  implicit lazy val defaultKeyValueSerializer: SimpleSerializer = SimpleSerializer(system)
+  import KafkaSerializers._
+
+  implicit lazy val jacksonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
+  implicit lazy val defaultKeyValueSerializer: StreamingSerializer = jacksonSerializer
+
 
   def defaultSerializers: KafkaSerializers = KafkaSerializers(defaultKeyValueSerializer, defaultKeyValueSerializer)
 

@@ -38,14 +38,14 @@ trait BgSatelliteStateService
     with BgClusteringSharding {
   this: BgPersistenceJournal =>
 
-  def createSatelliteStateFactory[I, V](name: String, handler: SatelliteValueHandler[I, V])
-                                       (implicit classTag: ClassTag[I])
+  def createSatelliteStateFactory[I <: AnyRef, V](name: String, handler: SatelliteValueHandler[I, V])
+                                                 (implicit classTag: ClassTag[I])
   : SatelliteContext[I, V] = {
     DistributedSharedState.createSatelliteStateDistribution[I, V](name, handler)
   }
 
-  def createSimpleSatelliteStateFactory[I](name: String)
-                                          (implicit classTag: ClassTag[I])
+  def createSimpleSatelliteStateFactory[I <: AnyRef](name: String)
+                                                    (implicit classTag: ClassTag[I])
   : SatelliteContext[I, I] = {
     DistributedSharedState.createSatelliteStateDistribution(name, new SatelliteValueHandler[I, I] {
       override def handle(versionedId: VersionedId, input: I)

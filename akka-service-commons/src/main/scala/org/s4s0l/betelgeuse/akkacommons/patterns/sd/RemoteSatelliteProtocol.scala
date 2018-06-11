@@ -17,10 +17,10 @@
 package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
 import akka.actor.ActorRef
+import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.Message
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
-import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -34,8 +34,8 @@ import scala.concurrent.{ExecutionContext, Future}
   * @param actorTarget      actor to ask, should respond with Messages also
   * @param simpleSerializer serializer to be used for marshalling T
   */
-private[sd] class RemoteSatelliteProtocol[T](actorTarget: ActorTarget)
-                                            (implicit simpleSerializer: SimpleSerializer)
+private[sd] class RemoteSatelliteProtocol[T <: AnyRef](actorTarget: ActorTarget)
+                                                      (implicit simpleSerializer: Serialization)
   extends SatelliteProtocol[T] {
   /**
     * distributes state change
@@ -47,7 +47,7 @@ private[sd] class RemoteSatelliteProtocol[T](actorTarget: ActorTarget)
       case msg@Message("state-change-ok", _, _, _) =>
         StateChangeOk(msg.correlationId)
       case msg@Message("state-change-validation-ok", _, _, _) =>
-        StateChangeOkWithValidationError(msg.correlationId, msg.payload.asObject[ValidationError])
+        StateChangeOkWithValidationError(msg.correlationId, msg.payload.toObject[ValidationError])
       case msg@Message("state-change-not-ok", _, _, _) =>
         StateChangeNotOk(msg.correlationId, new Exception(s"Remote satelliteError: ${msg.failedOpt.getOrElse(-1)}, message was: ${msg.payload.asString}"))
       case _ =>

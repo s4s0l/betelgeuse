@@ -20,7 +20,6 @@ import java.sql.Timestamp
 import java.util.{Calendar, Date, UUID}
 
 import akka.actor.{Cancellable, Scheduler}
-import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import io.crate.shade.org.postgresql.util.PSQLException
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings.{DbLocksRolling, DbLocksSingle}
@@ -35,6 +34,7 @@ import scalikejdbc.{DBSession, _}
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
+import scala.language.postfixOps
 
 /**
   * @author Marcin Wielgus
@@ -182,7 +182,6 @@ class CrateDbLocks(val schema: String = "locks", locksTable: String = "locks")
       tryNTimesExceptionFactory(s"Taking lock failed. Holder $uuid"),
       (lockSettings.lockAttemptInterval / 2).toMillis) {
       txExecutor.doInTx { implicit session =>
-        Source.combine()
         lockAttempt(lockName, lockSettings)(session)
       }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,14 @@
 package akka
 
 import akka.actor.Actor
+import akka.serialization.{Serialization, SerializationExtension}
 
 /**
   * @author Marcin Wielgus
   */
 trait HackedActor extends Actor {
+
+  implicit lazy val serializer: Serialization = SerializationExtension(context.system)
 
   override protected[akka] def aroundReceive(receive: Receive, msg: Any): Unit = {
     hackedAroundReceive(receive, msg)

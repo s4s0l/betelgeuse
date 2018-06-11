@@ -35,4 +35,5 @@ dependencies {
     compile "com.typesafe.akka:akka-http-spray-json_${scalaBinaryVersion}:${akkaHttpVersion}"
     testCompile "com.typesafe.akka:akka-http-testkit_${scalaBinaryVersion}:${akkaHttpVersion}"
     testCompile "com.typesafe.akka:akka-persistence-tck_${scalaBinaryVersion}:${akkaVersion}"
+    testCompile "com.typesafe.akka:akka-stream-testkit_${scalaBinaryVersion}:${akkaVersion}"
 }

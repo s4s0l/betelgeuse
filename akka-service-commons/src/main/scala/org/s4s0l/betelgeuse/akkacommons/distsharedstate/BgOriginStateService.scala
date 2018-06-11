@@ -34,21 +34,21 @@ trait BgOriginStateService
     with BgClusteringClient {
 
 
-  def createOriginState[I](name: String,
-                           distributor: OriginStateDistributor.Protocol[I],
-                           validator: (VersionedId, I) => I = (_: VersionedId, a: I) => a,
-                           stateDistributionRetryInterval: FiniteDuration = 30.seconds)
+  def createOriginState[I <: AnyRef](name: String,
+                                     distributor: OriginStateDistributor.Protocol[I],
+                                     validator: (VersionedId, I) => I = (_: VersionedId, a: I) => a,
+                                     stateDistributionRetryInterval: FiniteDuration = 30.seconds)
   : OriginStateActor.Protocol[I] = {
     OriginStateActor.startSharded(OriginStateActor.Settings(
       name, distributor, validator, stateDistributionRetryInterval))
   }
 
-  def createLocalDistribution[I](name: String, satelliteStates: Map[String, SatelliteProtocol[I]])
+  def createLocalDistribution[I <: AnyRef](name: String, satelliteStates: Map[String, SatelliteProtocol[I]])
   : OriginStateDistributor.Protocol[I] = {
     OriginStateDistributor.start(OriginStateDistributor.Settings(name, satelliteStates))
   }
 
-  def createRemoteDistribution[I](name: String, services: Seq[BgServiceId])
+  def createRemoteDistribution[I <: AnyRef](name: String, services: Seq[BgServiceId])
   : OriginStateDistributor.Protocol[I] = {
     OriginStateDistributor.startRemote(name, services)
   }

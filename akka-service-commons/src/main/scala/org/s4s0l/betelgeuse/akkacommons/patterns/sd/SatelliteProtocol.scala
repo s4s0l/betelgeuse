@@ -17,12 +17,12 @@
 package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
 import akka.actor.ActorRef
+import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.Headers
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.{Message, Payload}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
 import org.s4s0l.betelgeuse.akkacommons.utils.QA
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 
@@ -39,12 +39,12 @@ object SatelliteProtocol {
 
   sealed trait StateChangeResult extends Result[Uuid, Null]
 
-  case class StateChange[T](versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration, messageId: Uuid = QA.uuid) extends UuidQuestion {
-    def toMessage(implicit simpleSerializer: SimpleSerializer): Message = {
+  case class StateChange[T <: AnyRef](versionedId: VersionedId, value: T, expectedConfirmIn: FiniteDuration, messageId: Uuid = QA.uuid) extends UuidQuestion {
+    def toMessage(implicit simpleSerializer: Serialization): Message[T] = {
       val headers = Headers()
         .withHeader("versionedId", versionedId.toString)
         .withTtl(expectedConfirmIn)
-      Message("state-change", messageId, headers, Payload.apply(value.asInstanceOf[AnyRef]))
+      Message("state-change", messageId, headers, Payload.fromObject(value))
     }
   }
 
@@ -55,11 +55,11 @@ object SatelliteProtocol {
   case class StateChangeNotOk(correlationId: Uuid, ex: Throwable) extends StateChangeResult with NotOkNullResult[Uuid]
 
   case class DistributionComplete(versionedId: VersionedId, expectedConfirmIn: FiniteDuration, messageId: Uuid = QA.uuid) extends UuidQuestion {
-    def toMessage: Message = {
+    def toMessage: Message[AnyRef] = {
       val headers = Headers()
         .withHeader("versionedId", versionedId.toString)
         .withTtl(expectedConfirmIn)
-      Message("distribution-complete", messageId, headers, "")
+      Message("distribution-complete", messageId, headers)
     }
   }
 
@@ -70,7 +70,7 @@ object SatelliteProtocol {
 
 }
 
-trait SatelliteProtocol[T] {
+trait SatelliteProtocol[T <: AnyRef] {
   /**
     * distributes state change
     */

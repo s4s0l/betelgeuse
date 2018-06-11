@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import akka.kafka.{ConsumerSettings, ProducerSettings}
 import akka.stream.ActorMaterializer
 import com.typesafe.config.Config
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.s4s0l.betelgeuse.akkacommons.serialization.SimpleSerializer
 
 import scala.concurrent.ExecutionContext
 import scala.reflect.ClassTag
@@ -30,7 +29,7 @@ import scala.reflect.ClassTag
 /**
   * @author Maciej Flak
   */
-trait StreamingAccess[K, V] {
+trait StreamingAccess[K <: AnyRef, V <: AnyRef] {
 
   val consumer: KafkaConsumer[K, V]
 
@@ -39,7 +38,7 @@ trait StreamingAccess[K, V] {
 }
 
 
-class KafkaAccess[K, V](config: Config)(implicit k: ClassTag[K], v: ClassTag[V], system: ActorSystem, ser: KafkaSerializers, ec: ExecutionContext, mat: ActorMaterializer) extends StreamingAccess[K, V] {
+class KafkaAccess[K <: AnyRef, V <: AnyRef](config: Config)(implicit k: ClassTag[K], v: ClassTag[V], system: ActorSystem, ser: KafkaSerializers, ec: ExecutionContext, mat: ActorMaterializer) extends StreamingAccess[K, V] {
 
   require(k.runtimeClass != classOf[Nothing], "key type cannot be Nothing! For instance use getKafkaAccess[String, String](\"kafka1\") not getKafkaAccess(\"kafka1\")")
   require(v.runtimeClass != classOf[Nothing], "value type cannot be Nothing! For instance use getKafkaAccess[String, String](\"kafka1\") not getKafkaAccess(\"kafka1\")")

@@ -41,21 +41,21 @@ class RoachSerializer(system: ActorSystem, elementConfig: Config) {
     value match {
       case jsonCapableValue: JacksonJsonSerializable =>
         Serialized(
-          jsonSerializer.asSimple.toString(jsonCapableValue),
+          jsonSerializer.simpleToString(jsonCapableValue),
           value.getClass.getName)
 
       case wrappingCandidate
         if serializerHints.wrap.isDefinedAt(wrappingCandidate) =>
         val jsonSerializable = serializerHints.wrap.apply(wrappingCandidate)
         Serialized(
-          jsonSerializer.asSimple.toString(jsonSerializable),
+          jsonSerializer.simpleToString(jsonSerializable),
           jsonSerializable.getClass.getName)
 
       case jsonCapableCandidate: AnyRef
         if serializerHints.useJackson.isDefinedAt(jsonCapableCandidate)
           && serializerHints.useJackson(jsonCapableCandidate) =>
         Serialized(
-          jsonSerializer.asSimple.toString(jsonCapableCandidate),
+          jsonSerializer.simpleToString(jsonCapableCandidate),
           value.getClass.getName)
 
       case binary: AnyRef
@@ -63,7 +63,7 @@ class RoachSerializer(system: ActorSystem, elementConfig: Config) {
           && serializerHints.useBinary(binary) =>
         val sm = simpleSerializer.serializerFor(binary.getClass)
         Serialized(
-          jsonSerializer.asSimple.toString(JsonBinaryWrapper(
+          jsonSerializer.simpleToString(JsonBinaryWrapper(
             binary.getClass.getName,
             Some(Serializers.manifestFor(sm, binary)),
             simpleSerializer.serialize(binary).get)),
@@ -78,7 +78,7 @@ class RoachSerializer(system: ActorSystem, elementConfig: Config) {
 
   def deserialize(serializedValue: String, valueClass: String): Any = {
     val eventClass = Class.forName(valueClass).asInstanceOf[Class[AnyRef]]
-    jsonSerializer.asSimple.fromStringToClass(serializedValue, eventClass) match {
+    jsonSerializer.simpleFromStringAsClass(serializedValue, eventClass) match {
       case JsonBinaryWrapper(className, manifest, binary) =>
         val expectedClass = Class.forName(className).asInstanceOf[Class[AnyRef]]
         val serializerToUse = simpleSerializer.serializerFor(expectedClass)
@@ -116,4 +116,5 @@ object RoachSerializer {
   }
 
   case class Serialized(value: String, valueClass: String)
+
 }

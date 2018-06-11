@@ -69,8 +69,8 @@ object DistributedSharedState {
   /**
     *
     */
-  def createSatelliteStateDistribution[I, V](name: String, handler: SatelliteValueHandler[I, V])
-                                            (implicit
+  def createSatelliteStateDistribution[I <: AnyRef, V](name: String, handler: SatelliteValueHandler[I, V])
+                                                      (implicit
                                              receptionistExt: BgClusteringReceptionistExtension,
                                              shardingExt: BgClusteringShardingExtension,
                                              actorFinder: JournalReader,
@@ -100,14 +100,14 @@ object DistributedSharedState {
     def addListener[C <: NewVersionedValueListener[R]](listener: C): ListenerStartupNotifier
   }
 
-  class SatelliteContext[I, V] private[DistributedSharedState](name: String,
-                                                               handler: SatelliteValueHandler[I, V])
-                                                              (implicit
-                                                               receptionistExt: BgClusteringReceptionistExtension,
-                                                               shardingExt: BgClusteringShardingExtension,
-                                                               actorRefFactory: ActorRefFactory,
-                                                               actorFinder: JournalReader,
-                                                               classTag: ClassTag[I]) {
+  class SatelliteContext[I <: AnyRef, V] private[DistributedSharedState](name: String,
+                                                                         handler: SatelliteValueHandler[I, V])
+                                                                        (implicit
+                                                                         receptionistExt: BgClusteringReceptionistExtension,
+                                                                         shardingExt: BgClusteringShardingExtension,
+                                                                         actorRefFactory: ActorRefFactory,
+                                                                         actorFinder: JournalReader,
+                                                                         classTag: ClassTag[I]) {
     private val listeners = Promise[Seq[DelayedSubsActor.Listener[VersionedId, V]]]()
     private val pubSub = DelayedSubsActor.start(DelayedSubsActor.Settings(s"satellite-listener-$name", listeners.future))
     private val pubSubSatellite = DelayedSubsActor.asSatelliteStateListener(pubSub)
@@ -118,7 +118,7 @@ object DistributedSharedState {
 
     def createCache[R](cacheName: String, valueEnricher: V => Future[R], cacheTtl: FiniteDuration)
     : VersionedCache[R] = {
-      val keyFactory: VersionedEntityActor.Protocol.GetValue => VersionedId = (it) => it.messageId
+      val keyFactory: VersionedEntityActor.Protocol.GetValue => VersionedId = it => it.messageId
       val valueOwnerFacade = new ValueOwnerFacade[VersionedEntityActor.Protocol.GetValue, VersionedId, V] {
         override def apply(getterMessage: VersionedEntityActor.Protocol.GetValue)
                           (implicit executionContext: ExecutionContext, sender: ActorRef)
