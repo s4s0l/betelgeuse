@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.message
 
 import java.util.UUID
 
+import akka.NotUsed
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.Message.ForwardHeaderProvider
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.{HeaderAccessors, HeaderSetter, _}
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
@@ -33,7 +34,7 @@ object Message {
 
   val defaultForward: ForwardHeaderProvider = () => Seq()
 
-  def apply(target: String, id: String, headers: Map[String, String]): Message[AnyRef] = {
+  def apply(target: String, id: String, headers: Map[String, String]): Message[NotUsed] = {
     new Message(target, id, headers + createTimestamp, Payload.emptyUnit)
   }
 
@@ -69,6 +70,12 @@ final case class Message[P <: AnyRef](target: String, id: String, headers: Map[S
                            (implicit extraHeaders: ForwardHeaderProvider): Message[N] = {
     Message(newTarget, UUID.randomUUID().toString,
       (followHeaders(RESPONSE_HEADERS, extraHeaders()) + (MessageHeaders.HEADER_CORRELATION_ID -> id)) ++ newHeaders, newPayload)
+  }
+
+  def responseError[N <: AnyRef](newTarget: String, errorPayload: String, newHeaders: Map[String, String] = Map())
+                                (implicit extraHeaders: ForwardHeaderProvider): Message[N] = {
+    Message(newTarget, UUID.randomUUID().toString,
+      (followHeaders(RESPONSE_HEADERS, extraHeaders()) + (MessageHeaders.HEADER_CORRELATION_ID -> id)) ++ newHeaders, Payload.apply(errorPayload).asInstanceOf[Payload[N]])
   }
 
   private def followHeaders(ffwdBase: Seq[String], forwardedHeadersExtra: Seq[String]): Map[String, String] = {

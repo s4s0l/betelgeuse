@@ -16,6 +16,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
+import akka.NotUsed
 import akka.actor.ActorRef
 import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.Headers
@@ -44,7 +45,7 @@ object SatelliteProtocol {
       val headers = Headers()
         .withHeader("versionedId", versionedId.toString)
         .withTtl(expectedConfirmIn)
-      Message("state-change", messageId, headers, Payload.fromObject(value))
+      Message("state-change", messageId, headers, Payload.wrap(value))
     }
   }
 
@@ -55,7 +56,7 @@ object SatelliteProtocol {
   case class StateChangeNotOk(correlationId: Uuid, ex: Throwable) extends StateChangeResult with NotOkNullResult[Uuid]
 
   case class DistributionComplete(versionedId: VersionedId, expectedConfirmIn: FiniteDuration, messageId: Uuid = QA.uuid) extends UuidQuestion {
-    def toMessage: Message[AnyRef] = {
+    def toMessage: Message[NotUsed] = {
       val headers = Headers()
         .withHeader("versionedId", versionedId.toString)
         .withTtl(expectedConfirmIn)

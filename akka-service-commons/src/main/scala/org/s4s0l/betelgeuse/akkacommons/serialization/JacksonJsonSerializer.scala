@@ -102,6 +102,11 @@ class JacksonJsonSerializer extends Serializer {
       .asInstanceOf[T]
   }
 
+  def simpleFromBinary[T <: AnyRef](bytes: Array[Byte])(implicit classTag: ClassTag[T]): T = {
+    fromBinary(bytes, classTag.runtimeClass)
+      .asInstanceOf[T]
+  }
+
   // The serializer id has to have this exact value to be equal to the old original implementation
   override def identifier: Int = JacksonJsonSerializer.identifier
 

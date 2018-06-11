@@ -47,7 +47,7 @@ private[sd] class RemoteSatelliteProtocol[T <: AnyRef](actorTarget: ActorTarget)
       case msg@Message("state-change-ok", _, _, _) =>
         StateChangeOk(msg.correlationId)
       case msg@Message("state-change-validation-ok", _, _, _) =>
-        StateChangeOkWithValidationError(msg.correlationId, msg.payload.toObject[ValidationError])
+        StateChangeOkWithValidationError(msg.correlationId, msg.payload.deserializeTo[ValidationError])
       case msg@Message("state-change-not-ok", _, _, _) =>
         StateChangeNotOk(msg.correlationId, new Exception(s"Remote satelliteError: ${msg.failedOpt.getOrElse(-1)}, message was: ${msg.payload.asString}"))
       case _ =>

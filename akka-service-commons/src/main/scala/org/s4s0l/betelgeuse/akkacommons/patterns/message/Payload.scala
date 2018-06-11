@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.message
 
 import java.nio.charset.StandardCharsets
 
+import akka.NotUsed
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.serialization.{Serialization, Serializers}
 import akka.util.ByteString
@@ -26,17 +27,16 @@ import com.fasterxml.jackson.core.{JsonGenerator, JsonParser}
 import com.fasterxml.jackson.databind.annotation.{JsonDeserialize, JsonSerialize}
 import com.fasterxml.jackson.databind.node.TextNode
 import com.fasterxml.jackson.databind.{DeserializationContext, JsonNode, SerializerProvider}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
 /**
-  * Payload for messages. Could be just ByteString, but bs is copying arrays all the time...
-  * This payload wraps either byte string or Array[Byte], and allows conversion between both.
-  * User of this class is not aware whether it was created with string or byte string and
-  * can use it as both. or even as string.
+  * Json serializable payload wrapper, gives some apis for creating common types that do not need
+  * serializer, and for complex types if forces usage of serializer.
   *
-  * DO NOT MUTATE!
+  * DO NOT MUTATE its contents.
   *
   * @author Marcin Wielgus
   */
@@ -46,9 +46,8 @@ import scala.reflect.ClassTag
 class Payload[P] private(
                           val manifest: String,
                           val contents: () => Either[ByteString, Array[Byte]]
-
                         )
-  extends Serializable {
+  extends JacksonJsonSerializable {
 
   @transient lazy val asArray: Array[Byte] = {
     _binaryContents.left.map(_.toArray[Byte]).left
@@ -65,11 +64,17 @@ class Payload[P] private(
   }
   @transient private lazy val _binaryContents = contents()
 
-  def asObject(implicit classTag: ClassTag[P], serializer: Serialization): P = {
-    Payload.asObject(manifest, asArray)(classTag, serializer)
+  def unwrap(implicit classTag: ClassTag[P], serializer: Serialization): P = {
+    manifest match {
+      case "string" if classTag.runtimeClass == classOf[String] => asString.asInstanceOf[P]
+      case "array" if classTag.runtimeClass == classOf[Array[Byte]] => asArray.asInstanceOf[P]
+      case "bytes" if classTag.runtimeClass == classOf[ByteString] => asBytes.asInstanceOf[P]
+      case _ if classTag.runtimeClass == classOf[ByteString] => asBytes.asInstanceOf[P]
+      case _ => Payload.asObject(manifest, asArray)(classTag, serializer)
+    }
   }
 
-  def toObject[T <: AnyRef](implicit classTag: ClassTag[T], serializer: Serialization): T = {
+  def deserializeTo[T <: AnyRef](implicit classTag: ClassTag[T], serializer: Serialization): T = {
     Payload.asObject(manifest, asArray)(classTag, serializer)
   }
 
@@ -93,13 +98,15 @@ class Payload[P] private(
 
 object Payload {
 
-  implicit def fromObject[T <: AnyRef](value: T)
-                                      (implicit serializer: Serialization): Payload[T] = {
+  implicit def wrap[T <: AnyRef](value: T)
+                                (implicit serializer: Serialization): Payload[T] = {
     val str = Serializers.manifestFor(serializer.serializerFor(value.getClass), value)
     new Payload(str, () => Right(serializer.serialize(value).get))
   }
 
   implicit def apply(bytes: ByteString): Payload[ByteString] = new Payload("bytes", () => Left(bytes))
+
+  implicit def toArray(bytes: ByteString): Payload[Array[Byte]] = new Payload("array", () => Left(bytes))
 
   implicit def apply(bytes: Array[Byte]): Payload[Array[Byte]] = new Payload("array", () => Right(bytes))
 
@@ -112,7 +119,7 @@ object Payload {
 
   val emptyArray: Payload[Array[Byte]] = new Payload("empty", () => Right(Array()))
 
-  val emptyUnit: Payload[AnyRef] = new Payload("empty", () => Right(Array()))
+  val emptyUnit: Payload[NotUsed] = new Payload("empty", () => Right(Array()))
 
   val emptyBytes: Payload[ByteString] = new Payload("empty", () => Right(Array()))
 

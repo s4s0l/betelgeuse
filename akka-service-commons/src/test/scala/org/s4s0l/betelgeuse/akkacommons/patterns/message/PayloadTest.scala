@@ -58,13 +58,13 @@ class PayloadTest extends FeatureSpec {
       val value: Future[SourceRef[Int]] = Source.apply(List(1, 2, 3, 4))
         .runWith(StreamRefs.sourceRef())
       val ref = Await.result(value, 2.seconds)
-      val payload: Payload[SourceRef[Int]] = Payload.fromObject(ref)
+      val payload: Payload[SourceRef[Int]] = Payload.wrap(ref)
       val bytes = jsonSerializer.simpleToString(payload)
 
       val deserialized = jsonSerializer.simpleFromString[Payload[SourceRef[Int]]](bytes)
 
       val sink = Sink.seq[Int]
-      val ret = deserialized.asObject.runWith(sink)
+      val ret = deserialized.unwrap.runWith(sink)
       val res = Await.result(ret, 2.seconds)
       assert(res == List(1, 2, 3, 4))
     }
@@ -74,9 +74,9 @@ class PayloadTest extends FeatureSpec {
   feature("Payload can be conveniently created and deconstructed to objects using converters") {
     scenario("Creating from object with serializer and reading from them") {
       val animal = Animal("our cat", 12, Cat("black", tail = true))
-      val payload = Payload.fromObject(animal)
+      val payload: Payload[Animal] = animal
       assert(payload.asString == "{\"name\":\"our cat\",\"age\":12,\"t\":{\"color\":\"black\",\"tail\":true}}")
-      val animalRead: Animal = payload.asObject
+      val animalRead: Animal = payload.unwrap
       assert(animal == animalRead)
       assert(!payload.isEmpty)
       assert(payload.payloadSize == payload.asString.length)
@@ -87,22 +87,48 @@ class PayloadTest extends FeatureSpec {
     scenario("Create as both string or byte") {
       val payload: Payload[String] = "somepayload"
       assert(payload.asString == "somepayload")
+      assert(payload.unwrap == "somepayload")
       assert(payload.asBytes == ByteString("somepayload"))
       assert(payload.asArray sameElements Array[Byte]('s': Byte, 'o', 'm', 'e', 'p', 'a', 'y', 'l', 'o', 'a', 'd'))
       assert(payload.payloadSize == 11)
 
+      val payload2: Payload[String] = Payload.wrap("somepayload")
+      assert(payload2.asString == "somepayload")
+      assert(payload2.unwrap == "somepayload")
+      assert(payload2.asBytes == ByteString("somepayload"))
+      assert(payload2.asArray sameElements Array[Byte]('s': Byte, 'o', 'm', 'e', 'p', 'a', 'y', 'l', 'o', 'a', 'd'))
+      assert(payload2.payloadSize == 11)
+
       val payloadFromBytes: Payload[ByteString] = ByteString("somepayload")
       assert(payloadFromBytes.asString == "somepayload")
+      assert(payloadFromBytes.unwrap == ByteString("somepayload"))
       assert(payloadFromBytes.asBytes == ByteString("somepayload"))
       assert(payloadFromBytes.asArray sameElements "somepayload".getBytes())
       assert(payloadFromBytes.payloadSize == 11)
+
+
+      val payloadFromBytes2: Payload[ByteString] = Payload.wrap(ByteString("somepayload"))
+      assert(payloadFromBytes2.asString == "somepayload")
+      assert(payloadFromBytes2.unwrap == ByteString("somepayload"))
+      assert(payloadFromBytes2.asBytes == ByteString("somepayload"))
+      assert(payloadFromBytes2.asArray sameElements "somepayload".getBytes())
+      assert(payloadFromBytes2.payloadSize == 11)
 
 
       val payloadFromArray: Payload[Array[Byte]] = "123".getBytes()
       assert(payloadFromArray.asString == "123")
       assert(payloadFromArray.asBytes == ByteString("123"))
       assert(payloadFromArray.asArray sameElements "123".getBytes())
+      assert(payloadFromArray.unwrap sameElements "123".getBytes())
       assert(payloadFromArray.payloadSize == 3)
+
+
+      val payloadFromArray2: Payload[Array[Byte]] = Payload.wrap("123".getBytes())
+      assert(payloadFromArray2.asString == "123")
+      assert(payloadFromArray2.asBytes == ByteString("123"))
+      assert(payloadFromArray2.asArray sameElements "123".getBytes())
+      assert(payloadFromArray2.unwrap sameElements "123".getBytes())
+      assert(payloadFromArray2.payloadSize == 3)
 
     }
     scenario("Implicit conversions to string and byteString and array (deprecated)") {

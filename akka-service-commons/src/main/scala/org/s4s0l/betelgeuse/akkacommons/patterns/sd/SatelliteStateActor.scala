@@ -107,13 +107,13 @@ class SatelliteStateActor[I <: AnyRef, V](settings: Settings[I, V])(implicit cla
 
     case msg@Message("state-change", messageId, _, _) =>
       val versionedId: VersionedId = VersionedId(msg.get("versionedId").get)
-      val value: I = msg.payload.toObject[I](classTag, serializer)
+      val value: I = msg.payload.deserializeTo[I](classTag, serializer)
       val expectedConfirmIn: FiniteDuration = msg.ttlAsDurationLeft
       handleStateChangeCommand(StateChange(versionedId, value, expectedConfirmIn, messageId)) {
         case StateChangeOk(_) =>
           msg.response("state-change-ok", "")
         case StateChangeOkWithValidationError(_, errors) =>
-          msg.response("state-change-validation-ok", Payload.fromObject(errors)(serializer))
+          msg.response("state-change-validation-ok", Payload.wrap(errors)(serializer))
         case StateChangeNotOk(_, ex) =>
           msg.response("state-change-not-ok", ex.getMessage).withFailed()
       }
