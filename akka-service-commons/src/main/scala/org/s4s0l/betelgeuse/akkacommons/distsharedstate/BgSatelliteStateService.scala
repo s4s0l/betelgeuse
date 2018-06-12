@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +30,6 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteValueHandler
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteValueHandler.HandlerResult
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.BgPersistenceJournal
-import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
@@ -34,18 +39,17 @@ import scala.reflect.ClassTag
   */
 trait BgSatelliteStateService
   extends BgClusteringReceptionist
-    with BgSerializationJackson
     with BgClusteringSharding {
   this: BgPersistenceJournal =>
 
-  def createSatelliteStateFactory[I, V](name: String, handler: SatelliteValueHandler[I, V])
-                                       (implicit classTag: ClassTag[I])
+  def createSatelliteStateFactory[I <: AnyRef, V](name: String, handler: SatelliteValueHandler[I, V])
+                                                 (implicit classTag: ClassTag[I])
   : SatelliteContext[I, V] = {
     DistributedSharedState.createSatelliteStateDistribution[I, V](name, handler)
   }
 
-  def createSimpleSatelliteStateFactory[I](name: String)
-                                          (implicit classTag: ClassTag[I])
+  def createSimpleSatelliteStateFactory[I <: AnyRef](name: String)
+                                                    (implicit classTag: ClassTag[I])
   : SatelliteContext[I, I] = {
     DistributedSharedState.createSatelliteStateDistribution(name, new SatelliteValueHandler[I, I] {
       override def handle(versionedId: VersionedId, input: I)

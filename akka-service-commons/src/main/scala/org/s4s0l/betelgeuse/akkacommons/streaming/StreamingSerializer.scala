@@ -14,26 +14,15 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.patterns.message;
+package org.s4s0l.betelgeuse.akkacommons.streaming
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import scala.reflect.ClassTag
 
 /**
- * @author Marcin Wielgus
- */
-public class PayloadSerializer extends StdSerializer<Payload<Object>> {
+  * @author Marcin Wielgus
+  */
+trait StreamingSerializer {
+  def toBinary(o: AnyRef): Array[Byte]
 
-    public PayloadSerializer() {
-        super(Payload.class, false);
-    }
-
-
-    @Override
-    public void serialize(Payload value, JsonGenerator gen, SerializerProvider provider) {
-        Payload.serialize(value, gen, provider);
-    }
-
-
+  def fromBinary[T <: AnyRef](bytes: Array[Byte])(implicit classTag: ClassTag[T]): T
 }

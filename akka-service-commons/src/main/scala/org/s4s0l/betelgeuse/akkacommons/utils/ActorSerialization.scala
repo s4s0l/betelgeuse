@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,26 +20,14 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.patterns.message;
+package org.s4s0l.betelgeuse.akkacommons.utils
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import akka.actor.Actor
+import akka.serialization.{Serialization, SerializationExtension}
 
 /**
- * @author Marcin Wielgus
- */
-public class PayloadSerializer extends StdSerializer<Payload<Object>> {
-
-    public PayloadSerializer() {
-        super(Payload.class, false);
-    }
-
-
-    @Override
-    public void serialize(Payload value, JsonGenerator gen, SerializerProvider provider) {
-        Payload.serialize(value, gen, provider);
-    }
-
-
+  * @author Marcin Wielgus
+  */
+trait ActorSerialization extends Actor {
+  implicit lazy val serializer: Serialization = SerializationExtension(context.system)
 }

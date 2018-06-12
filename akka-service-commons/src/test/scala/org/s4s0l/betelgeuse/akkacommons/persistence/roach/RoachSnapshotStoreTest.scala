@@ -19,6 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 import java.lang.System.getProperty
 
 import akka.persistence.snapshot.SnapshotStoreSpec
+import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigFactory.parseResources
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
@@ -35,7 +36,7 @@ class RoachSnapshotStoreTest extends SnapshotStoreSpec(
         Map(
           "datasource" -> "RoachSnapshotStoreTest".toLowerCase,
           "schemaname" -> "RoachSnapshotStoreTest".toLowerCase,
-          "address" -> getProperty("roach.db.host", "127.0.0.1"),
+          "address" -> getProperty("roach.db.hostTestPayload", "127.0.0.1"),
           "port" -> getProperty("roach.db.port", "26257")
         )))
       .withFallback(parseResources("persistence-roach.conf"))
@@ -47,6 +48,10 @@ class RoachSnapshotStoreTest extends SnapshotStoreSpec(
         )
       ))
       .withFallback(parseResources("persistence.conf"))
+      .withFallback(ConfigFactory.parseString(
+        s"""
+           |persistence-snapstore-roach.serializerHintsClass="${classOf[RoachTestHints].getName}"
+        """.stripMargin))
 ) {
 
   protected override def beforeAll(): Unit

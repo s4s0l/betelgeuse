@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +23,12 @@
 package org.s4s0l.betelgeuse.akkacommons.test
 
 import akka.actor.{ActorRef, ActorSystem}
+import akka.serialization.Serialization
 import akka.stream.ActorMaterializer
 import akka.testkit.{ImplicitSender, TestKit}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.TestedService
 import org.s4s0l.betelgeuse.utils.AllUtils
 import org.scalamock.scalatest.MockFactory
@@ -67,7 +75,7 @@ trait BgTestService extends FeatureSpecLike
       val eventualUnits: immutable.Seq[Future[Unit]] = servicesUnderTest.map(serv => Future(serv.startService()))
       val eventualUnit: Future[Seq[Unit]] = AllUtils.listOfFuturesToFutureOfList(eventualUnits)
       import concurrent.duration._
-      Await.result(eventualUnit, 60 seconds)
+      Await.result(eventualUnit, 120 seconds)
     } else {
       servicesUnderTest.foreach(_.startService())
     }
@@ -120,6 +128,8 @@ object BgTestService {
     implicit val actorMaterializer: ActorMaterializer = testedService.actorMaterializer
     implicit val self: ActorRef = testedService.self
     implicit val execContext: ExecutionContextExecutor = testedService.execContext
+    implicit val akkaSerialization: Serialization = testedService.service.serializer
+    implicit val serializationJackson: JacksonJsonSerializer = testedService.service.serializationJackson
   }
 
   class TestedService[T <: BgService](bgServiceFactory: => T) {

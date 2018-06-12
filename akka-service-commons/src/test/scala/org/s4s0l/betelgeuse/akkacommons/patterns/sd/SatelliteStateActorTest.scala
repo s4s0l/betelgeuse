@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +25,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorRef
+import akka.serialization.Serialization
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
@@ -381,7 +388,7 @@ class SatelliteStateActorTest extends
 
     scenario("Handler reports validation error using Message pattern protocol also") {
       new WithService(my) {
-        private implicit val serializer: SimpleSerializer = service.simpleSerialization
+        private implicit val serializer: Serialization = service.serializer
 
         Given("A new shard storing string values named test1")
         private val idInTest = "id4aamp"
@@ -425,7 +432,7 @@ class SatelliteStateActorTest extends
 
     scenario("Does not confirm distribution if value was not introduced before using Message pattern protocol also") {
       new WithService(my) {
-        private implicit val serializer: SimpleSerializer = service.simpleSerialization
+        private implicit val serializer: Serialization = service.serializer
         Given("A new shard storing string values named testX")
         private val idInTest = "mid1"
 
@@ -470,7 +477,7 @@ class SatelliteStateActorTest extends
 
     scenario("Does not confirm distribution if listener failed using Message pattern protocol also") {
       new WithService(my) {
-        private implicit val serializer: SimpleSerializer = service.simpleSerialization
+        private implicit val serializer: Serialization = service.serializer
         Given("A new shard storing string values named test3 with always failing listener")
         private val idInTest = "mid2"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
@@ -493,7 +500,7 @@ class SatelliteStateActorTest extends
 
     scenario("Does not confirm distribution if listener times out using Message pattern protocol also") {
       new WithService(my) {
-        private implicit val serializer: SimpleSerializer = service.simpleSerialization
+        private implicit val serializer: Serialization = service.serializer
         Given("A new shard storing string values named test3 with always timing out listener")
         private val idInTest = "mid3"
         When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
@@ -516,7 +523,7 @@ class SatelliteStateActorTest extends
 
     scenario("Can handle proper changeState - changeDistributed flow using Message pattern protocol also") {
       new WithService(my) {
-        private implicit val serializer: SimpleSerializer = service.simpleSerialization
+        private implicit val serializer: Serialization = service.serializer
 
         Given("A new shard storing string values named test1")
         private val idInTest = "mid4"
@@ -594,8 +601,6 @@ class SatelliteStateActorTest extends
     }
   }
   private val my = testWith(new BgPersistenceJournalRoach
-    with BgSerialization
-    with BgSerializationJackson
     with BgClusteringSharding
     with BgClusteringReceptionist
     with BgSatelliteStateService {

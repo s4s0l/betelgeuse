@@ -17,10 +17,10 @@
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import akka.actor.{ActorRef, ActorSystem}
-import akka.persistence.{BuiltInSerializerHints, PersistentRepr}
-import akka.serialization.{Serialization, SerializationExtension}
+import akka.persistence.PersistentRepr
+import com.typesafe.config.ConfigFactory
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachAsyncWriteJournalDaoTest._
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, SimpleSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.concurrent.ScalaFutures
@@ -38,16 +38,15 @@ class RoachAsyncWriteJournalDaoTest
     with DbRoachTest
     with MockFactory
     with ScalaFutures {
-  implicit val jacksonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
-  implicit val simple: Serialization = SerializationExtension(ActorSystem(getClass.getSimpleName))
-  implicit val hints: BuiltInSerializerHints = new BuiltInSerializerHints()
+
+  private implicit val serializer: RoachSerializer = new RoachSerializer(ActorSystem(getClass.getSimpleName), ConfigFactory.empty())
+
   feature("Akka journal can be saved in roach db") {
 
     scenario("Json serializable Events are saved and retrieved") {
       localTx { implicit session =>
         Given("Roach async writer dao with no serializer")
 
-        val serializer = new JacksonJsonSerializer()
         val dao = new RoachAsyncWriteJournalDao()
         And("Some regular event")
         val event = JsonEvent("s", 1, Seq("a"))
@@ -118,7 +117,6 @@ class RoachAsyncWriteJournalDaoTest
       localTx { implicit session =>
         Given("Roach async writer dao")
 
-        val serializer = new JacksonJsonSerializer()
         val dao = new RoachAsyncWriteJournalDao()
         And("Some string event")
         val event = "a string value"
@@ -231,7 +229,7 @@ class RoachAsyncWriteJournalDaoTest
 
 
         When("next message is inserted")
-        setup3Events(dao, "5", dao.getMaxSequenceNumber("tag", "5", -1)+1)
+        setup3Events(dao, "5", dao.getMaxSequenceNumber("tag", "5", -1) + 1)
 
 
         Then("It has sequence number not lost")
@@ -278,7 +276,7 @@ class RoachAsyncWriteJournalDaoTest
     }
   }
 
-  def setup3Events(dao: RoachAsyncWriteJournalDao, id: String, seqStart:Long = 1)
+  def setup3Events(dao: RoachAsyncWriteJournalDao, id: String, seqStart: Long = 1)
                   (implicit session: DBSession): Unit = {
     val event1 = RegularEvent("s", 1, Seq("a"))
     val event2 = RegularEvent("s", 2, Seq("b"))
@@ -293,7 +291,7 @@ class RoachAsyncWriteJournalDaoTest
     ))
 
     val entity2 = RoachAsyncWriteJournal.createEntity(PersistentRepr.apply(
-      payload = event2, sequenceNr = seqStart+1, persistenceId = s"tag/$id",
+      payload = event2, sequenceNr = seqStart + 1, persistenceId = s"tag/$id",
       deleted = false,
       manifest = "manifa",
       sender = ActorRef.noSender,

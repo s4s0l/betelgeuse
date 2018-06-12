@@ -25,6 +25,8 @@ import com.fasterxml.jackson.databind.{ObjectMapper, SerializationFeature}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.slf4j.LoggerFactory
 
+import scala.reflect.ClassTag
+
 /**
   * taken from https://github.com/NextGenTel/akka-tools
   */
@@ -88,7 +90,22 @@ class JacksonJsonSerializer extends Serializer {
 
   import JacksonJsonSerializer._
 
-  lazy val asSimple:SimpleSerializer = SimpleSerializer.toSimpleSerializer(this)
+  def simpleToString(o: AnyRef): String = new String(toBinary(o), "UTF8")
+
+  def simpleFromString[T <: AnyRef](bytes: String)(implicit classTag: ClassTag[T]): T = {
+    fromBinary(bytes.getBytes("UTF8"), classTag.runtimeClass)
+      .asInstanceOf[T]
+  }
+
+  def simpleFromStringAsClass[T <: AnyRef](bytes: String, clazz: Class[T]): T = {
+    fromBinary(bytes.getBytes("UTF8"), clazz)
+      .asInstanceOf[T]
+  }
+
+  def simpleFromBinary[T <: AnyRef](bytes: Array[Byte])(implicit classTag: ClassTag[T]): T = {
+    fromBinary(bytes, classTag.runtimeClass)
+      .asInstanceOf[T]
+  }
 
   // The serializer id has to have this exact value to be equal to the old original implementation
   override def identifier: Int = JacksonJsonSerializer.identifier
@@ -107,6 +124,7 @@ class JacksonJsonSerializer extends Serializer {
       case _: JacksonJsonSerializableButNotDeserializable =>
         throw new Exception("The type " + o.getClass + " is not supposed to be deserializable since it extends JacksonJsonSerializableButNotDeserializable")
       case x: AnyRef => x
+      case null => null
     }
   }
 

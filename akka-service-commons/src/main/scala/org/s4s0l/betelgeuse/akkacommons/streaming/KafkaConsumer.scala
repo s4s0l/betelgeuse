@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import akka.kafka.{ConsumerMessage, ConsumerSettings, Subscriptions}
 import akka.stream.scaladsl.Source
 
 
-trait KafkaConsumer[K, V] {
+trait KafkaConsumer[K <: AnyRef, V <: AnyRef] {
   def source(topics: Set[String]): Source[ConsumerMessage.CommittableMessage[K, V], Consumer.Control]
 }
 
@@ -29,7 +29,7 @@ trait KafkaConsumer[K, V] {
 /**
   * @author Maciej Flak
   */
-class KafkaConsumerImpl[K, V] private[streaming](consumerSettings: ConsumerSettings[K, V]) extends KafkaConsumer[K,V]{
+class KafkaConsumerImpl[K <: AnyRef, V <: AnyRef] private[streaming](consumerSettings: ConsumerSettings[K, V]) extends KafkaConsumer[K, V] {
 
   /**
     * simple wrapper around [[akka.kafka.scaladsl.Consumer#committableSource(akka.kafka.ConsumerSettings, akka.kafka.Subscription)]]

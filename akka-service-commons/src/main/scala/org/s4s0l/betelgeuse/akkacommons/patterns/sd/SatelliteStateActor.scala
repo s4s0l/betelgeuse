@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +24,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
 import akka.actor.{ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
+import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClientExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionistExtension
@@ -31,7 +38,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntity
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.ProtocolGetters
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JsonAnyWrapper, SimpleSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JsonAnyWrapper
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 import org.s4s0l.betelgeuse.akkacommons.utils.QA.Uuid
 
@@ -49,10 +56,9 @@ import scala.reflect.ClassTag
   *
   * @author Marcin Wielgus
   */
-class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: ClassTag[I])
+class SatelliteStateActor[I <: AnyRef, V](settings: Settings[I, V])
+                                         (implicit classTag: ClassTag[I])
   extends VersionedEntityActor[V](VersionedEntityActor.Settings(settings.name)) {
-
-  private lazy val serializer = SimpleSerializer(context.system)
 
   /**
     * true we accept and saved it
@@ -68,7 +74,7 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
   override def processEvent(recover: Boolean): PartialFunction[Event, Unit] =
     super.processEvent(recover) orElse processStateChangeEvents(recover, identity, self)
 
-  private def processStateChangeEvents(recover: Boolean, responseFactory: (StateChangeResult) => Any, senderProvider: => ActorRef)
+  private def processStateChangeEvents(recover: Boolean, responseFactory: StateChangeResult => Any, senderProvider: => ActorRef)
   : PartialFunction[Event, Unit] = {
     case x@StateChangedEvent(version, _, _, msgId) =>
       x.toHandlerResult match {
@@ -108,13 +114,13 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
 
     case msg@Message("state-change", messageId, _, _) =>
       val versionedId: VersionedId = VersionedId(msg.get("versionedId").get)
-      val value: I = msg.payload.asObject[I](classTag, serializer)
+      val value: I = msg.payload.deserializeTo[I](classTag, serializer)
       val expectedConfirmIn: FiniteDuration = msg.ttlAsDurationLeft
       handleStateChangeCommand(StateChange(versionedId, value, expectedConfirmIn, messageId)) {
         case StateChangeOk(_) =>
           msg.response("state-change-ok", "")
         case StateChangeOkWithValidationError(_, errors) =>
-          msg.response("state-change-validation-ok", Payload.apply(errors)(serializer))
+          msg.response("state-change-validation-ok", Payload.wrap(errors)(serializer))
         case StateChangeNotOk(_, ex) =>
           msg.response("state-change-not-ok", ex.getMessage).withFailed()
       }
@@ -149,7 +155,7 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
 
   }
 
-  private def handleStateDistributedCommand(msg: DistributionComplete)(responseFactory: (DistributionCompleteResult) => Any) = {
+  private def handleStateDistributedCommand(msg: DistributionComplete)(responseFactory: DistributionCompleteResult => Any) = {
     val DistributionComplete(version, exp, msgId) = msg
     stateChangesProcessed.get(version) match {
       case None | Some(Right(_)) =>
@@ -193,7 +199,7 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
     log.error(ex, "Satellite state={}, entity={} {}", settings.name, versionedId, msg)
   }
 
-  private def handleStateChangeCommand(msg: StateChange[I])(responseFactory: (StateChangeResult) => Any)
+  private def handleStateChangeCommand(msg: StateChange[I])(responseFactory: StateChangeResult => Any)
   : Unit = {
     if (stateChangeHandlingInProgress) {
       logg("Got StateChange, but stashing.", msg.versionedId)
@@ -246,10 +252,10 @@ class SatelliteStateActor[I, V](settings: Settings[I, V])(implicit classTag: Cla
 object SatelliteStateActor {
 
 
-  def startSharded[I, V](settings: Settings[I, V],
-                         propsMapper: Props => Props = identity,
-                         receptionist: Option[BgClusteringReceptionistExtension] = None)
-                        (implicit shardingExt: BgClusteringShardingExtension, classTag: ClassTag[I])
+  def startSharded[I <: AnyRef, V](settings: Settings[I, V],
+                                   propsMapper: Props => Props = identity,
+                                   receptionist: Option[BgClusteringReceptionistExtension] = None)
+                                  (implicit shardingExt: BgClusteringShardingExtension, classTag: ClassTag[I])
   : Protocol[I, V]
   = {
     val ref = shardingExt.start(s"satellite-state-${settings.name}",
@@ -267,18 +273,18 @@ object SatelliteStateActor {
     => (VersionedId(a("versionedId")).id, a)
   }
 
-  def getRemote[I](name: String, serviceId: BgServiceId)
-                  (implicit clientExt: BgClusteringClientExtension,
-                   simpleSerializer: SimpleSerializer)
+  def getRemote[I <: AnyRef](name: String, serviceId: BgServiceId)
+                            (implicit clientExt: BgClusteringClientExtension,
+                             simpleSerializer: Serialization)
   : SatelliteProtocol[I] =
     new RemoteSatelliteProtocol(clientExt.client(serviceId).toActorTarget(getRemoteName(name)))
 
 
   private def getRemoteName(name: String): String = s"/user/satellite-state-$name"
 
-  trait Protocol[I, V] extends ProtocolGetters[V] with
+  trait Protocol[I <: AnyRef, V] extends ProtocolGetters[V] with
     SatelliteProtocol[I] {
-    def asRemote(implicit simpleSerializer: SimpleSerializer): SatelliteProtocol[I]
+    def asRemote(implicit simpleSerializer: Serialization): SatelliteProtocol[I]
   }
 
   private trait AsyncHandleResponse
@@ -294,9 +300,9 @@ object SatelliteStateActor {
     * @tparam I incoming type
     * @tparam V stored type
     */
-  final case class Settings[I, V](name: String,
-                                  handler: SatelliteValueHandler[I, V],
-                                  listener: SatelliteStateListener[V])
+  final case class Settings[I <: AnyRef, V](name: String,
+                                            handler: SatelliteValueHandler[I, V],
+                                            listener: SatelliteStateListener[V])
 
   case class StateChangedEvent[V](versionedId: VersionedId,
                                   handlerValue: JsonAnyWrapper,
@@ -312,11 +318,11 @@ object SatelliteStateActor {
   /**
     * An protocol for [[SatelliteStateActor]]
     */
-  private final class ProtocolImpl[I, V] private[sd](protected[sd] val actorTarget: ActorTarget, shardName: String)
+  private final class ProtocolImpl[I <: AnyRef, V] private[sd](protected[sd] val actorTarget: ActorTarget, shardName: String)
     extends Protocol[I, V] {
 
 
-    override def asRemote(implicit simpleSerializer: SimpleSerializer): SatelliteProtocol[I] = new RemoteSatelliteProtocol(actorTarget)
+    override def asRemote(implicit simpleSerializer: Serialization): SatelliteProtocol[I] = new RemoteSatelliteProtocol(actorTarget)
 
     /**
       * distributes state change
@@ -339,9 +345,9 @@ object SatelliteStateActor {
     }
   }
 
-  private case class AsyncHandleResult[I, V](originalSender: ActorRef, originalMessage: StateChange[I], result: HandlerResult[V], responseFactory: (StateChangeResult) => Any) extends AsyncHandleResponse
+  private case class AsyncHandleResult[I <: AnyRef, V](originalSender: ActorRef, originalMessage: StateChange[I], result: HandlerResult[V], responseFactory: StateChangeResult => Any) extends AsyncHandleResponse
 
-  private case class AsyncHandleFailed[I, V](originalSender: ActorRef, originalMessage: StateChange[I], ex: Exception, responseFactory: (StateChangeResult) => Any) extends AsyncHandleResponse
+  private case class AsyncHandleFailed[I <: AnyRef, V](originalSender: ActorRef, originalMessage: StateChange[I], ex: Exception, responseFactory: StateChangeResult => Any) extends AsyncHandleResponse
 
   private object StateChangedEvent {
 

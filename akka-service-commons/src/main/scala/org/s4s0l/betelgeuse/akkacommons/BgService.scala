@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,9 +27,12 @@ import java.net.URI
 import java.util.UUID
 
 import akka.Done
+import akka.actor.CoordinatedShutdown.UnknownReason
 import akka.actor.{ActorSystem, CoordinatedShutdown, Props}
+import akka.serialization.{Serialization, SerializationExtension}
 import akka.stream.{ActorMaterializer, Materializer}
 import com.typesafe.config.{Config, ConfigFactory}
+import org.s4s0l.betelgeuse.akkacommons.serialization.{HttpMarshalling, JacksonJsonSerializer}
 import org.s4s0l.betelgeuse.akkacommons.utils.EventStreamListener
 
 import scala.collection.mutable
@@ -78,7 +87,9 @@ trait BgService {
          |${BgServiceExtension.configBaseKey}.externalAddress = ${serviceInfo.externalAddress}
          |""".stripMargin
     LOGGER.info(s"Customize config with: \n$sysName\n and fallback to service.conf")
-    ConfigFactory.parseString(sysName).withFallback(ConfigFactory.parseResources("service.conf"))
+    ConfigFactory.parseString(sysName)
+      .withFallback(ConfigFactory.parseResources("service.conf"))
+      .withFallback(ConfigFactory.parseResources("serialization-jackson.conf"))
   }
 
   def configFile: String = s"$systemName.conf"
@@ -98,6 +109,12 @@ trait BgService {
   implicit lazy val executor: ExecutionContextExecutor = system.dispatcher
 
   implicit lazy val materializer: Materializer = ActorMaterializer()
+
+  implicit lazy val serializer: Serialization = SerializationExtension(system)
+
+  implicit lazy val serializationJackson: JacksonJsonSerializer = new JacksonJsonSerializer()
+
+  implicit lazy val httpMarshalling: HttpMarshalling = new HttpMarshalling(serializationJackson)
 
   def serviceExtension: BgServiceExtension = BgServiceExtension.get(system)
 
@@ -126,7 +143,7 @@ trait BgService {
 
   def shutdown(): Unit = {
     LOGGER.info("Ensuring coordinated shutdown is triggered...")
-    Await.result(CoordinatedShutdown(system).run(), 180 seconds)
+    Await.result(CoordinatedShutdown(system).run(UnknownReason), 180 seconds)
     Await.result(system.whenTerminated, 180 seconds)
     LOGGER.info("Actor system terminated.")
   }

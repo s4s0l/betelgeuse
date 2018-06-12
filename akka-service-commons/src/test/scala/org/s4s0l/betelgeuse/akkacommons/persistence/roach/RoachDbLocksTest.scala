@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -215,7 +221,7 @@ class RoachDbLocksTest extends TestKit(ActorSystem("a"))
           assert(dbLocks.isLocksTablePresent)
           dbLocks.dropLocksTable
         }
-        AllUtils.tryNTimes(10) {
+        AllUtils.tryNTimes("Delete me locks", 10) {
           localTxExecutor.doInTx { implicit session =>
             DbRoachTest.dropDatabase("roach_db_locks_test")
           }
@@ -225,7 +231,7 @@ class RoachDbLocksTest extends TestKit(ActorSystem("a"))
   }
 
   override def cleanUp(db: BetelgeuseDb): Unit = {
-    AllUtils.tryNTimes(2) {
+    AllUtils.tryNTimes("RoachDbLocksTestDropLocksTestDb", 2) {
       db.localTx { implicit session =>
         dropDatabase("roach_db_locks_test")(session)
       }
@@ -234,7 +240,7 @@ class RoachDbLocksTest extends TestKit(ActorSystem("a"))
   }
 
   override protected def withFixture(test: NoArgTest): Outcome = {
-    AllUtils.tryNTimes(2) {
+    AllUtils.tryNTimes("RoachDbLocksTestDropLocksTestDb", 2) {
       db.localTx { implicit session =>
         dropDatabase("roach_db_locks_test")(session)
       }

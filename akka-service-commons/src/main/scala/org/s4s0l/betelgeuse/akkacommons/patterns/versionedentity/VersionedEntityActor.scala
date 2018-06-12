@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +32,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntity
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, JsonAnyWrapper}
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
-import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, QA, TimeoutShardedActor}
+import org.s4s0l.betelgeuse.akkacommons.utils.{ActorSerialization, ActorTarget, QA, TimeoutShardedActor}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}
@@ -43,6 +49,7 @@ import scala.language.{implicitConversions, postfixOps}
 class VersionedEntityActor[T](settings: Settings[T]) extends Actor
   with ActorLogging
   with PersistentShardedActor
+  with ActorSerialization
   with TimeoutShardedActor {
 
   private var currentVersion: Int = 0

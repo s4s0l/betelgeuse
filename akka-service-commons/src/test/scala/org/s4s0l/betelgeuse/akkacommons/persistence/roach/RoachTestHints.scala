@@ -14,26 +14,15 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.patterns.message;
+package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import akka.persistence.{BuiltInSerializerHints, TestPayload}
 
 /**
- * @author Marcin Wielgus
- */
-public class PayloadSerializer extends StdSerializer<Payload<Object>> {
-
-    public PayloadSerializer() {
-        super(Payload.class, false);
-    }
-
-
-    @Override
-    public void serialize(Payload value, JsonGenerator gen, SerializerProvider provider) {
-        Payload.serialize(value, gen, provider);
-    }
-
-
+  * @author Marcin Wielgus
+  */
+class RoachTestHints extends BuiltInSerializerHints {
+  override def useBinary: PartialFunction[Any, Boolean] = super.useBinary orElse {
+    case _:TestPayload => true
+  }
 }

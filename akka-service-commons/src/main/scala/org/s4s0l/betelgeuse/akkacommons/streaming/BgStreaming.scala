@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,12 +31,11 @@ trait BgStreaming extends BgService {
 
   implicit def streamingExtension: BgStreamingExtension = BgStreamingExtension(system)
 
-  def createKafkaAccess[K, V](name: String)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = streamingExtension.defaultSerializers): StreamingAccess[K, V] = getKafkaAccessForConfigKey(s"streaming.context.additional.kafka.$name")
+  def createKafkaAccess[K <: AnyRef, V <: AnyRef](name: String)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = streamingExtension.defaultSerializers): StreamingAccess[K, V] = getKafkaAccessForConfigKey(s"streaming.context.additional.kafka.$name")
 
-  def createDefaultKafkaAccess[K, V]()(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = streamingExtension.defaultSerializers): StreamingAccess[K, V] = getKafkaAccessForConfigKey[K, V]("streaming.context")(k, v, serializer)
+  private def getKafkaAccessForConfigKey[K <: AnyRef, V <: AnyRef](name: String)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers): StreamingAccess[K, V] = BgStreamingExtension(system).buildStreamingAccess[K, V](config.getConfig(name))
 
-
-  private def getKafkaAccessForConfigKey[K, V](name: String)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers): StreamingAccess[K, V] = BgStreamingExtension(system).buildStreamingAccess[K, V](config.getConfig(name))
+  def createDefaultKafkaAccess[K <: AnyRef, V <: AnyRef]()(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = streamingExtension.defaultSerializers): StreamingAccess[K, V] = getKafkaAccessForConfigKey[K, V]("streaming.context")(k, v, serializer)
 
 
   abstract override def customizeConfiguration: Config = {

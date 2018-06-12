@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,12 +24,12 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistence
-import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 
 /**
   * @author Maciej Flak
   */
-trait BgPersistenceRoach extends BgPersistence with BgSerializationJackson {
+trait BgPersistenceRoach
+  extends BgPersistence {
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgPersistenceRoach])
 

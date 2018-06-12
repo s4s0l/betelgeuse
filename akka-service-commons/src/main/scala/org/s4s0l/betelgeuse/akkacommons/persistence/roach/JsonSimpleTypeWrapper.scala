@@ -18,16 +18,15 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonInclude.Include
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 
 /**
   * @author Marcin Wielgus
   */
 @JsonInclude(Include.NON_EMPTY)
 case class JsonSimpleTypeWrapper(
-                                  string: Option[String],
-                                  int: Option[Int],
-                                  long: Option[Long],
-                                  bool: Option[Boolean],
+                                  string: Option[String] = None,
+                                  int: Option[Int] = None,
+                                  long: Option[Long] = None,
+                                  bool: Option[Boolean] = None,
                                 )
   extends RoachSerializerHints.HintWrapped

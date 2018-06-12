@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,6 +40,7 @@ import scalikejdbc.{DBSession, _}
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
+import scala.language.postfixOps
 
 /**
   * @author Marcin Wielgus
@@ -58,7 +65,7 @@ class CrateDbLocks(val schema: String = "locks", locksTable: String = "locks")
   private val unsafeLocksTable = SQLSyntax.createUnsafely(locksTable)
 
   override def initLocks(txExecutor: TxExecutor): Unit = {
-    tryNTimes(5, Set(classOf[PSQLException]),
+    tryNTimes("InitLocks", 5, Set(classOf[PSQLException]),
       tryNTimesExceptionFactory(s"Lock mechanism initiation failed. Holder $uuid")) {
       txExecutor.doInTx { implicit DBSession =>
         ensureLocksTableExists
@@ -106,11 +113,14 @@ class CrateDbLocks(val schema: String = "locks", locksTable: String = "locks")
       case _: DbLocksSingle => runLockedInternal()
       case DbLocksRolling(duration, _, _, lockTimeInitial) => runLockedInternal(
         Some(
-          scheduler.schedule(duration - lockTimeInitial, duration, () =>
-            if (!isFinished) {
-              lock(lockName, txExecutor, settings)
-            }))
-      )
+          scheduler.schedule(duration - lockTimeInitial, duration, new Runnable {
+            override def run(): Unit = {
+              if (!isFinished) {
+                lock(lockName, txExecutor, settings)
+              }
+            }
+          })
+        ))
     }
 
   }
@@ -173,7 +183,7 @@ class CrateDbLocks(val schema: String = "locks", locksTable: String = "locks")
   }
 
   def lock(lockName: String, txExecutor: TxExecutor, lockSettings: DbLocksSettings = DbLocksSingle()): Date = {
-    tryNTimes(lockSettings.lockAttemptCount,
+    tryNTimes(s"Lock:$lockName", lockSettings.lockAttemptCount,
       Set(classOf[Exception]),
       tryNTimesExceptionFactory(s"Taking lock failed. Holder $uuid"),
       (lockSettings.lockAttemptInterval / 2).toMillis) {

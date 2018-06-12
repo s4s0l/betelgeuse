@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,12 +18,6 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
-
-/*
- * Copyright© 2017 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity
@@ -34,7 +34,6 @@ import org.s4s0l.betelgeuse.akkacommons.http.rest.RestDomainObjectTest.SomeValue
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Settings
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.JournalReader
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
-import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 
 import scala.concurrent.duration._
@@ -54,7 +53,7 @@ class VersionedEntityRestProtocolTest extends
   implicit val self: ActorRef = ActorRef.noSender
 
   private val aService = testWith(new BgPersistenceJournalRoach
-    with BgClusteringSharding with BgSerializationJackson {
+    with BgClusteringSharding {
     private implicit val toInt: String => Int = x => x.toInt
     private lazy val versionedEntity = VersionedEntityActor.startSharded[SomeValue](Settings("rest-proto-sample"))
     lazy val restProtocol: VersionedEntityRestProtocol[SomeValue, Int] = createProtocol("rest-proto-sample", 1, versionedEntity)

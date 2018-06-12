@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +27,6 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClient
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateActor, OriginStateDistributor, SatelliteProtocol}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 
 import scala.concurrent.duration.{FiniteDuration, _}
 
@@ -30,25 +35,24 @@ import scala.concurrent.duration.{FiniteDuration, _}
   */
 trait BgOriginStateService
   extends BgClusteringSharding
-    with BgSerializationJackson
     with BgClusteringClient {
 
 
-  def createOriginState[I](name: String,
-                           distributor: OriginStateDistributor.Protocol[I],
-                           validator: (VersionedId, I) => I = (_: VersionedId, a: I) => a,
-                           stateDistributionRetryInterval: FiniteDuration = 30.seconds)
+  def createOriginState[I <: AnyRef](name: String,
+                                     distributor: OriginStateDistributor.Protocol[I],
+                                     validator: (VersionedId, I) => I = (_: VersionedId, a: I) => a,
+                                     stateDistributionRetryInterval: FiniteDuration = 30.seconds)
   : OriginStateActor.Protocol[I] = {
     OriginStateActor.startSharded(OriginStateActor.Settings(
       name, distributor, validator, stateDistributionRetryInterval))
   }
 
-  def createLocalDistribution[I](name: String, satelliteStates: Map[String, SatelliteProtocol[I]])
+  def createLocalDistribution[I <: AnyRef](name: String, satelliteStates: Map[String, SatelliteProtocol[I]])
   : OriginStateDistributor.Protocol[I] = {
     OriginStateDistributor.start(OriginStateDistributor.Settings(name, satelliteStates))
   }
 
-  def createRemoteDistribution[I](name: String, services: Seq[BgServiceId])
+  def createRemoteDistribution[I <: AnyRef](name: String, services: Seq[BgServiceId])
   : OriginStateDistributor.Protocol[I] = {
     OriginStateDistributor.startRemote(name, services)
   }

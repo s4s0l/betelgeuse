@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,12 +73,12 @@ object DbRoachTest {
   }
 
   def cleanUp(schemaName: String)(db: BetelgeuseDb): Unit = {
-    AllUtils.tryNTimes(2) {
+    AllUtils.tryNTimes("DbRoachTestCleanupLocksDelete", 4) {
       db.localTx { implicit session =>
         deleteAllRecords("locks", "locks")(session)
       }
     }
-    AllUtils.tryNTimes(2) {
+    AllUtils.tryNTimes("DbRoachTestCleanupDbDrop", 4) {
       db.localTx { implicit session =>
         dropDatabase(schemaName)(session)
       }

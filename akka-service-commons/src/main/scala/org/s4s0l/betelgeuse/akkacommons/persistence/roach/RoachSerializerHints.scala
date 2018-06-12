@@ -18,7 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import akka.serialization.Serialization
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachSerializerHints.HintWrapped
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer, SimpleSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
 
 import scala.language.implicitConversions
 

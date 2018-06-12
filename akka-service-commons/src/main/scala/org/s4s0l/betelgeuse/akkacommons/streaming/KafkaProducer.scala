@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 package org.s4s0l.betelgeuse.akkacommons.streaming
 
-import akka.{Done, NotUsed}
-import akka.kafka.{ProducerMessage, ProducerSettings}
 import akka.kafka.scaladsl.Producer
+import akka.kafka.{ProducerMessage, ProducerSettings}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.{Done, NotUsed}
 import org.apache.kafka.clients.producer.ProducerRecord
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -28,14 +28,14 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * @author Maciej Flak
   */
-trait KafkaProducer[K,V]{
+trait KafkaProducer[K <: AnyRef, V <: AnyRef] {
   def sink(shared: Boolean=false): Sink[ProducerRecord[K, V], Future[Done]]
   def flow[P](shared: Boolean=false): Flow[ProducerMessage.Message[K, V, P], ProducerMessage.Result[K, V, P], NotUsed]
   def single(topic: String, elems: List[V]): Future[Done]
 }
 
 
-class KafkaProducerImpl[K, V] private[streaming](producerSettings: ProducerSettings[K, V])(implicit ec: ExecutionContext, mat: ActorMaterializer) extends KafkaProducer[K,V]{
+class KafkaProducerImpl[K <: AnyRef, V <: AnyRef] private[streaming](producerSettings: ProducerSettings[K, V])(implicit ec: ExecutionContext, mat: ActorMaterializer) extends KafkaProducer[K, V] {
 
   private val shared_producer = producerSettings.createKafkaProducer()
 

@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, Props}
 import akka.persistence.AtLeastOnceDelivery
+import akka.serialization.Serialization
 import akka.util.Timeout
 import com.fasterxml.jackson.annotation.JsonIgnore
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
@@ -26,7 +27,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Proto
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor._
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, SimpleSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.QA._
 import org.s4s0l.betelgeuse.utils.AllUtils.{listOfFuturesToFutureOfList, _}
 
@@ -43,7 +44,7 @@ import scala.language.postfixOps
   *
   * @author Marcin Wielgus
   */
-class OriginStateDistributor[T](settings: Settings[T]) extends Actor with ActorLogging {
+class OriginStateDistributor[T <: AnyRef](settings: Settings[T]) extends Actor with ActorLogging {
 
   import context.dispatcher
 
@@ -106,10 +107,10 @@ object OriginStateDistributor {
     * @param name     the name must be same at origin and at satellite ends
     * @param services list of remote services to which changes will be distributed
     */
-  def startRemote[T](name: String, services: Seq[BgServiceId])
-                    (implicit clientExt: BgClusteringClientExtension,
-                     actorRefFactory: ActorRefFactory,
-                     simpleSerializer: SimpleSerializer)
+  def startRemote[T <: AnyRef](name: String, services: Seq[BgServiceId])
+                              (implicit clientExt: BgClusteringClientExtension,
+                               actorRefFactory: ActorRefFactory,
+                               simpleSerializer: Serialization)
   : OriginStateDistributor.Protocol[T] = {
     val satellites: Map[String, SatelliteProtocol[T]] = services.map { it =>
       it.systemName -> SatelliteStateActor.getRemote[T](name, it)
@@ -120,14 +121,14 @@ object OriginStateDistributor {
   /**
     * creates props for actor
     */
-  def start[T](settings: Settings[T], propsMapper: Props => Props = identity)
-              (implicit actorSystem: ActorRefFactory)
+  def start[T <: AnyRef](settings: Settings[T], propsMapper: Props => Props = identity)
+                        (implicit actorSystem: ActorRefFactory)
   : Protocol[T] = {
     val ref = actorSystem.actorOf(Props(new OriginStateDistributor(settings)))
     new ProtocolImpl[T](ref)
   }
 
-  final case class Settings[T](name: String, satelliteStates: Map[String, SatelliteProtocol[T]])
+  final case class Settings[T <: AnyRef](name: String, satelliteStates: Map[String, SatelliteProtocol[T]])
 
   trait Protocol[T] {
 

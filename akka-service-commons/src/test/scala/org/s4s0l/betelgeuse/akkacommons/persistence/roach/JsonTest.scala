@@ -16,7 +16,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
-import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializer, SimpleSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
 import org.s4s0l.betelgeuse.akkacommons.test.DbRoachTest
 import org.scalatest.FeatureSpec
 import scalikejdbc._
@@ -26,7 +26,7 @@ import scalikejdbc._
   */
 class JsonTest extends FeatureSpec with DbRoachTest {
 
-  val serializer: SimpleSerializer = new JacksonJsonSerializer()
+  val serializer = new JacksonJsonSerializer()
   val simpleJsonValue = Map(
     "one" -> "one_value",
     "two" -> Map(
@@ -38,7 +38,7 @@ class JsonTest extends FeatureSpec with DbRoachTest {
   feature("Simple insert and select of a json value") {
     scenario("al lot of data") {
       localTx { implicit session =>
-        val serialized: String = serializer.toString(simpleJsonValue)
+        val serialized: String = serializer.simpleToString(simpleJsonValue)
         sql"insert into json_test (avalue) values ($serialized)".update().apply()
         val (id, jsonString, value) =
           sql"""
@@ -56,7 +56,7 @@ class JsonTest extends FeatureSpec with DbRoachTest {
             )
           }).single().apply().get
         assert(value == simpleJsonValue("two").asInstanceOf[Map[String, String]]("two_one"))
-        assert(serializer.fromString[Map[String, Any]](jsonString) == simpleJsonValue)
+        assert(serializer.simpleFromString[Map[String, Any]](jsonString) == simpleJsonValue)
       }
 
     }
