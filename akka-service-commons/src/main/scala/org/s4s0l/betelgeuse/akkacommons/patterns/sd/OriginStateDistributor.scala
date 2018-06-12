@@ -64,9 +64,11 @@ class OriginStateDistributor[T <: AnyRef](settings: Settings[T]) extends Actor w
       val distributionResult = stateChangeResult.flatMap { results =>
         if (results.exists(_.isNotOk)) {
           //At least one failed so we fail all
+          val msgs = results.filter(_.isNotOk).map(_.asInstanceOf[NotOkResult[_, _]])
+            .map(_.ex.getMessage).mkString(" AND ")
           Future.successful(
             OriginStateChangedNotOk(deliveryId,
-              new Exception("Some distributions failed", results.asInstanceOf[NotOkResult[_, _]].ex)))
+              new Exception(s"Some distributions failed: [$msgs]")))
         } else if (results.exists(_.isInstanceOf[StateChangeOkWithValidationError])) {
           //at least one has validation result we map them and send back
           val allValidationErrors = results.filter(_.isInstanceOf[StateChangeOkWithValidationError])
