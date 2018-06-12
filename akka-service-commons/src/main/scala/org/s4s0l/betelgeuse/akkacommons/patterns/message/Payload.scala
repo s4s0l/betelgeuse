@@ -110,7 +110,7 @@ object Payload {
       case a if a.getClass == classOf[String] =>
         Payload(a.asInstanceOf[String]).asInstanceOf[Payload[T]]
       case a if a.getClass == classOf[Array[Byte]] =>
-        Payload(a.asInstanceOf[Array[Byte]]).asInstanceOf[Payload[T]]
+        new Payload("array", () => ByteString(a.asInstanceOf[Array[Byte]]))
       case a if a.getClass == classOf[ByteString] =>
         Payload(a.asInstanceOf[ByteString]).asInstanceOf[Payload[T]]
       case _ =>
@@ -121,11 +121,7 @@ object Payload {
 
   implicit def apply(bytes: ByteString): Payload[ByteString] = new Payload("bytes", () => bytes)
 
-  @deprecated("Do not use arrays as payload use byte string", since = "2018.06.12")
-  implicit def toArray(bytes: ByteString): Payload[Array[Byte]] = new Payload("array", () => bytes)
-
-  @deprecated("Do not use arrays as payload use byte string", since = "2018.06.12")
-  implicit def apply(bytes: Array[Byte]): Payload[Array[Byte]] = new Payload("array", () => ByteString(bytes))
+  implicit def apply(bytes: Array[Byte]): Payload[ByteString] = new Payload("bytes", () => ByteString(bytes))
 
   implicit def apply(string: String): Payload[String] = new Payload("string", () => ByteString(string.getBytes("utf8")))
 
