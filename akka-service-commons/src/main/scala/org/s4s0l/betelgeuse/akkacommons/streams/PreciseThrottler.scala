@@ -38,13 +38,13 @@ object PreciseThrottler {
 
 
   implicit class PreciseThrottlerSource[T, Mat](wrapped: Source[T, Mat]) {
-    def viaPreciseThrottler(delay: FiniteDuration): Source[T, Mat] = {
-      wrapped.via(throttleFixed(delay))
+    def viaPreciseThrottler(delay: FiniteDuration, buffer: Int): Source[T, Mat] = {
+      wrapped.via(throttleFixed(delay, buffer))
     }
 
-    def viaPreciseThrottlerAkka(delay: FiniteDuration,
+    def viaPreciseThrottlerAkka(delay: FiniteDuration, buffer: Int,
                                 initialDelay: FiniteDuration = Duration.Zero): Source[T, Mat] = {
-      wrapped.via(throttleLightAkka(delay, initialDelay))
+      wrapped.via(throttleLightAkka(delay, initialDelay, buffer))
     }
   }
 
@@ -56,7 +56,7 @@ object PreciseThrottler {
   private type FixedScheduler = AsyncCallback[Long] => Cancelable
 
   private[PreciseThrottler] val deNano: Long = 1000000
-  private[PreciseThrottler] val tickNano: Long = (20d * deNano).toLong
+
 
   private[PreciseThrottler] val tickers = mutable.Map[Long, Ticker]()
 
@@ -90,7 +90,7 @@ object PreciseThrottler {
   }
 
 
-  def throttleFixed[A](delay: FiniteDuration): GraphStage[FlowShape[A, A]] = {
+  def throttleFixed[A](delay: FiniteDuration, buffer: Int): GraphStage[FlowShape[A, A]] = {
     val asMillis = delay.toMillis
     val ticker = tickers.synchronized {
       tickers.getOrElse(asMillis, {
@@ -100,11 +100,11 @@ object PreciseThrottler {
 
     }
     val shd: FixedScheduler = ticker.register
-    new FixedThrottle[A](shd)
+    new FixedThrottle[A](delay.toMillis, shd, buffer)
   }
 
   def throttleLightAkka[A](delay: FiniteDuration,
-                           initialDelay: FiniteDuration
+                           initialDelay: FiniteDuration, buffer: Int
                           ): GraphStage[FlowShape[A, A]] = {
     implicit val ec: ExecutionContext = SameThreadExecutionContext
     val shd: FixedScheduler = cb => {
@@ -115,7 +115,7 @@ object PreciseThrottler {
       )
       () => ret.cancel()
     }
-    new FixedThrottle[A](shd)
+    new FixedThrottle[A](delay.toMillis, shd, buffer)
   }
 
 
@@ -217,14 +217,14 @@ object PreciseThrottler {
   }
 
 
-  private[PreciseThrottler] case class FixedThrottle[A](scheduler: FixedScheduler) extends GraphStage[FlowShape[A, A]] {
+  private[PreciseThrottler] case class FixedThrottle[A](intervalMillis: Long, scheduler: FixedScheduler, bufferSize: Int) extends GraphStage[FlowShape[A, A]] {
 
     private val in = Inlet[A]("Map.in")
     private val out = Outlet[A]("Map.out")
     override val shape: FlowShape[A, A] = FlowShape.of(in, out)
 
     def createLogic(inheritedAttributes: Attributes): GraphStageLogic = {
-      val buffer = new FiniteQueue[A](100)
+      val buffer = new FiniteQueue[A](bufferSize)
       new GraphStageLogic(shape) {
 
         def closed: Boolean = isClosed(in)
@@ -251,10 +251,9 @@ object PreciseThrottler {
         setHandler(out, new OutHandler {
 
           override def onPull(): Unit = {
-            if (!closed && !hasBeenPulled(in)) {
+            if (!closed && !hasBeenPulled(in) && !buffer.isFull) {
               //this should not happen
               LOGGER.warn("This should not happen, contact developers")
-              pull(in)
             }
 
           }
@@ -262,31 +261,23 @@ object PreciseThrottler {
 
         var lastMessageSend: Long = -1
 
+        private def dequeueAndPush(fireTimeNanos: Long): Unit = {
+          push(out, buffer.dequeue())
+          lastMessageSend = fireTimeNanos
+          if (!closed && !hasBeenPulled(in)) {
+            pull(in)
+          }
+        }
+
+
         def tick(fireTimeNanos: Long): Unit = {
           if (closed && buffer.isEmpty) {
             completeStage()
           }
-          if (isAvailable(out)) {
-            if (lastMessageSend == -1) {
-              //first message, always only one
-              if (buffer.nonEmpty) {
-                push(out, buffer.dequeue())
-                lastMessageSend = fireTimeNanos
-                if (!closed)
-                  pull(in)
-              }
-            } else {
-              val messagesToBeSend: Long = (fireTimeNanos - lastMessageSend) / PreciseThrottler.tickNano
-              if (messagesToBeSend >= 0) {
-                push(out, buffer.dequeue())
-                lastMessageSend = fireTimeNanos
-                if (!closed)
-                  pull(in)
-                //todo ??? we should leave info for onPull to catch up when  messagesToBeSend > 1
-              } else {
-                LOGGER.warn("Upstream is too slow, skipping tick.")
-              }
-            }
+          if (isAvailable(out) && buffer.nonEmpty) {
+            //              val messagesToBeSend: Long = Math.max(1, (fireTimeNanos - lastMessageSend) / (intervalMillis * deNano))
+            //todo ??? we should leave info for onPull to catch up when  messagesToBeSend > 1
+            dequeueAndPush(fireTimeNanos)
             if (closed && buffer.isEmpty) {
               completeStage()
             }

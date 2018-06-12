@@ -14,18 +14,11 @@
  *  limitations under the License.
  */
 
-/*
- * Copyright© 2017 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
-
 package org.s4s0l.betelgeuse.akkacommons.tools
-
-import javax.script.{ScriptEngine, ScriptEngineManager}
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.util.Timeout
+import javax.script.{ScriptEngine, ScriptEngineManager}
 import org.s4s0l.betelgeuse.akkacommons.tools.ScalaScriptEngineActor.Protocol.{Eval, EvalNotOk, EvalOk, EvalResult}
 import org.s4s0l.betelgeuse.akkacommons.tools.ScalaScriptEngineActor.Settings
 import org.s4s0l.betelgeuse.akkacommons.utils.QA.{Uuid, UuidQuestion}

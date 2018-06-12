@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-/*
- * Copyright© 2017 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
-
 package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
 import akka.actor.{ActorRef, Props}
