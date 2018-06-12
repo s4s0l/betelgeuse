@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,15 +45,15 @@ trait TryNTimes {
   def tryNTimesDefaultExceptionFactory(): ((Int, Option[Exception])) => Exception =
     tryNTimesExceptionFactory("Try-N-Times failed")
 
-  def tryNTimesMessage[T](
-                           count: Int,
-                           message: String,
-                           nonFatalExceptions: Set[Class[_ <: Exception]] = Set(classOf[Exception]),
-                           waitTimeMs: Long = 1000
+  def tryNTimesMessage[T](operationName: String,
+                          count: Int,
+                          message: String,
+                          nonFatalExceptions: Set[Class[_ <: Exception]] = Set(classOf[Exception]),
+                          waitTimeMs: Long = 1000
                          )(code: => T): T =
-    tryNTimes(count, nonFatalExceptions, tryNTimesExceptionFactory(message), waitTimeMs)(code)
+    tryNTimes(operationName, count, nonFatalExceptions, tryNTimesExceptionFactory(message), waitTimeMs)(code)
 
-  def tryNTimes[T](
+  def tryNTimes[T](operationName: String,
                     count: Int,
                     nonFatalExceptions: Set[Class[_ <: Exception]] = Set(classOf[Exception]),
                     exceptionProducer: ((Int, Option[Exception])) => Exception = tryNTimesDefaultExceptionFactory(),
@@ -67,14 +73,13 @@ trait TryNTimes {
         case e: Exception if isNonFatal(e) =>
           lastException = e
           if (LOGGER.isDebugEnabled) {
-            LOGGER.debug(s"Unable to complete in $i attempt out of $count. Because got: ${e.getClass} : ${e.getMessage}. This is non fatal", e)
-          } else {
-            LOGGER.info(s"Unable to complete in $i attempt out of $count. Because got: ${e.getClass} : ${e.getMessage}. This is non fatal")
+            LOGGER.debug(s"Unable to complete [$operationName] in  $i attempt out of $count. Because got: ${e.getClass} : ${e.getMessage}. This is non fatal", e)
           }
+          LOGGER.warn(s"Unable to complete [$operationName] in $i attempt out of $count. Because got: ${e.getClass} : ${e.getMessage}. This is non fatal")
           if (i != count)
             Thread.sleep(waitTimeMs + new Random().nextInt(waitTimeMs.toInt))
         case x: Exception =>
-          LOGGER.warn(s"Aborting on $i attempt because of exception", x)
+          LOGGER.warn(s"Aborting [$operationName] on $i attempt because of exception", x)
           throw x
       }
     }

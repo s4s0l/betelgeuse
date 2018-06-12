@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +29,7 @@ import akka.{Done, NotUsed}
 import com.typesafe.config.ConfigException
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.s4s0l.betelgeuse.akkacommons.serialization.{BgSerialization, JacksonJsonSerializable, JacksonJsonSerializer}
+import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
 import org.s4s0l.betelgeuse.akkacommons.streaming.BgStreamingTest._
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
@@ -40,7 +46,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
   private val LOGGER = LoggerFactory.getLogger(getClass)
 
-  private val aService = testWith(new BgStreaming with BgSerialization {}
+  private val aService = testWith(new BgStreaming {}
   )
   aService.to = 5.seconds
 
@@ -246,7 +252,7 @@ class BgStreamingTest extends BgTestService with ScalaFutures with GivenWhenThen
 
 object BgStreamingTest {
 
-  case class Apple(a: String) extends JacksonJsonSerializable
+  case class Apple(a: String)
 
 }
 

@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +27,6 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClient
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateActor, OriginStateDistributor, SatelliteProtocol}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
-import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 
 import scala.concurrent.duration.{FiniteDuration, _}
 
@@ -30,7 +35,6 @@ import scala.concurrent.duration.{FiniteDuration, _}
   */
 trait BgOriginStateService
   extends BgClusteringSharding
-    with BgSerializationJackson
     with BgClusteringClient {
 
 

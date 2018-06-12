@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,7 +69,7 @@ object DbCrateTest {
 
   def cleanUp(schemaName: String)(implicit session: DBSession): Unit = {
     deleteAllTablesInSchema(schemaName)(session)
-    AllUtils.tryNTimes(2) {
+    AllUtils.tryNTimes("DbCrateTestCleanUp", 2) {
       //see https://github.com/crate/crate-jdbc/issues/237
       deleteAllRecords("locks", "locks")(session)
     }

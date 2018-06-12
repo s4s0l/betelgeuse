@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +23,14 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.versioning
 
-import java.util.concurrent.TimeUnit
-import javax.sql.DataSource
-
 import com.typesafe.config.Config
+import javax.sql.DataSource
 import org.flywaydb.core.Flyway
 import org.s4s0l.betelgeuse.utils.AllUtils._
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.concurrent.{Await, Future, duration}
-import scala.concurrent.duration._
 
 /**
   * @author Marcin Wielgus
@@ -75,7 +77,7 @@ class FlyTrackPersistenceSchemaUpdater(config: Config) extends PersistenceSchema
     }
 
   private def validateConnection(dataSource: DataSource): Unit =
-    tryNTimesMessage(connectionAcquireRetries,
+    tryNTimesMessage(s"ConnectionValidation", connectionAcquireRetries,
       "Before schema update connection validation failed",
       Set(classOf[Exception]), connectionAcquireDelay) {
       validateConnectionOnce(dataSource)

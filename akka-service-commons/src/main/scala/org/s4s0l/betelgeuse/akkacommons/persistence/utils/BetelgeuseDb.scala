@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -112,7 +118,7 @@ class BetelgeuseDb(val config: Config)(implicit executor: ExecutionContext, sche
       import AllUtils._
       val lockDuration = dbConfig.duration("migration.lockDuration").getOrElse(1 minute)
       val lockAttemptCount = dbConfig.int("migration.lockAttemptCount").getOrElse(35)
-      val lockAttemptInterval = dbConfig.duration("migration.lockAttemptInterval").getOrElse(1 second)
+      val lockAttemptInterval = dbConfig.duration("migration.lockAttemptInterval").getOrElse(2 second)
       val preLockFinishProlong = dbConfig.duration("migration.preLockFinishProlong").getOrElse(500 millis)
 
       locksSupport.runLocked(s"FlywayMigration", localTxExecutor, DbLocksSettings.DbLocksRolling(lockDuration, lockAttemptCount, lockAttemptInterval, preLockFinishProlong)) { implicit session =>

@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,12 +18,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/*
- * Copyright© 2017 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
  */
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.sd
@@ -38,7 +38,6 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntity
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedEntityRestProtocol, VersionedId}
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.JournalReader
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
-import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerializationJackson
 import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 
 import scala.concurrent.duration._
@@ -58,7 +57,7 @@ class OriginStatePublishingRestProtocolTest extends
   implicit val self: ActorRef = ActorRef.noSender
 
   private val aService = testWith(new BgPersistenceJournalRoach
-    with BgClusteringSharding with BgSerializationJackson {
+    with BgClusteringSharding {
   })
 
 

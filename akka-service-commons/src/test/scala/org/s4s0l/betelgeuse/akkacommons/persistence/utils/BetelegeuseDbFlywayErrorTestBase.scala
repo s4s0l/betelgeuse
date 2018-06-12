@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +28,6 @@ import akka.testkit.TestKit
 import com.miguno.akka.testing.VirtualTime
 import com.typesafe.config.{Config, ConfigFactory}
 import org.flywaydb.core.api.FlywayException
-import org.s4s0l.betelgeuse.akkacommons.persistence.roach.RoachDbLocks
 import org.s4s0l.betelgeuse.utils.AllUtils
 import org.scalatest._
 import org.slf4j.{Logger, LoggerFactory}
@@ -108,7 +113,7 @@ abstract class BetelegeuseDbFlywayErrorTestBase
   }
 
   private def waitForMigrationLocks(name: String): Unit = {
-    AllUtils.tryNTimes(100, waitTimeMs = 100) {
+    AllUtils.tryNTimes("WaitingMigrationLocks", 100, waitTimeMs = 100) {
       val locks = scalike.getLocks(name)
       locks.executor.doInTx {
         implicit session =>

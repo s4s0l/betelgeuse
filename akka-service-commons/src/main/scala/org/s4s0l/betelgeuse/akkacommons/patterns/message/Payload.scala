@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,39 +49,38 @@ import scala.reflect.ClassTag
 @SerialVersionUID(2L)
 @JsonSerialize(using = classOf[PayloadSerializer])
 @JsonDeserialize(using = classOf[PayloadDeserializer])
-class Payload[P] private(
-                          val manifest: String,
-                          val contents: () => Either[ByteString, Array[Byte]]
+class Payload[P <: AnyRef] private(
+                                    val manifest: String,
+                                    val contents: () => ByteString
                         )
   extends JacksonJsonSerializable {
 
   @transient lazy val asArray: Array[Byte] = {
-    _binaryContents.left.map(_.toArray[Byte]).left
-      .getOrElse(_binaryContents.right.get)
+    _binaryContents.toArray
   }
   @transient lazy val asBytes: ByteString = {
-    _binaryContents.left.getOrElse(ByteString(_binaryContents.right.get))
+    _binaryContents
   }
   @transient lazy val asString: String = {
-    _binaryContents.right.map(new String(_, "utf8")).getOrElse(_binaryContents.left.get.decodeString(StandardCharsets.UTF_8))
+    _binaryContents.decodeString(StandardCharsets.UTF_8)
   }
   @transient lazy val payloadSize: Int = {
-    _binaryContents.right.map(_.length).getOrElse(_binaryContents.left.get.length)
+    _binaryContents.length
   }
   @transient private lazy val _binaryContents = contents()
 
   def unwrap(implicit classTag: ClassTag[P], serializer: Serialization): P = {
-    manifest match {
-      case "string" if classTag.runtimeClass == classOf[String] => asString.asInstanceOf[P]
-      case "array" if classTag.runtimeClass == classOf[Array[Byte]] => asArray.asInstanceOf[P]
-      case "bytes" if classTag.runtimeClass == classOf[ByteString] => asBytes.asInstanceOf[P]
-      case _ if classTag.runtimeClass == classOf[ByteString] => asBytes.asInstanceOf[P]
-      case _ => Payload.asObject(manifest, asArray)(classTag, serializer)
-    }
+    deserializeTo[P]
   }
 
   def deserializeTo[T <: AnyRef](implicit classTag: ClassTag[T], serializer: Serialization): T = {
-    Payload.asObject(manifest, asArray)(classTag, serializer)
+    manifest match {
+      case "string" if classTag.runtimeClass == classOf[String] => asString.asInstanceOf[T]
+      case "array" if classTag.runtimeClass == classOf[Array[Byte]] => asArray.asInstanceOf[T]
+      case "bytes" if classTag.runtimeClass == classOf[ByteString] => asBytes.asInstanceOf[T]
+      case _ if classTag.runtimeClass == classOf[ByteString] => asBytes.asInstanceOf[T]
+      case _ => Payload.asObject(manifest, asArray)(classTag, serializer)
+    }
   }
 
   @JsonIgnore
@@ -84,7 +89,7 @@ class Payload[P] private(
   override def equals(other: Any): Boolean = other match {
     case that: Payload[_] =>
       (that canEqual this) &&
-        asArray.sameElements(that.asArray)
+        asBytes.equals(that.asBytes)
     case _ => false
   }
 
@@ -100,28 +105,40 @@ object Payload {
 
   implicit def wrap[T <: AnyRef](value: T)
                                 (implicit serializer: Serialization): Payload[T] = {
-    val str = Serializers.manifestFor(serializer.serializerFor(value.getClass), value)
-    new Payload(str, () => Right(serializer.serialize(value).get))
+    value match {
+      case null => throw new Exception("Payload may not be null")
+      case a if a.getClass == classOf[String] =>
+        Payload(a.asInstanceOf[String]).asInstanceOf[Payload[T]]
+      case a if a.getClass == classOf[Array[Byte]] =>
+        Payload(a.asInstanceOf[Array[Byte]]).asInstanceOf[Payload[T]]
+      case a if a.getClass == classOf[ByteString] =>
+        Payload(a.asInstanceOf[ByteString]).asInstanceOf[Payload[T]]
+      case _ =>
+        val str = Serializers.manifestFor(serializer.serializerFor(value.getClass), value)
+        new Payload(str, () => ByteString(serializer.serialize(value).get))
+    }
   }
 
-  implicit def apply(bytes: ByteString): Payload[ByteString] = new Payload("bytes", () => Left(bytes))
+  implicit def apply(bytes: ByteString): Payload[ByteString] = new Payload("bytes", () => bytes)
 
-  implicit def toArray(bytes: ByteString): Payload[Array[Byte]] = new Payload("array", () => Left(bytes))
+  @deprecated("Do not use arrays as payload use byte string", since = "2018.06.12")
+  implicit def toArray(bytes: ByteString): Payload[Array[Byte]] = new Payload("array", () => bytes)
 
-  implicit def apply(bytes: Array[Byte]): Payload[Array[Byte]] = new Payload("array", () => Right(bytes))
+  @deprecated("Do not use arrays as payload use byte string", since = "2018.06.12")
+  implicit def apply(bytes: Array[Byte]): Payload[Array[Byte]] = new Payload("array", () => ByteString(bytes))
 
-  implicit def apply(string: String): Payload[String] = new Payload("string", () => Right(string.getBytes("utf8")))
+  implicit def apply(string: String): Payload[String] = new Payload("string", () => ByteString(string.getBytes("utf8")))
 
   implicit def toResponseMarshallable(p: Payload[_]): ToResponseMarshallable =
-    if (p._binaryContents.isLeft) p._binaryContents.left.get else p._binaryContents.right.get
+    p._binaryContents
 
-  val emptyString: Payload[String] = new Payload("empty", () => Right(Array()))
+  val emptyString: Payload[String] = new Payload("empty", () => ByteString.empty)
 
-  val emptyArray: Payload[Array[Byte]] = new Payload("empty", () => Right(Array()))
+  val emptyArray: Payload[Array[Byte]] = new Payload("empty", () => ByteString.empty)
 
-  val emptyUnit: Payload[NotUsed] = new Payload("empty", () => Right(Array()))
+  val emptyUnit: Payload[NotUsed] = new Payload("empty", () => ByteString.empty)
 
-  val emptyBytes: Payload[ByteString] = new Payload("empty", () => Right(Array()))
+  val emptyBytes: Payload[ByteString] = new Payload("empty", () => ByteString.empty)
 
   def serialize(value: Payload[_], gen: JsonGenerator, provider: SerializerProvider): Unit = {
     val array = value.asArray
@@ -131,11 +148,11 @@ object Payload {
     gen.writeEndObject()
   }
 
-  def deserialize(jp: JsonParser, ctxt: DeserializationContext): Payload[Any] = {
+  def deserialize(jp: JsonParser, ctxt: DeserializationContext): Payload[AnyRef] = {
     val node: JsonNode = jp.getCodec.readTree(jp)
     val manifest = node.get("manifest").asText
     val data = node.get("data").asInstanceOf[TextNode].binaryValue()
-    new Payload[Any](manifest, () => Right(data))
+    new Payload[AnyRef](manifest, () => ByteString(data))
   }
 
   private def asObject[T](manifest: String, contents: Array[Byte])

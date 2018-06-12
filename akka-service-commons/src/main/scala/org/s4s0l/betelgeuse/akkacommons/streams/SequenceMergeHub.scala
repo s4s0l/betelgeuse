@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,8 +37,8 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed], killSwitch: UniqueKill
                              materializer: Materializer) {
 
   private val sourceQueue = mutable.Queue[(Source[T, M], Promise[M])]()
-  @volatile var running: Option[(Source[T, M], M)] = None
-  @volatile var down: Boolean = false
+  @volatile private var running: Option[(Source[T, M], M, UniqueKillSwitch)] = None
+  @volatile private var down: Boolean = false
 
   def killSource(): Unit = {
     synchronized {
@@ -42,6 +48,16 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed], killSwitch: UniqueKill
     }
   }
 
+  def currentlyRunning(): Option[(Source[T, M], M)] = {
+    running.map(it => (it._1, it._2))
+  }
+
+
+  /**
+    * Enqueues the source for streaming. Will be run immediately
+    * if no stream is currently running otherwise it will wait for all
+    * previous streams to complete.
+    */
   def addSource(src: Source[T, M]): Future[M] = {
     synchronized {
       if (down) {
@@ -52,6 +68,18 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed], killSwitch: UniqueKill
       if (running.isEmpty)
         runNext()
       promise.future
+    }
+  }
+
+  /**
+    * Runs the stream forcibly, stopping any running stream
+    * and purging the stream queue.
+    */
+  def runSource(src: Source[T, M]): Future[M] = {
+    synchronized {
+      sourceQueue.clear()
+      running.foreach(_._3.shutdown())
+      addSource(src)
     }
   }
 
@@ -66,25 +94,28 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed], killSwitch: UniqueKill
   private def runNext(): Unit = synchronized {
     val tmp = dequeue()
       .map { it =>
-        val (x, done) = it._1
+        val ((x, done), ksw) = it._1
           .watchTermination()(Keep.both)
+          .viaMat(KillSwitches.single)(Keep.both)
           .to(mergeSink)
           .run()
-        val ret = (it._1, it._2, x)
+        val ret = (it._1, it._2, x, ksw)
         done.onComplete(_ => {
           runNext()
         })
         ret
       }
-    running = tmp.map(it => (it._1, it._3))
+    running = tmp.map(it => (it._1, it._3, it._4))
     tmp.foreach { it => it._2.success(it._3) }
   }
 
 }
 
 object SequenceMergeHub {
-  def defineSource[T, M](perProducerBufferSize: Int = 16)(implicit ec: ExecutionContext,
-                                                          materializer: Materializer): Source[T, SequenceMergeHub[T, M]] =
+  def defineSource[T, M](perProducerBufferSize: Int = 16)
+                        (implicit ec: ExecutionContext,
+                         materializer: Materializer)
+  : Source[T, SequenceMergeHub[T, M]] =
     MergeHub.source[T](perProducerBufferSize)
       .viaMat(KillSwitches.single)(Keep.both)
       .mapMaterializedValue(it => new SequenceMergeHub[T, M](it._1, it._2))

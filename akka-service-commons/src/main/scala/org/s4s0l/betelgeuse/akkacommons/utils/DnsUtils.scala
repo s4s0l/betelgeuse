@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,7 +60,7 @@ object DnsUtils {
     *
     */
   def getSelfIpAddressFromHostName(dnsLookupAddress: Address): String = {
-    AllUtils.tryNTimes(10, exceptionProducer = AllUtils.tryNTimesExceptionFactory("Unable to detect current host ip address")) {
+    AllUtils.tryNTimes(s"IpAddressFromHost:${dnsLookupAddress}", 10, exceptionProducer = AllUtils.tryNTimesExceptionFactory("Unable to detect current host ip address")) {
       import scala.collection.JavaConverters._
       val allByName = InetAddress.getAllByName(dnsLookupAddress.host.get)
       val allByNameLookup = util.Arrays.asList(allByName: _*).asScala.map { it => (it, List(it.getCanonicalHostName, it.getHostAddress, it.getHostName)) }

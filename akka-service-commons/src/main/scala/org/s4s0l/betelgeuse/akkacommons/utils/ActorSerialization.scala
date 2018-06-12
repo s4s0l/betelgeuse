@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,16 +20,14 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.serialization
+package org.s4s0l.betelgeuse.akkacommons.utils
 
+import akka.actor.Actor
 import akka.serialization.{Serialization, SerializationExtension}
-import org.s4s0l.betelgeuse.akkacommons.BgService
 
 /**
   * @author Marcin Wielgus
   */
-trait BgSerialization extends BgService {
-
-  implicit lazy val serializer: Serialization = SerializationExtension(system)
-
+trait ActorSerialization extends Actor {
+  implicit lazy val serializer: Serialization = SerializationExtension(context.system)
 }

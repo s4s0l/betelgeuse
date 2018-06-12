@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,7 +42,6 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateActor, Satellite
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol.{SetValue, SetValueOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
-import org.s4s0l.betelgeuse.akkacommons.serialization.BgSerialization
 import org.s4s0l.betelgeuse.akkacommons.test.{BgTestJackson, BgTestRoach}
 import org.s4s0l.betelgeuse.akkacommons.{BgService, BgServiceId}
 import org.scalatest.Outcome
@@ -57,7 +62,6 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
     with BgClusteringReceptionist
     with BgClusteringSharding
     with BgClusteringClient
-    with BgSerialization
     with BgOriginStateService {
     override protected def systemName: String = "origin"
 

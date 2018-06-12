@@ -100,6 +100,7 @@ build:
     - docker service logs crate
     - docker service rm crate
     - find . -type f -wholename '*/build/test-results/*.xml' -exec cp '{}' shippable/testresults ';'
+    - find . -type f -wholename '*/build/reports/tests/test-run.log' -exec cp '{}' shippable/testresults ';'
   on_success:
     - >
       (
