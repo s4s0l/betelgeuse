@@ -15,7 +15,6 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.http.stomp
 
 import java.util.UUID
@@ -49,7 +48,8 @@ object StompHandler extends StompHandler {
 
   def defaultActorDestinationFromSessionId(sessionId: SocksSessionId): StompMessageDestination = defaultActorDestination(sessionId.webSocketName, sessionId.internalSessionId)
 
-  final case class StompHandlerEnvironment(stompServerMessageActor: ActorRef, socksSessionId: SocksSessionId)
+  final case class StompHandlerEnvironment(stompServerMessageActor: ActorRef,
+                                           socksSessionId: SocksSessionId)
 
 
   /**
@@ -57,7 +57,7 @@ object StompHandler extends StompHandler {
     * @param registerAsNamed                if true actor registers itself in given pub sub as service named /ws-$webSocketName/session/$sessionId/default"
     *                                       and will NOT register uppon any SUBSCRIBE messages! so above name will be the only one
     *                                       through which it will be reachable
-    * @param stompServerMessageActorMapping - optional function for mapping messages other than stomp ones
+    * @param stompServerMessageActorMapping - optional function for mapping messages other than stomp ones, returning none will skip message
     * @param webSocketName                  name ofweb socket
     * @param pubSubActorRef                 pub sub to register receiving actor to, if registerAsNamed = false
     *                                       then stomp actor will register as:
@@ -67,7 +67,7 @@ object StompHandler extends StompHandler {
     */
   final case class StompHandlerSettings(webSocketName: String, pubSubActorRef: Option[ActorRef] = None,
                                         registerAsNamed: Boolean = false,
-                                        stompServerMessageActorMapping: SocksSessionId => PartialFunction[Any, StompServerMessage] = _ => PartialFunction.empty,
+                                        stompServerMessageActorMapping: StompHandlerEnvironment => PartialFunction[Any, Option[StompServerMessage]] = _ => PartialFunction.empty,
                                         fromServerActorBufferSize: Int = 1000,
                                         fromServerActorOverflowStrategy: OverflowStrategy = OverflowStrategy.dropHead
                                        )
@@ -136,7 +136,7 @@ object StompHandler extends StompHandler {
 
     private val subscriptionIds = mutable.Map[StompMessageDestination, String]()
     private var webSocket: ActorRef = _
-    private val userMessageMapping = settings.stompServerMessageActorMapping(socksSessionId)
+    private val userMessageMapping = settings.stompServerMessageActorMapping(StompHandlerEnvironment(self, socksSessionId))
     private val pubSubActorRef = settings.pubSubActorRef.filter(_ => !settings.registerAsNamed)
 
     override def preStart(): Unit = {
@@ -149,10 +149,12 @@ object StompHandler extends StompHandler {
       }
     }
 
+
     override def receive: Receive = webSocketActorHandle orElse
       coreReceives orElse
       ignoredMessages orElse
-      userMessageMapping.andThen(defaultReceive orElse unhandledStuff) orElse
+      userMessageMapping
+        .andThen(defaultReceive orElse unhandledStuff) orElse
       defaultReceive orElse unhandledStuff
 
 
@@ -233,6 +235,10 @@ object StompHandler extends StompHandler {
       case a: StompServerMessage if receiveIncomingStompUserMessage.isDefinedAt(a) =>
         val msg = receiveIncomingStompUserMessage.apply(a)
         webSocket ! msg
+      case Some(a: StompServerMessage) if receiveIncomingStompUserMessage.isDefinedAt(a) =>
+        val msg = receiveIncomingStompUserMessage.apply(a)
+        webSocket ! msg
+      case None =>
     }
 
 
