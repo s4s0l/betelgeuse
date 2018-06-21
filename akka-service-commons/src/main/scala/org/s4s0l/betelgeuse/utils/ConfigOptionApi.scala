@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +25,6 @@ package org.s4s0l.betelgeuse.utils
 import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
-import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
@@ -42,6 +47,8 @@ trait ConfigOptionApi {
   def config(path: String): Option[Config]
 
   def duration(path: String): Option[FiniteDuration]
+
+  def getFiniteDuration(path: String): FiniteDuration
 
 }
 
@@ -74,6 +81,9 @@ object ConfigOptionApi {
           case Failure(f) => throw new Exception(s"unable to get duration from configuration at path $path", f)
         }
       } else None
+
+    override def getFiniteDuration(path: String): FiniteDuration =
+      FiniteDuration(typeSafeConfig.getDuration(path).toNanos, TimeUnit.NANOSECONDS)
   }
 }
 
