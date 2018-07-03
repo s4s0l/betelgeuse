@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -66,7 +72,7 @@ class OriginStateActor[T](settings: Settings[T])
         sender() ! GetPublicationStatusOk(PublicationStatuses(publishStatus.map(e => {
           val completed = e._2.isRight || (e._2.isLeft && e._2.left.get)
           PublicationStatus(e._1, completed, e._2.right.getOrElse(ValidationError(Seq())))
-        }).toList), messageId)
+        }).toList.sortBy(_.versionedId.version).reverse), messageId)
       }
   }
 
