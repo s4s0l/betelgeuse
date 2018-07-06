@@ -69,9 +69,9 @@ class SequenceMergeHubTest
       eventualSeq.expectNext(4)
       eventualSeq.request(1).expectNext(5)
       whenReady(hub.addSource(Source(List(6)))) { _ =>
+        eventualSeq.expectNext(6)
         hub.killSource()
       }
-      eventualSeq.expectNext(6)
       eventualSeq.expectComplete()
     }
   }
