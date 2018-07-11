@@ -287,10 +287,11 @@ object PreciseThrottler {
           if (closed && buffer.isEmpty) {
             completeStage()
           }
-          if (isAvailable(out) && buffer.nonEmpty) {
+          if (isAvailable(out)) {
             if (buffer.isEmpty) {
               //todo ??? we should leave info for onPull to catch up when  messagesToBeSend > 1
-              if (warnOnNoData) LOGGER.warn("Throttling has no data to pull, too slow producer")
+              //we do not warn before first message - this is very likely to happen regardless of upstream speed
+              if (warnOnNoData && lastMessageSend != -1) LOGGER.warn("Throttling has no data to pull, too slow producer")
             }
             else {
               dequeueAndPush(fireTimeNanos)
