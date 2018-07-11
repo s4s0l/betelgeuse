@@ -38,7 +38,7 @@ class RoachAsyncWriteJournalDao()
                               toSequenceNr: Long, max: Long)
                              (cb: RoachAsyncWriteJournalEntity => Unit)
                              (implicit session: DBSession): Unit = {
-    LOGGER.info(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
+    LOGGER.debug(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
     withSQL {
       val query: scalikejdbc.PagingSQLBuilder[RoachAsyncWriteJournalEntity] = select
         .from(RoachAsyncWriteJournalEntity as e)

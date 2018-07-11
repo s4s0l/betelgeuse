@@ -37,7 +37,7 @@ class RoachAsyncSingleWriteJournalDao() extends
                               toSequenceNr: Long, max: Long)
                              (cb: RoachAsyncWriteJournalEntity => Unit)
                              (implicit session: DBSession): Unit = {
-    LOGGER.info(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
+    LOGGER.debug(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
     withSQL {
       select.from(RoachAsyncSingleWriteJournalEntity as e)
         .where

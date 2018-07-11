@@ -46,7 +46,7 @@ class CrateAsyncWriteJournalDao()
                              (cb: CrateAsyncWriteJournalEntity => Unit)
                              (implicit session: DBSession)
   : Unit = {
-    LOGGER.info(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
+    LOGGER.debug(s"Replaying $tag $uniqueId $fromSequenceNr $toSequenceNr $max")
     withSQL {
       select.from(CrateAsyncWriteJournalEntity as e)
         .where
