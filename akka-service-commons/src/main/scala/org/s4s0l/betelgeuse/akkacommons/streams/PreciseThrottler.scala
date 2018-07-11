@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,13 +44,13 @@ object PreciseThrottler {
 
 
   implicit class PreciseThrottlerSource[T, Mat](wrapped: Source[T, Mat]) {
-    def viaPreciseThrottler(delay: FiniteDuration, buffer: Int): Source[T, Mat] = {
-      wrapped.via(throttleFixed(delay, buffer))
+    def viaPreciseThrottler(delay: FiniteDuration, buffer: Int, warnOnNoData: Boolean): Source[T, Mat] = {
+      wrapped.via(throttleFixed(delay, buffer, warnOnNoData))
     }
 
-    def viaPreciseThrottlerAkka(delay: FiniteDuration, buffer: Int,
+    def viaPreciseThrottlerAkka(delay: FiniteDuration, buffer: Int, warnOnNoData: Boolean,
                                 initialDelay: FiniteDuration = Duration.Zero): Source[T, Mat] = {
-      wrapped.via(throttleLightAkka(delay, initialDelay, buffer))
+      wrapped.via(throttleLightAkka(delay, initialDelay, buffer, warnOnNoData))
     }
   }
 
@@ -90,7 +96,7 @@ object PreciseThrottler {
   }
 
 
-  def throttleFixed[A](delay: FiniteDuration, buffer: Int): GraphStage[FlowShape[A, A]] = {
+  def throttleFixed[A](delay: FiniteDuration, buffer: Int, warnOnNoData: Boolean): GraphStage[FlowShape[A, A]] = {
     val asMillis = delay.toMillis
     val ticker = tickers.synchronized {
       tickers.getOrElse(asMillis, {
@@ -100,11 +106,13 @@ object PreciseThrottler {
 
     }
     val shd: FixedScheduler = ticker.register
-    new FixedThrottle[A](delay.toMillis, shd, buffer)
+    new FixedThrottle[A](delay.toMillis, shd, buffer, warnOnNoData)
   }
 
   def throttleLightAkka[A](delay: FiniteDuration,
-                           initialDelay: FiniteDuration, buffer: Int
+                           initialDelay: FiniteDuration,
+                           buffer: Int,
+                           warnOnNoData: Boolean
                           ): GraphStage[FlowShape[A, A]] = {
     implicit val ec: ExecutionContext = SameThreadExecutionContext
     val shd: FixedScheduler = cb => {
@@ -115,7 +123,7 @@ object PreciseThrottler {
       )
       () => ret.cancel()
     }
-    new FixedThrottle[A](delay.toMillis, shd, buffer)
+    new FixedThrottle[A](delay.toMillis, shd, buffer, warnOnNoData)
   }
 
 
@@ -217,7 +225,12 @@ object PreciseThrottler {
   }
 
 
-  private[PreciseThrottler] case class FixedThrottle[A](intervalMillis: Long, scheduler: FixedScheduler, bufferSize: Int) extends GraphStage[FlowShape[A, A]] {
+  private[PreciseThrottler] case class FixedThrottle[A](
+                                                         intervalMillis: Long,
+                                                         scheduler: FixedScheduler,
+                                                         bufferSize: Int,
+                                                         warnOnNoData: Boolean
+                                                       ) extends GraphStage[FlowShape[A, A]] {
 
     private val in = Inlet[A]("Map.in")
     private val out = Outlet[A]("Map.out")
@@ -275,11 +288,15 @@ object PreciseThrottler {
             completeStage()
           }
           if (isAvailable(out) && buffer.nonEmpty) {
-            //              val messagesToBeSend: Long = Math.max(1, (fireTimeNanos - lastMessageSend) / (intervalMillis * deNano))
-            //todo ??? we should leave info for onPull to catch up when  messagesToBeSend > 1
-            dequeueAndPush(fireTimeNanos)
-            if (closed && buffer.isEmpty) {
-              completeStage()
+            if (buffer.isEmpty) {
+              //todo ??? we should leave info for onPull to catch up when  messagesToBeSend > 1
+              if (warnOnNoData) LOGGER.warn("Throttling has no data to pull, too slow producer")
+            }
+            else {
+              dequeueAndPush(fireTimeNanos)
+              if (closed && buffer.isEmpty) {
+                completeStage()
+              }
             }
           }
 
