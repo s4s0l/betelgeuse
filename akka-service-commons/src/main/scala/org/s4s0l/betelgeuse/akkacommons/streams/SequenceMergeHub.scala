@@ -22,9 +22,9 @@
 
 package org.s4s0l.betelgeuse.akkacommons.streams
 
-import akka.NotUsed
 import akka.stream.scaladsl.{Keep, MergeHub, Sink, Source}
 import akka.stream.{KillSwitches, Materializer, UniqueKillSwitch}
+import akka.{Done, NotUsed}
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future, Promise}
@@ -37,6 +37,7 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
   */
 class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed],
                              killSwitch: UniqueKillSwitch,
+                             hubComplete: Future[Done],
                              noStreamFactory: Option[() => Source[T, M]])
                             (implicit ec: ExecutionContext,
                              materializer: Materializer) {
@@ -46,10 +47,15 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed],
   @volatile private var down: Boolean = false
   private var noSourceStreamKillSwitch: Option[UniqueKillSwitch] = None
 
+  hubComplete.onComplete(_ => killSource())
 
   def killSource(): Unit = {
     synchronized {
       down = true
+      sourceQueue.foreach { src =>
+        val value: M = src._1.to(Sink.cancelled).run()
+        src._2.success(value)
+      }
       sourceQueue.clear()
       killSwitch.shutdown()
     }
@@ -61,7 +67,7 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed],
     * @return true if default was started
     */
   def playDefault(): Boolean = synchronized {
-    if (running.isEmpty && noSourceStreamKillSwitch.isEmpty) {
+    if (!down && running.isEmpty && noSourceStreamKillSwitch.isEmpty) {
       runNoSourceStream()
       true
     } else {
@@ -82,15 +88,17 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed],
   def addSource(src: Source[T, M]): Future[M] = {
     synchronized {
       if (down) {
-        throw new IllegalStateException("Source is down!")
+        val m = src.to(Sink.cancelled).run()
+        Future.successful(m)
+      } else {
+        val noSourceWasRunning = noSourceStreamKillSwitch.isDefined
+        noSourceStreamKillSwitch.foreach(_.shutdown())
+        val promise = Promise[M]()
+        sourceQueue.enqueue((src, promise))
+        if (running.isEmpty && !noSourceWasRunning)
+          runNext()
+        promise.future
       }
-      val noSourceWasRunning = noSourceStreamKillSwitch.isDefined
-      noSourceStreamKillSwitch.foreach(_.shutdown())
-      val promise = Promise[M]()
-      sourceQueue.enqueue((src, promise))
-      if (running.isEmpty && !noSourceWasRunning)
-        runNext()
-      promise.future
     }
   }
 
@@ -101,12 +109,14 @@ class SequenceMergeHub[T, M](mergeSink: Sink[T, NotUsed],
   def runSource(src: Source[T, M]): Future[M] = {
     synchronized {
       if (down) {
-        throw new IllegalStateException("Source is down!")
+        val m = src.to(Sink.cancelled).run()
+        Future.successful(m)
+      } else {
+        noSourceStreamKillSwitch.foreach(_.shutdown())
+        sourceQueue.clear()
+        running.foreach(_._3.shutdown())
+        addSource(src)
       }
-      noSourceStreamKillSwitch.foreach(_.shutdown())
-      sourceQueue.clear()
-      running.foreach(_._3.shutdown())
-      addSource(src)
     }
   }
 
@@ -189,5 +199,6 @@ object SequenceMergeHub {
   : Source[T, SequenceMergeHub[T, M]] =
     MergeHub.source[T](perProducerBufferSize)
       .viaMat(KillSwitches.single)(Keep.both)
-      .mapMaterializedValue(it => new SequenceMergeHub[T, M](it._1, it._2, noStreamFactory))
+      .watchTermination()(Keep.both)
+      .mapMaterializedValue(it => new SequenceMergeHub[T, M](it._1._1, it._1._2, it._2, noStreamFactory))
 }
