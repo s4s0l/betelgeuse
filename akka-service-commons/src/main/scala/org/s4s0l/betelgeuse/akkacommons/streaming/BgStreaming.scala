@@ -16,9 +16,12 @@
 
 package org.s4s0l.betelgeuse.akkacommons.streaming
 
+import akka.Done
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkacommons.BgService
 
+import scala.collection.mutable
+import scala.concurrent.Future
 import scala.reflect.ClassTag
 
 /**
@@ -31,12 +34,36 @@ trait BgStreaming extends BgService {
 
   implicit def streamingExtension: BgStreamingExtension = BgStreamingExtension(system)
 
-  def createKafkaAccess[K <: AnyRef, V <: AnyRef](name: String)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = streamingExtension.defaultSerializers): StreamingAccess[K, V] = getKafkaAccessForConfigKey(s"streaming.context.additional.kafka.$name")
+  private val closeOnShutdown: mutable.ListBuffer[AutoCloseable] = mutable.ListBuffer[AutoCloseable]()
 
-  private def getKafkaAccessForConfigKey[K <: AnyRef, V <: AnyRef](name: String)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers): StreamingAccess[K, V] = BgStreamingExtension(system).buildStreamingAccess[K, V](config.getConfig(name))
+  def createKafkaAccess[K <: AnyRef, V <: AnyRef](name: String)
+                                                 (implicit k: ClassTag[K],
+                                                  v: ClassTag[V],
+                                                  serializer: KafkaSerializers = streamingExtension.defaultSerializers)
+  : StreamingAccess[K, V] = {
+    getKafkaAccessForConfigKey(s"streaming.context.additional.kafka.$name")
+  }
 
-  def createDefaultKafkaAccess[K <: AnyRef, V <: AnyRef]()(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = streamingExtension.defaultSerializers): StreamingAccess[K, V] = getKafkaAccessForConfigKey[K, V]("streaming.context")(k, v, serializer)
+  private def getKafkaAccessForConfigKey[K <: AnyRef, V <: AnyRef](name: String)
+                                                                  (implicit k: ClassTag[K],
+                                                                   v: ClassTag[V],
+                                                                   serializer: KafkaSerializers)
+  : StreamingAccess[K, V] = {
+    BgStreamingExtension(system).buildStreamingAccess[K, V](config.getConfig(name))
+  }
 
+  def createDefaultKafkaAccess[K <: AnyRef, V <: AnyRef]()(implicit k: ClassTag[K],
+                                                           v: ClassTag[V],
+                                                           serializer: KafkaSerializers = streamingExtension.defaultSerializers)
+  : StreamingAccess[K, V] =
+    getKafkaAccessForConfigKey[K, V]("streaming.context")(k, v, serializer)
+
+
+  def closeOnShutdown(access: StreamingAccess[_, _]): Unit = {
+    closeOnShutdown.synchronized {
+      closeOnShutdown.append(access)
+    }
+  }
 
   abstract override def customizeConfiguration: Config = {
     LOGGER.info("Customize config with streaming.conf with fallback to...")
@@ -55,7 +82,25 @@ trait BgStreaming extends BgService {
     super.initialize()
     LOGGER.info("initializing")
     system.registerExtension(BgStreamingExtension)
+    shutdownCoordinated(
+      "akka-service-shutdown",
+      "streaming-access-close")(() => cleanup)
     LOGGER.info("initialized")
   }
 
+  private def cleanup: Future[Done.type] = {
+    Future {
+      closeOnShutdown.synchronized {
+        closeOnShutdown.foreach { it =>
+          try {
+            it.close()
+          } catch {
+            case ex: Throwable => LOGGER.error(s"Unable to stop kafka access $it", ex)
+          }
+        }
+        closeOnShutdown.clear()
+        Done
+      }
+    }
+  }
 }

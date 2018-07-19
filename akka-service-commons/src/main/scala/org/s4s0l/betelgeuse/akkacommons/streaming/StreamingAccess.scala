@@ -21,6 +21,7 @@ import akka.kafka.{ConsumerSettings, ProducerSettings}
 import akka.stream.ActorMaterializer
 import com.typesafe.config.Config
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.s4s0l.betelgeuse.utils.Lazy
 
 import scala.concurrent.ExecutionContext
 import scala.reflect.ClassTag
@@ -29,11 +30,11 @@ import scala.reflect.ClassTag
 /**
   * @author Maciej Flak
   */
-trait StreamingAccess[K <: AnyRef, V <: AnyRef] {
+trait StreamingAccess[K <: AnyRef, V <: AnyRef] extends AutoCloseable {
 
-  val consumer: KafkaConsumer[K, V]
+  def consumer: KafkaConsumer[K, V]
 
-  val producer: KafkaProducer[K, V]
+  def producer: KafkaProducer[K, V]
 
 }
 
@@ -69,14 +70,21 @@ class KafkaAccess[K <: AnyRef, V <: AnyRef](config: Config)(implicit k: ClassTag
 
   private[streaming] lazy val producerSettings: ProducerSettings[K, V] = {
     val settings = getKafkaConfig(config.string("custom-conf-path")) match {
-      case Some(customConfig) => ProducerSettings(customConfig, toKafkaSerializer[K](ser.keySer,k), toKafkaSerializer[V](ser.valueSer,v))
-      case None => ProducerSettings(system, toKafkaSerializer[K](ser.keySer,k), toKafkaSerializer[V](ser.valueSer,v))
+      case Some(customConfig) => ProducerSettings(customConfig, toKafkaSerializer[K](ser.keySer, k), toKafkaSerializer[V](ser.valueSer, v))
+      case None => ProducerSettings(system, toKafkaSerializer[K](ser.keySer, k), toKafkaSerializer[V](ser.valueSer, v))
     }
     settings.withBootstrapServers(config.getString("bootstrap-servers"))
   }
 
   override lazy val consumer: KafkaConsumer[K, V] = new KafkaConsumerImpl(consumerSettings)
 
-  override lazy val producer: KafkaProducer[K, V] = new KafkaProducerImpl(producerSettings)
+  private val lazyProducer = Lazy {
+    new KafkaProducerImpl(producerSettings)
+  }
 
+  override def producer: KafkaProducer[K, V] = lazyProducer()
+
+  override def close(): Unit = {
+    lazyProducer.toOption.foreach(_.close())
+  }
 }

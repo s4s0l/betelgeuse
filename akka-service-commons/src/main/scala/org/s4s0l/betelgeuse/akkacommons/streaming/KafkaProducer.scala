@@ -28,9 +28,11 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * @author Maciej Flak
   */
-trait KafkaProducer[K <: AnyRef, V <: AnyRef] {
-  def sink(shared: Boolean=false): Sink[ProducerRecord[K, V], Future[Done]]
-  def flow[P](shared: Boolean=false): Flow[ProducerMessage.Message[K, V, P], ProducerMessage.Result[K, V, P], NotUsed]
+trait KafkaProducer[K <: AnyRef, V <: AnyRef] extends AutoCloseable {
+  def sink(shared: Boolean = false): Sink[ProducerRecord[K, V], Future[Done]]
+
+  def flow[P](shared: Boolean = false): Flow[ProducerMessage.Message[K, V, P], ProducerMessage.Result[K, V, P], NotUsed]
+
   def single(topic: String, elems: List[V]): Future[Done]
 }
 
@@ -39,7 +41,7 @@ class KafkaProducerImpl[K <: AnyRef, V <: AnyRef] private[streaming](producerSet
 
   private val shared_producer = producerSettings.createKafkaProducer()
 
-  def sink(shared: Boolean=false): Sink[ProducerRecord[K, V], Future[Done]] = {
+  def sink(shared: Boolean = false): Sink[ProducerRecord[K, V], Future[Done]] = {
     if (shared) {
       Producer.plainSink(producerSettings, shared_producer)
     }
@@ -48,9 +50,9 @@ class KafkaProducerImpl[K <: AnyRef, V <: AnyRef] private[streaming](producerSet
     }
   }
 
-  def flow[P](shared: Boolean=false): Flow[ProducerMessage.Message[K, V, P], ProducerMessage.Result[K, V, P], NotUsed] = {
-    if (shared){
-      Producer.flow(producerSettings,shared_producer)
+  def flow[P](shared: Boolean = false): Flow[ProducerMessage.Message[K, V, P], ProducerMessage.Result[K, V, P], NotUsed] = {
+    if (shared) {
+      Producer.flow(producerSettings, shared_producer)
     } else {
       Producer.flow(producerSettings)
     }
@@ -59,5 +61,5 @@ class KafkaProducerImpl[K <: AnyRef, V <: AnyRef] private[streaming](producerSet
   def single(topic: String, elems: List[V]): Future[Done] = Source(elems).map(new ProducerRecord[K, V](topic, _))
     .runWith(Producer.plainSink(producerSettings, shared_producer))
 
-
+  override def close(): Unit = shared_producer.close()
 }

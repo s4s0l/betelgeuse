@@ -30,7 +30,7 @@ import scala.reflect.ClassTag
 class BgStreamingExtension(private val system: ExtendedActorSystem) extends Extension {
 
   //fixme: config can be implicit as it is implicitly provided in BgService
-  def buildStreamingAccess[K <: AnyRef, V <: AnyRef](config: Config)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = defaultSerializers): StreamingAccess[K, V] = {
+  private[streaming] def buildStreamingAccess[K <: AnyRef, V <: AnyRef](config: Config)(implicit k: ClassTag[K], v: ClassTag[V], serializer: KafkaSerializers = defaultSerializers): StreamingAccess[K, V] = {
     implicit val systemA: ExtendedActorSystem = system
     val ec = system.dispatchers.lookup(config.string("poolName").getOrElse("streaming.context.streaming-io-dispatcher"))
     new KafkaAccess(config)(k, v, system, serializer, ec, ActorMaterializer())
@@ -38,11 +38,11 @@ class BgStreamingExtension(private val system: ExtendedActorSystem) extends Exte
 
   import KafkaSerializers._
 
-  implicit lazy val jacksonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
-  implicit lazy val defaultKeyValueSerializer: StreamingSerializer = jacksonSerializer
+  private[streaming] implicit lazy val jacksonSerializer: JacksonJsonSerializer = new JacksonJsonSerializer()
+  private[streaming] implicit lazy val defaultKeyValueSerializer: StreamingSerializer = jacksonSerializer
 
 
-  def defaultSerializers: KafkaSerializers = KafkaSerializers(defaultKeyValueSerializer, defaultKeyValueSerializer)
+  private[streaming] def defaultSerializers: KafkaSerializers = KafkaSerializers(defaultKeyValueSerializer, defaultKeyValueSerializer)
 
 }
 
