@@ -75,7 +75,7 @@ final case class Message[P <: AnyRef](target: String, id: String, headers: Map[S
   def responseError[N <: AnyRef](newTarget: String, errorPayload: String, newHeaders: Map[String, String] = Map())
                                 (implicit extraHeaders: ForwardHeaderProvider): Message[N] = {
     Message(newTarget, UUID.randomUUID().toString,
-      (followHeaders(RESPONSE_HEADERS, extraHeaders()) + (MessageHeaders.HEADER_CORRELATION_ID -> id)) ++ newHeaders, Payload.apply(errorPayload).asInstanceOf[Payload[N]])
+      (followHeaders(RESPONSE_HEADERS, extraHeaders()) + (MessageHeaders.HEADER_CORRELATION_ID -> id)) ++ newHeaders, Payload.apply(errorPayload).asInstanceOf[Payload[N]]).withFailed()
   }
 
   private def followHeaders(ffwdBase: Seq[String], forwardedHeadersExtra: Seq[String]): Map[String, String] = {
