@@ -87,5 +87,8 @@ trait TimeoutActor extends HackedActor with ActorLogging {
     timeoutInitialStart()
   }
 
-
+  override def postStop(): Unit = {
+    super.postStop()
+    cancelTimeoutTimer()
+  }
 }

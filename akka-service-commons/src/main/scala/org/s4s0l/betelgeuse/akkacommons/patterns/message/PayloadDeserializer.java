@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 /**
  * @author Marcin Wielgus
  */
+@SuppressWarnings("unchecked")
 public class PayloadDeserializer extends StdDeserializer<Payload<Object>> {
     public PayloadDeserializer() {
         super(Payload.class);
