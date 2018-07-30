@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +25,9 @@ package org.s4s0l.betelgeuse.akkacommons
 /**
   * @author Marcin Wielgus
   */
-class ServiceInfo(val id: BgServiceId, val instance: Int, val docker: Boolean) {
+class ServiceInfo(val id: BgServiceId,
+                  val instance: Int = System.getProperty(s"${BgServiceExtension.configBaseKey}.instance", "1").toInt,
+                  val docker: Boolean = System.getProperty(s"${BgServiceExtension.configBaseKey}.docker", "false").toBoolean) {
 
   val portSuffix: String = if (docker) firstPortSuffix else "%02d%02d".format(id.portBase, instance)
   val externalAddress: String = if (docker) s"${id.systemName}_service" else "127.0.0.1"

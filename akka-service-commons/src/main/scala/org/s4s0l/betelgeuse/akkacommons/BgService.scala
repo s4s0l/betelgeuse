@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +28,7 @@ import java.util.UUID
 
 import akka.Done
 import akka.actor.CoordinatedShutdown.UnknownReason
-import akka.actor.{ActorSystem, CoordinatedShutdown, Props}
+import akka.actor.{ActorSystem, CoordinatedShutdown, Props, Scheduler}
 import akka.serialization.{Serialization, SerializationExtension}
 import akka.stream.{ActorMaterializer, Materializer}
 import com.typesafe.config.{Config, ConfigFactory}
@@ -57,11 +63,7 @@ trait BgService {
 
   protected def portBase: Int = 1
 
-  protected lazy val serviceInfo: ServiceInfo = new ServiceInfo(
-    serviceId,
-    getSystemProperty(s"${BgServiceExtension.configBaseKey}.instance", "1").toInt,
-    getSystemProperty(s"${BgServiceExtension.configBaseKey}.docker", "false").toBoolean
-  )
+  protected lazy val serviceInfo: ServiceInfo = new ServiceInfo(serviceId)
 
   protected def getSystemProperty(key: String, default: String = null): String =
     System.getProperty(key, default)
@@ -109,6 +111,8 @@ trait BgService {
   implicit lazy val serializationJackson: JacksonJsonSerializer = new JacksonJsonSerializer()
 
   implicit lazy val httpMarshalling: HttpMarshalling = new HttpMarshalling(serializationJackson)
+
+  implicit lazy val akkaSystemScheduler: Scheduler = system.scheduler
 
   def serviceExtension: BgServiceExtension = BgServiceExtension.get(system)
 
