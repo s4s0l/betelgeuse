@@ -6,7 +6,7 @@
 
 package org.s4s0l.betelgeuse.utils
 
-import java.net.URLClassLoader
+import java.net.{JarURLConnection, URL, URLClassLoader}
 import java.util.jar.Manifest
 
 /**
@@ -25,10 +25,12 @@ object VersionUtils {
                      )
 
   private val unknown = "<unknown>"
-  private val unknownVersions = Versions(unknown, unknown, unknown, unknown, unknown, unknown, unknown)
+  private val unknownVersions = Versions(unknown, unknown, unknown, unknown,
+    unknown, unknown, unknown)
 
   def getVersions(forCLass: Class[_]): Versions = {
-    getManifest(forCLass).map { m =>
+    getManifestFromJar(forCLass)
+      .orElse(getManifest(forCLass)).map { m =>
       Versions(
         Option(m.getMainAttributes.getValue("Source-Version")).getOrElse(unknown),
         Option(m.getMainAttributes.getValue("Implementation-Title")).getOrElse(unknown),
@@ -51,6 +53,19 @@ object VersionUtils {
       }
     } catch {
       case _: Throwable => None
+    }
+  }
+
+  def getManifestFromJar(forClass: Class[_]): Option[Manifest] = {
+    try {
+      val path = forClass.getProtectionDomain.getCodeSource.getLocation.getPath.replace("classes/", "")
+      val url = new URL("jar:file:" + path + "test.jar!/")
+      val jarConnection = url.openConnection.asInstanceOf[JarURLConnection]
+      val manifest = jarConnection.getManifest
+      Some(manifest)
+    } catch {
+      case _: Throwable =>
+        None
     }
   }
 }
