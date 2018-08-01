@@ -59,7 +59,7 @@ object VersionUtils {
   def getManifestFromJar(forClass: Class[_]): Option[Manifest] = {
     try {
       val path = forClass.getProtectionDomain.getCodeSource.getLocation.getPath.replace("classes/", "")
-      val url = new URL("jar:file:" + path + "test.jar!/")
+      val url = new URL("jar:file:" + path + "!/")
       val jarConnection = url.openConnection.asInstanceOf[JarURLConnection]
       val manifest = jarConnection.getManifest
       Some(manifest)
