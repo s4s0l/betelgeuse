@@ -40,7 +40,8 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 
-trait BgService {
+trait BgService
+  extends BgVersionProvider {
 
   protected final lazy val log: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(this.getClass)
 
@@ -195,6 +196,13 @@ trait BgService {
   }
 
   final def run(): ActorSystem = {
+    val versions = getVersionsInfo
+    log.info("Betelgeuse@{} is starting application {}@{} generated from {}",
+      versions.bgVersions.implementation,
+      versions.appVersions.name,
+      versions.appVersions.implementation,
+      versions.appVersions.vcs
+    )
     mainRunned = true
     if (configInited) {
       log.warn("Use lazy vals!!!, otherwise some fixes may not apply!")

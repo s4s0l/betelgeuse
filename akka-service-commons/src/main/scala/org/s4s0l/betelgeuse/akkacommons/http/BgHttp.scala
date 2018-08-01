@@ -24,10 +24,12 @@ package org.s4s0l.betelgeuse.akkacommons.http
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
+import akka.http.scaladsl.marshalling.ToEntityMarshaller
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkacommons.BgService
+import org.s4s0l.betelgeuse.akkacommons.BgVersionProvider.BgVersionsInfo
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
@@ -46,7 +48,8 @@ trait BgHttp extends BgService {
 
   def httpRoute: Route = {
     pathPrefix("version") {
-      complete("There will be an version")
+      implicit val um: ToEntityMarshaller[BgVersionsInfo] = httpMarshalling.marshaller[BgVersionsInfo]
+      complete(getVersionsInfo)
     }
   }
 
