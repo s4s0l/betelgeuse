@@ -1,4 +1,3 @@
-
 package org.s4s0l.betelgeuse.akkacommons.kamon
 
 import java.time.ZoneId
@@ -19,6 +18,10 @@ class LoggingReporter(log: LoggingAdapter, selectors: Seq[Selector]) extends Met
     .appendPattern("HH:mm:ss")
     .toFormatter()
 
+  private val dateFormat = new DateTimeFormatterBuilder()
+    .appendPattern("yyyy-MM-dd HH:mm:ss.SSS")
+    .toFormatter()
+
   override def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit = {
     val metrics: Seq[ReporterMetric] = snapshot.metrics.counters.map(ReporterMetricValue) ++
       snapshot.metrics.gauges.map(ReporterMetricValue) ++
@@ -26,12 +29,12 @@ class LoggingReporter(log: LoggingAdapter, selectors: Seq[Selector]) extends Met
       snapshot.metrics.rangeSamplers.map(ReporterMetricDistribution)
     val grouped = LoggingReporter.groupBy(metrics, selectors)
     val toBePrinted = LoggingReporter.printAll(grouped).toSeq.sorted
-    val fromStr = timeFormat.format(snapshot.from.atZone(ZoneId.systemDefault()))
-    val toStr = timeFormat.format(snapshot.to.atZone(ZoneId.systemDefault()))
-    toBePrinted.foreach { it =>
-      log.info(s"Metric in $fromStr - $toStr: $it ")
-    }
-
+    val fromTime = timeFormat.format(snapshot.from.atZone(ZoneId.systemDefault()))
+    val toTime = timeFormat.format(snapshot.to.atZone(ZoneId.systemDefault()))
+    val date = dateFormat.format(snapshot.to.atZone(ZoneId.systemDefault()))
+    val prefix = s"$date INFO "
+    val fullReport = toBePrinted.mkString(s"Metrics report: from $fromTime to $toTime\n$prefix", s"\n$prefix", "\n")
+    log.info(fullReport)
   }
 
   override def start(): Unit = {}
@@ -57,10 +60,11 @@ object LoggingReporter {
     override def tags: Map[String, String] = md.tags
 
     override def print(nameToUse: String): String = {
-      s"[$nameToUse.min = ${md.distribution.min}, " +
-        s"$nameToUse.max = ${md.distribution.max}, " +
-        s"$nameToUse.med = ${md.distribution.percentile(0.5).value}, " +
-        s"$nameToUse.99 = ${md.distribution.percentile(0.99).value}${printUnit(md.unit)}]"
+      f"[$nameToUse%20s.evt = ${md.distribution.count}%4d, " +
+        f"$nameToUse%20s.min = ${md.distribution.min}%10d, " +
+        f"$nameToUse%20s.max = ${md.distribution.max}%10d, " +
+        f"$nameToUse%20s.med = ${md.distribution.percentile(0.5).value}%10d, " +
+        f"$nameToUse%20s .99 = ${md.distribution.percentile(0.99).value}%10d${printUnit(md.unit)}]"
     }
   }
 
@@ -80,7 +84,7 @@ object LoggingReporter {
     override def tags: Map[String, String] = md.tags
 
     override def print(nameToUse: String): String = {
-      s"[$nameToUse = ${md.value}${printUnit(md.unit)}]"
+      f"[$nameToUse%18s = ${md.value}%10d${printUnit(md.unit)}]"
     }
   }
 
@@ -201,9 +205,14 @@ object LoggingReporter {
         name
       } else {
 
-        name.iterator.sliding(2).collect {
+        val res = name.iterator.sliding(2).collect {
           case a :: b :: Nil if !a.isLetterOrDigit && b.isLetterOrDigit => b
         }.mkString(name.substring(0, 1), "", ".")
+        if (res.length > 5) {
+          res.substring(res.length - 5, res.length)
+        } else {
+          res
+        }
       }
     }
 
@@ -211,9 +220,9 @@ object LoggingReporter {
       val ((name, selector), metrics) = it
       val shortcut = shorten(name)
       val values = metrics.map { metric =>
-        metric.print(shortcut + selector.displayExtractor.extractName(metric))
-      }
-      s"$name: ${values.mkString(", ")}"
+        (shortcut + selector.displayExtractor.extractName(metric), metric)
+      }.sortBy(_._1).map { it => it._2.print(it._1) }
+      f"[$name%-100s][M] - ${values.mkString(", ")}"
     }
   }
 

@@ -1,4 +1,3 @@
-
 package org.s4s0l.betelgeuse.akkacommons.kamon
 
 import akka.event.Logging
@@ -30,13 +29,15 @@ trait BgKamonService extends BgService {
       GroupByNamesInAndTag("jvm.gc.promotion", Set(), TagExtractor(Seq("space"))),
       GroupByNamesInAndTag("host.memory", Set(), TagExtractor(Seq("mode"))),
       GroupByPrefixAndTag("akka.system.", Set(), SuffixExtractor("akka.system.", Seq("tracked"))),
-      GroupByNamesInAndTag("executor.values", Set("executor.pool", "executor.tasks"), Set("name"), SuffixExtractor("executor.", Seq("state", "setting"))),
+      GroupByNamesInAndTag("executor.values", Set("executor.pool", "executor.tasks"), Set("type", "name"), SuffixExtractor("executor.", Seq("state", "setting"))),
       GroupByNamesInAndTag("executor.stats", Set("executor.threads", "executor.queue"), Set("name"), SuffixExtractor("executor.", Seq("state"))),
       GroupByPrefixAndTag("akka.actor.", Set("path"), SuffixExtractor("akka.actor.", Seq())),
       GroupByPrefixAndTag("akka.group.", Set("group"), SuffixExtractor("akka.group.", Seq())),
       GroupByPrefixAndTag("akka.cluster.sharding.region.", Set("type"), SuffixExtractor("akka.cluster.sharding.region.", Seq())),
       GroupByPrefixAndTag("akka.cluster.sharding.shard.", Set("type"), SuffixExtractor("akka.cluster.sharding.shard.", Seq())),
-
+      GroupByPrefixAndTag("akka.remote.", Set("direction"), SuffixExtractor("akka.remote.", Seq())),
+      GroupByNamesInAndTag("process.ulimit", Set(), TagExtractor(Seq("limit"))),
+      GroupByNamesInAndTag("jvm.hiccup", Set(), TagExtractor(Seq())),
     )
   }
 
