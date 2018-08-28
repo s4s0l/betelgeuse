@@ -34,7 +34,6 @@ dependencies {
     compile group: 'io.kamon', name: "kamon-system-metrics_${scalaBinaryVersion}", version: kamonSystemMetricsVersion
     compile group: 'io.kamon', name: "kamon-spm_${scalaBinaryVersion}", version: kamonSpmVersion
     compile group: "org.apache.thrift", name: "libthrift", version: "0.9.2"
-    compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
 
 }
 
