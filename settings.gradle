@@ -22,5 +22,6 @@
 
 include 'akka-service-commons'
 include 'akka-service-commons-test'
+include 'akka-service-kamon'
 include 'akka-service-typed'
 include 'akka-service-typed-test'

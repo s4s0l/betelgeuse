@@ -43,7 +43,6 @@ task('repl', type: JavaExec) {
 
 apply from: '../gradle/scala.gradle'
 apply from: '../gradle/akka.gradle'
-apply from: '../gradle/kamon.gradle'
 apply from: '../gradle/scalike-jdbc.gradle'
 
 
