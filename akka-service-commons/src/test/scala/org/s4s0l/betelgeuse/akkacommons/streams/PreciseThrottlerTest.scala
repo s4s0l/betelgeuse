@@ -1,8 +1,3 @@
-/*
- * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
 
 /*
  * Copyright© 2018 the original author or authors.
