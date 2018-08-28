@@ -1,5 +1,11 @@
 
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,28 +21,26 @@
  *  limitations under the License.
  */
 
-configurations {
-    agent
-}
 
 ext {
-    kamonVersion = '0.6.7'
+    kamonVersion = '1.1.0'
+    kamonAkkHttpVersion = '1.0.1'
+    kamonSpmVersion = '1.1.1'
+    kamonSystemMetricsVersion = '1.0.0'
+    kamonLogReporterVersion = '0.6.8'
+    kamonAkkaRemoteVersion = "1.1.0"
 }
 
 dependencies {
-    compile group: 'io.kamon', name: "kamon-log-reporter_${scalaBinaryVersion}", version: kamonVersion
+    compile group: 'io.kamon', name: "kamon-log-reporter_${scalaBinaryVersion}", version: kamonLogReporterVersion
     compile group: 'io.kamon', name: "kamon-core_${scalaBinaryVersion}", version: kamonVersion
-    compile group: 'io.kamon', name: "kamon-system-metrics_${scalaBinaryVersion}", version: kamonVersion
     compile group: 'io.kamon', name: "kamon-akka-${akkaBinaryVersion}_${scalaBinaryVersion}", version: kamonVersion
-    compile group: 'io.kamon', name: "kamon-akka-http_${scalaBinaryVersion}", version: kamonVersion
-
-    agent group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
+    compile group: 'io.kamon', name: "kamon-akka-remote-${akkaBinaryVersion}_${scalaBinaryVersion}", version: kamonAkkaRemoteVersion
+    compile group: 'io.kamon', name: "kamon-akka-http-${akkaBinaryVersion}_${scalaBinaryVersion}", version: kamonAkkHttpVersion
+    compile group: 'io.kamon', name: "kamon-system-metrics_${scalaBinaryVersion}", version: kamonSystemMetricsVersion
+    compile group: 'io.kamon', name: "kamon-spm_${scalaBinaryVersion}", version: kamonSpmVersion
+    compile group: "org.apache.thrift", name: "libthrift", version: "0.9.2"
     compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.10'
 
 }
 
-
-task extractAspect(type:Copy){
-    from configurations.agent
-    into "${rootDir}/native"
-}

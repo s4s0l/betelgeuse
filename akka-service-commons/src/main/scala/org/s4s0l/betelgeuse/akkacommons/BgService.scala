@@ -149,6 +149,8 @@ trait BgService
 
   private def startUpProcedure(): Unit = {
     LOGGER.info("Starting startup sequence...")
+    val _ = config
+    LOGGER.info("Configuration prepared")
     val lock = registerOnInitializedBlocker()
     try {
       initialize()
@@ -217,7 +219,7 @@ trait BgService
   }
 
   private def fixUriBug(): Unit = {
-    val testString = "akka.tcp://toktme-story-handler@toktme-story_handlerservice:40000/system/receptionist"
+    val testString = "akka.tcp://toktme-story-handler@toktme-story_handlerservice:40000/system/bg_receptionist"
     if (new URI(testString).getUserInfo == null) {
       LOGGER.info("Fixing URI bug (https://bugs.openjdk.java.net/browse/JDK-8170265)")
       //      see https://stackoverflow.com/questions/28568188/java-net-uri-get-host-with-underscores

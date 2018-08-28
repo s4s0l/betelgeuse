@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,8 +40,6 @@ dependencies {
     compile "org.scalatest:scalatest_${scalaBinaryVersion}:3.0.3"
     compile 'org.pegdown:pegdown:1.6.0'
     compile group: "com.miguno.akka", name: "akka-mock-scheduler_${scalaBinaryVersion}", version: '0.5.1'
-
-
 }
 
 
