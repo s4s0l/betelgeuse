@@ -51,7 +51,7 @@ class RoachSnapshotStore extends SnapshotStore {
           .where(toSqlConditions(criteria, tagAndId))
           .orderBy(s.seq).desc
           .limit(1)
-      }.map(RoachSnapshotStoreEntity(s.resultName))
+      }.tags("roach.snap.load").map(RoachSnapshotStoreEntity(s.resultName))
         .single().apply()
     }.map {
       _.map { entity: RoachSnapshotStoreEntity =>
@@ -82,6 +82,7 @@ class RoachSnapshotStore extends SnapshotStore {
            |  ( ${tagAndId.uniqueId}, ${tagAndId.tag}, ${metadata.sequenceNr},
            |    ${metadata.timestamp}, ${serialized.value}, ${serialized.valueClass})
            """.stripMargin
+        .tags("roach.snap.save")
         .update().apply()
     }.andThen {
       case Success(_) =>
@@ -100,7 +101,7 @@ class RoachSnapshotStore extends SnapshotStore {
           .eq(s.tag, tagAndId.tag).and
           .eq(s.id, tagAndId.uniqueId).and
           .eq(s.seq, metadata.sequenceNr)
-      }.update().apply()
+      }.tags("roach.snap.delete").update().apply()
     }
   }
 
@@ -111,7 +112,7 @@ class RoachSnapshotStore extends SnapshotStore {
         delete
           .from(RoachSnapshotStoreEntity as s)
           .where(toSqlConditions(criteria, tagAndId))
-      }.update().apply()
+      }.tags("roach.snap.delete").update().apply()
     }
   }
 

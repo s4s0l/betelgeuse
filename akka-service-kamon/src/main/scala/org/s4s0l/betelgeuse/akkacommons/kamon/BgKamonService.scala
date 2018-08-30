@@ -39,6 +39,8 @@ trait BgKamonService extends BgService {
       GroupByNamesInAndTag("process.ulimit", Set(), TagExtractor(Seq("limit"))),
       GroupByNamesInAndTag("jvm.hiccup", Set(), TagExtractor(Seq())),
       GroupByPrefixAndTag("akka.http.server.", Set("port"), SuffixExtractor("akka.http.server.", Seq("port"))),
+      GroupByNamesInAndTag("sql.failure", Set(), TagExtractor(Seq("statement"))),
+      GroupByNamesInAndTag("sql.time", Set("statement"), TagExtractor(Seq("statement"))),
 
     )
   }
@@ -57,12 +59,16 @@ trait BgKamonService extends BgService {
       } else {
         LOGGER.info("SPM Kamon reporter disabled as no kamon.spm.token provided")
       }
+
+      if (config.getBoolean("kamon.sql.enabled")) {
+        ScalikeSqlMonitoring()
+      }
       LOGGER.info("Kamon enabled.")
     } else {
       LOGGER.info("Kamon disabled.")
     }
     super.initialize()
-    if (kamonEnabled) {
+    if (kamonEnabled && config.getBoolean("kamon.logging.enabled")) {
       Kamon.addReporter(new LoggingReporter(Logging(system, "Kamon"), createMetricSelectors))
     }
   }

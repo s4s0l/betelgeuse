@@ -136,7 +136,9 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
 
     sql"""SELECT when_overdue,by_who_id, "_version" FROM $unsafeSchema.$unsafeLocksTable
          WHERE  name = $lockName
-       """.map(x => (x.timestamp(1), x.string(2), x.long(3))).first().apply() match {
+       """
+      .tags("locks.check")
+      .map(x => (x.timestamp(1), x.string(2), x.long(3))).first().apply() match {
       case None =>
         sql"""INSERT INTO  $unsafeSchema.$unsafeLocksTable
                 (name,
@@ -145,7 +147,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
                 by_who ,
                 by_who_id )
          VALUES ($lockName, $now, $willBeOverdue, $humanReadableName, $uuid)
-       """.update().apply()
+       """.tags("locks.create").update().apply()
         LOGGER.debug(s"Lock $lockName inserted. Holder $uuid.")
       case Some((when_overdue, _, version))
         if when_overdue.getTime < now.getTime =>
@@ -157,7 +159,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
                  by_who_id = $uuid
              WHERE
                 name = $lockName AND "_version" = $version
-           """.update().apply()
+           """.tags("locks.update").update().apply()
         if (updated != 1) {
           throw new Exception(s"Optimistic lock exception")
         }
@@ -172,7 +174,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
              WHERE
                 name = $lockName
 
-           """.executeUpdate().apply()
+           """.tags("locks.update").executeUpdate().apply()
         if (updated != 1) {
           throw new Exception(s"Optimistic lock exception")
         }
@@ -190,7 +192,9 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
     def deleteCmd(version: Long): Int = {
       val count =
         sql"""DELETE FROM $unsafeSchema.$unsafeLocksTable
-          WHERE name=$lockName AND "_version"=$version""".executeUpdate().apply()
+          WHERE name=$lockName AND "_version"=$version"""
+          .tags("locks.delete")
+          .executeUpdate().apply()
 
       if (count != 0) {
         LOGGER.debug(s"Lock $lockName released,actually there was $count locks. Holder $uuid.")
@@ -200,7 +204,8 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
 
     sql"""SELECT by_who_id,when_overdue, _version from $unsafeSchema.$unsafeLocksTable
           WHERE NAME=$lockName
-       """.map(r => (r.string(1), r.timestamp(2), r.long(3))).first().apply() match {
+       """.map(r => (r.string(1), r.timestamp(2), r.long(3)))
+      .tags("locks.check").first().apply() match {
       case None =>
         LOGGER.warn(s"Requested lock release, but no lock was found for lockName = $lockName! Holder $uuid.")
       case Some((_, whenOverdue, version))
@@ -230,6 +235,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
          SELECT by_who_id, by_who, when_overdue FROM $unsafeSchema.$unsafeLocksTable
           WHERE name=$lockName
        """
+      .tags("locks.party")
       .map(r => (r.string(1), r.string(2), r.timestamp(3)))
       .first().apply()
       .filter(_._3.getTime > now.getTime)

@@ -55,10 +55,11 @@ class RoachAsyncWriteJournalDao()
         case x => query.limit(x.toInt)
       }
 
-    }.foreach { rs =>
-      val entity = RoachAsyncWriteJournalEntity.apply(e.resultName)(rs)
-      cb.apply(entity)
-    }
+    }.tags("roach.replay")
+      .foreach { rs =>
+        val entity = RoachAsyncWriteJournalEntity.apply(e.resultName)(rs)
+        cb.apply(entity)
+      }
   }
 
   override def save(l: immutable.Seq[RoachAsyncWriteJournalEntity])(implicit session: DBSession): Unit = {
@@ -76,7 +77,7 @@ class RoachAsyncWriteJournalDao()
             column.eventClass -> e.eventClass,
             column.deleted -> e.deleted
           )
-      }.update().apply()
+      }.tags("roach.save").update().apply()
     } else {
       withSQL {
         insert.into(RoachAsyncWriteJournalEntity)
@@ -90,17 +91,18 @@ class RoachAsyncWriteJournalDao()
             column.eventClass -> sqls.?,
             column.deleted -> sqls.?
           )
-      }.batch(l.map { e =>
-        Seq(
-          e.tag,
-          e.id,
-          e.seq,
-          e.manifest,
-          e.writerUuid,
-          e.event,
-          e.eventClass,
-          e.deleted)
-      }: _*).apply()
+      }.tags("roach.save")
+        .batch(l.map { e =>
+          Seq(
+            e.tag,
+            e.id,
+            e.seq,
+            e.manifest,
+            e.writerUuid,
+            e.event,
+            e.eventClass,
+            e.deleted)
+        }: _*).apply()
     }
   }
 
@@ -114,7 +116,7 @@ class RoachAsyncWriteJournalDao()
           .where.eq(RoachAsyncWriteJournalEntity.column.id, id)
           .and.eq(RoachAsyncWriteJournalEntity.column.tag, tag)
           .and.le(RoachAsyncWriteJournalEntity.column.seq, toSeqNum)
-      }.update.apply()
+      }.tags("roach.delete").update.apply()
     } else {
       val realToSeq = maxSeq - 1
       withSQL {
@@ -122,13 +124,13 @@ class RoachAsyncWriteJournalDao()
           .where.eq(RoachAsyncWriteJournalEntity.column.id, id)
           .and.eq(RoachAsyncWriteJournalEntity.column.tag, tag)
           .and.le(RoachAsyncWriteJournalEntity.column.seq, realToSeq)
-      }.update.apply()
+      }.tags("roach.delete").update.apply()
       withSQL {
         update(RoachAsyncWriteJournalEntity)
           .set(RoachAsyncWriteJournalEntity.column.deleted -> true)
           .where.eq(RoachAsyncWriteJournalEntity.column.id, id)
           .and.eq(RoachAsyncWriteJournalEntity.column.tag, tag)
-      }.update.apply()
+      }.tags("roach.delete").update.apply()
     }
   }
 
@@ -139,6 +141,7 @@ class RoachAsyncWriteJournalDao()
     val sql = sql"select max(seq) from ${RoachAsyncWriteJournalEntity.table} where tag = $tag and id = $id and seq >= $from"
 
     val v: Option[Option[Long]] = sql
+      .tags("roach.max")
       .map(r => r.longOpt(1))
       .single()
       .apply()

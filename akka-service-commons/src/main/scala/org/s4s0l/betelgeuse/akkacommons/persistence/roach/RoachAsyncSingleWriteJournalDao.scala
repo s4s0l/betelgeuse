@@ -43,7 +43,8 @@ class RoachAsyncSingleWriteJournalDao() extends
         .where
         .eq(e.tag, tag).and
         .eq(e.id, uniqueId)
-    }.map(RoachAsyncSingleWriteJournalEntity(e.resultName))
+    }.tags("roach.single.replay")
+      .map(RoachAsyncSingleWriteJournalEntity(e.resultName))
       .single()
       .apply()
       .foreach(cb)
@@ -66,7 +67,7 @@ class RoachAsyncSingleWriteJournalDao() extends
               column.eventClass -> entity.eventClass,
               column.deleted -> entity.deleted
             )
-        }.update().apply()
+        }.tags("roach.single.save").update().apply()
       } else {
         val updatedRecords = withSQL {
           update(RoachAsyncSingleWriteJournalEntity).set(
@@ -79,7 +80,7 @@ class RoachAsyncSingleWriteJournalDao() extends
           ).where.eq(column.seq, entity.seq - 1)
             .and.eq(column.id, entity.id)
             .and.eq(column.tag, entity.tag)
-        }.update().apply()
+        }.tags("roach.single.save").update().apply()
         if (updatedRecords != 1) {
           throw new Exception(s"Single write entity seems to have skipped some events or we are facing split brain for ${entity.tag}/${entity.id} seq was ${entity.seq}")
         }
@@ -95,7 +96,7 @@ class RoachAsyncSingleWriteJournalDao() extends
         .where.eq(RoachAsyncSingleWriteJournalEntity.column.id, id)
         .and.eq(RoachAsyncSingleWriteJournalEntity.column.tag, tag)
         .and.lt(RoachAsyncSingleWriteJournalEntity.column.seq, toSeqNum)
-    }.update.apply()
+    }.tags("roach.single.delete").update.apply()
   }
 
   def getMaxSequenceNumber(tag: String, id: String, from: Long)
@@ -105,7 +106,7 @@ class RoachAsyncSingleWriteJournalDao() extends
         .where
         .eq(e.tag, tag).and
         .eq(e.id, id)
-    }
+    }.tags("roach.single.max")
       .map(rs => rs.long(e.resultName.seq))
       .single().apply() match {
       case None => 0L
