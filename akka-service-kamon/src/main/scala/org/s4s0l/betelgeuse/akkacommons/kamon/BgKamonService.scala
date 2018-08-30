@@ -38,6 +38,8 @@ trait BgKamonService extends BgService {
       GroupByPrefixAndTag("akka.remote.", Set("direction"), SuffixExtractor("akka.remote.", Seq())),
       GroupByNamesInAndTag("process.ulimit", Set(), TagExtractor(Seq("limit"))),
       GroupByNamesInAndTag("jvm.hiccup", Set(), TagExtractor(Seq())),
+      GroupByPrefixAndTag("akka.http.server.", Set("port"), SuffixExtractor("akka.http.server.", Seq("port"))),
+
     )
   }
 

@@ -23,6 +23,13 @@ class LoggingReporter(log: LoggingAdapter, selectors: Seq[Selector]) extends Met
     .toFormatter()
 
   override def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit = {
+    //    println("============")
+    //    snapshot.metrics.rangeSamplers.foreach(println)
+    //    snapshot.metrics.histograms.foreach(println)
+    //    snapshot.metrics.gauges.foreach(println)
+    //    snapshot.metrics.counters.foreach(println)
+    //    println("============")
+
     val metrics: Seq[ReporterMetric] = snapshot.metrics.counters.map(ReporterMetricValue) ++
       snapshot.metrics.gauges.map(ReporterMetricValue) ++
       snapshot.metrics.histograms.map(ReporterMetricDistribution) ++
