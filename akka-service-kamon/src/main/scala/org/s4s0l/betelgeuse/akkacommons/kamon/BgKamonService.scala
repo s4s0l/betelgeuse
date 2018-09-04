@@ -3,6 +3,7 @@ package org.s4s0l.betelgeuse.akkacommons.kamon
 import akka.event.Logging
 import com.typesafe.config.{Config, ConfigFactory}
 import kamon.Kamon
+import kamon.prometheus.PrometheusReporter
 import kamon.spm.SPMReporter
 import kamon.system.SystemMetrics
 import org.s4s0l.betelgeuse.akkacommons.BgService
@@ -68,8 +69,15 @@ trait BgKamonService extends BgService {
       LOGGER.info("Kamon disabled.")
     }
     super.initialize()
-    if (kamonEnabled && config.getBoolean("kamon.logging.enabled")) {
-      Kamon.addReporter(new LoggingReporter(Logging(system, "Kamon"), createMetricSelectors))
+    if (kamonEnabled) {
+      if (config.getBoolean("kamon.logging.enabled")) {
+        LOGGER.info("Kamon Log reporter enabled.")
+        Kamon.addReporter(new LoggingReporter(Logging(system, "Kamon"), createMetricSelectors))
+      }
+      if (config.getBoolean("kamon.prometheus.enabled")) {
+        LOGGER.warn(s"Kamon Prometheus reporter enabled on port ${config.getString("kamon.prometheus.embedded-server.port")}.")
+        Kamon.addReporter(new PrometheusReporter())
+      }
     }
   }
 

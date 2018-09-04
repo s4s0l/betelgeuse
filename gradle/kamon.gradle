@@ -20,6 +20,7 @@ ext {
     kamonAkkHttpVersion = '1.0.1'
     kamonSpmVersion = '1.1.1'
     kamonSystemMetricsVersion = '1.0.0'
+    kamonPrometheusVersion = '1.1.1'
     kamonLogReporterVersion = '0.6.8'
     kamonAkkaRemoteVersion = "1.1.0"
 }
@@ -31,6 +32,7 @@ dependencies {
     compile group: 'io.kamon', name: "kamon-akka-remote-${akkaBinaryVersion}_${scalaBinaryVersion}", version: kamonAkkaRemoteVersion
     compile group: 'io.kamon', name: "kamon-akka-http-${akkaBinaryVersion}_${scalaBinaryVersion}", version: kamonAkkHttpVersion
     compile group: 'io.kamon', name: "kamon-system-metrics_${scalaBinaryVersion}", version: kamonSystemMetricsVersion
+    compile group: 'io.kamon', name: "kamon-prometheus_${scalaBinaryVersion}", version: kamonPrometheusVersion
     compile group: "org.apache.thrift", name: "libthrift", version: "0.9.2"
     //deoendency from kamon spm has class loading issues when used with google apis, this version seems to work fine for both
     compile("io.kamon:kamon-spm_${scalaBinaryVersion}:${kamonSpmVersion}") {
