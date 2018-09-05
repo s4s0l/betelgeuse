@@ -1,6 +1,7 @@
 db.${datasource} {
-  poolInitialSize = 3
-  poolMaxSize = 20
+  poolInitialSize = 2
+  #usually there can be 2 dispatchers using it db (max16) and journal (max16)
+  poolMaxSize = 34
   poolConnectionTimeoutMillis = 1000
   poolValidationQuery = "select 1 as one"
   poolFactoryName = "commons-dbcp2"
