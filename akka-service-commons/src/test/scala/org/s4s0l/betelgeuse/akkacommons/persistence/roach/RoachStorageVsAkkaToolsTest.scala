@@ -89,14 +89,14 @@ class RoachStorageVsAkkaToolsTest
       ref ! GracefulShutdown
       aService.testKit.expectMsgClass(10.seconds, classOf[Terminated])
 
+      aService.restartService()
 
       val ref2 = createRegion()
-      Thread.sleep(3000)
+      Thread.sleep(8000)
       //we check if region brought entity up by itself
       val x3 = Await.result(ref2 ? "aaa", to).asInstanceOf[(Long, ActorRef)]
-      assert(x3._1 < System.currentTimeMillis() - 2000L)
+      assert(x3._1 < System.currentTimeMillis() - 3000L)
     }
-
 
     scenario("Simple fsm can be persisted") {
 
