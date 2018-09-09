@@ -114,7 +114,7 @@ class BgPersistenceSingleJournalRoachTest
           }, 20 seconds)
 
         Then("It does not confirm, we assume it died because of persistence failure, and got restarted by supervisor")
-        testKit.expectNoMsg(1 second)
+        testKit.expectNoMessage(1 second)
 
 
         When("We hit it again")

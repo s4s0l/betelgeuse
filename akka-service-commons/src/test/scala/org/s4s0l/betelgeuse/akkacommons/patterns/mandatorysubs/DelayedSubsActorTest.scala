@@ -74,7 +74,7 @@ class DelayedSubsActorTest extends BgTestService {
         delayedSubsActor.publishMsg(Publish("1", "value", 5 seconds))
 
         Then("No ack is received")
-        testKit.expectNoMsg(to)
+        testKit.expectNoMessage(to)
 
 
         When("Promise completes with two always successful listeners")

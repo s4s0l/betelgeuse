@@ -200,7 +200,7 @@ class CacheAccessActorTest extends BgTestService {
         private val value3 = GetCacheValue(10)
         accessor.apply(value3).pipeTo(self)
         Then("We no immediate response")
-        testKit.expectNoMsg(1 second)
+        testKit.expectNoMessage(1 second)
 
         And("We do get answers finally")
         private val valuesCollected = mutable.Set[GetCacheValueResult[String]]()
