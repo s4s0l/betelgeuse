@@ -60,7 +60,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
   //  """.stripMargin
 ))) with FeatureSpecLike
   with ScalaFutures {
-
+  private val deNano = 1000000
   private implicit val mat: ActorMaterializer = ActorMaterializer()
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(25.second, 10.millis)
   private implicit val ec: ExecutionContext = system.dispatcher
@@ -76,7 +76,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
         println(x)
         //if this test stops passing this means akka got better and we can
         //consider moving back to standard solution
-        assert(x.stdDev > 15f)
+        assert(x.intervalStats.stdDev > 15f)
       }
     }
 
@@ -90,9 +90,9 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
 
       whenReady(silenceStream.future) { x =>
         println(x)
-        assert(x.avgInterval >= 18)
-        assert(x.avgInterval <= 22)
-        assert(x.stdDev <= 10)
+        assert(x.intervalStats.avgTime / deNano >= 18)
+        assert(x.intervalStats.avgTime / deNano <= 22)
+        assert(x.intervalStats.stdDev <= 10)
       }
 
     }
@@ -110,7 +110,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
       silenceStream.foreach(it => whenReady(it.future) { x =>
         println(x)
         count = count + 1
-        sum = sum + x.stdDev
+        sum = sum + x.intervalStats.stdDev
       }
       )
       println("WARM-UP SCORE:" + (sum / count))
@@ -126,7 +126,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
       silenceStream2.foreach(it => whenReady(it.future) { x =>
         println(x)
         count = count + 1
-        sum = sum + x.stdDev
+        sum = sum + x.intervalStats.stdDev
       }
       )
       println("OVERALL SCORE:" + (sum / count))
@@ -143,9 +143,9 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
 
       whenReady(silenceStream.future) { x =>
         println(x)
-        assert(x.avgInterval >= 18)
-        assert(x.avgInterval <= 22)
-        assert(x.stdDev <= 10)
+        assert(x.intervalStats.avgTime / deNano >= 18)
+        assert(x.intervalStats.avgTime / deNano <= 22)
+        assert(x.intervalStats.stdDev <= 10)
       }
       Thread.sleep(3000)
     }
@@ -202,7 +202,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
       silenceStream.foreach(it => whenReady(it.future) { x =>
         println(x)
         count = count + 1
-        sum = sum + x.stdDev
+        sum = sum + x.intervalStats.stdDev
       }
       )
       println("WARM-UP SCORE:" + (sum / count))
@@ -217,7 +217,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
       silenceStream2.foreach(it => whenReady(it.future) { x =>
         println(x)
         count = count + 1
-        sum = sum + x.stdDev
+        sum = sum + x.intervalStats.stdDev
       }
       )
       println("OVERALL SCORE:" + (sum / count))

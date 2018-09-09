@@ -29,11 +29,11 @@ import scala.concurrent.Promise
 object IntervalStats {
 
   implicit class TimingStatsSource[T, Mat](wrapped: Source[T, Mat]) {
-    def viaIntervalStatsKeepMat(): Source[T, (Mat, Promise[TimingStats])] = {
+    def viaIntervalStatsKeepMat(): Source[T, (Mat, Promise[StreamIntervalStats])] = {
       wrapped.viaMat(new TimingStatsFlow[T]())(Keep.both)
     }
 
-    def viaIntervalStatsMat(): Source[T, Promise[TimingStats]] = {
+    def viaIntervalStatsMat(): Source[T, Promise[StreamIntervalStats]] = {
       wrapped.viaMat(new TimingStatsFlow[T]())(Keep.right)
     }
   }
@@ -42,49 +42,67 @@ object IntervalStats {
   private val deNano = 1000000
 
 
-  case class TimingStats(
-                          totalTime: Long,
-                          maxInterval: Long,
-                          minInterval: Long,
-                          avgInterval: Long,
-                          messagesPassed: Long,
-                          dSquared: Long,
-                          timeToFirstMessage: Long) {
-
+  case class StreamTimeStats(
+                              maxTime: Long = Long.MinValue,
+                              minTime: Long = Long.MaxValue,
+                              avgTime: Long = 0,
+                              messagesPassed: Long = 0,
+                              dSquared: Long = 0
+                            ) {
     lazy val populationStdDev: Double = Math.sqrt(populationVariance) / deNano
     lazy val stdDev: Double = Math.sqrt(this.variance) / deNano
     private lazy val count: Long = messagesPassed - 1
     private lazy val populationVariance: Double = dSquared / count
     private lazy val variance = if (count > 1) dSquared.toDouble / (count - 1) else 0d
 
-    override def toString: String =
-      s"$messagesPassed messages in $totalTime, " +
-        s"avgInterval=$avgInterval, " +
-        f"stdDev=$stdDev%.2f, " +
-        s"min=$minInterval, " +
-        s"max $maxInterval, " +
-        s"delay=$timeToFirstMessage"
+    //see https://dev.to/nestedsoftware/calculating-standard-deviation-on-streaming-data-253l
+    def tick(time: Long): StreamTimeStats = {
+      val diff = time
+      val minValue = Math.min(minTime, diff)
+      val maxValue = Math.max(maxTime, diff)
+      val oldAvg = avgTime
+      val newAvg = (oldAvg * messagesPassed + diff) / (messagesPassed + 1)
+      val dSquaredIncrement =
+        (diff - newAvg) * (diff - oldAvg)
+      this.copy(
+        dSquared = dSquared + dSquaredIncrement,
+        avgTime = newAvg,
+        messagesPassed = messagesPassed + 1,
+        maxTime = maxValue,
+        minTime = minValue
+      )
+    }
   }
 
-  private[IntervalStats] case class TimingStatsFlow[A] private[IntervalStats]() extends GraphStageWithMaterializedValue[FlowShape[A, A], Promise[TimingStats]] {
+  case class StreamIntervalStats(
+                                  totalTime: Long,
+                                  timeToFirstMessage: Long,
+                                  intervalStats: StreamTimeStats
+                                ) {
+    override def toString: String =
+      s"${intervalStats.messagesPassed} messages in ${totalTime / deNano}, " +
+        s"avgInterval=${intervalStats.avgTime / deNano}, " +
+        f"stdDev=${intervalStats.stdDev}%.2f, " +
+        s"min=${intervalStats.minTime / deNano}, " +
+        s"max=${intervalStats.maxTime / deNano}, " +
+        s"delay=${timeToFirstMessage / deNano}"
+  }
+
+
+  private[IntervalStats] case class TimingStatsFlow[A] private[IntervalStats]()
+    extends GraphStageWithMaterializedValue[FlowShape[A, A], Promise[StreamIntervalStats]] {
 
     private val in = Inlet[A]("Map.in")
     private val out = Outlet[A]("Map.out")
     override val shape: FlowShape[A, A] = FlowShape.of(in, out)
 
     override def createLogicAndMaterializedValue(attr: Attributes)
-    : (GraphStageLogic, Promise[TimingStats]) = {
-      val materialized = Promise[TimingStats]()
-      var lastMessageTime: Long = -1
-      var minValue = Long.MaxValue
-      var maxValue = Long.MinValue
-      var avgValue: Long = -1
-      var counter: Long = 0
+    : (GraphStageLogic, Promise[StreamIntervalStats]) = {
+      val materialized = Promise[StreamIntervalStats]()
+      var firstMessageTime = -1L
+      var lastMessageTime = -1L
       var startTime = System.nanoTime()
-      var firstMessageTime: Long = -1
-      //see https://dev.to/nestedsoftware/calculating-standard-deviation-on-streaming-data-253l
-      var dSquared: Long = 0
-
+      var timeStats: StreamTimeStats = StreamTimeStats()
       val logic = new GraphStageLogic(shape) {
 
 
@@ -95,33 +113,18 @@ object IntervalStats {
               firstMessageTime = time
             } else {
               val diff = time - lastMessageTime
-              minValue = Math.min(minValue, diff)
-              maxValue = Math.max(maxValue, diff)
-              if (avgValue == -1) {
-                avgValue = 0
-              }
-              val newAvg = (avgValue * counter + diff) / (counter + 1)
-              val dSquaredIncrement =
-                (diff - newAvg) * (diff - avgValue)
-              dSquared = dSquared + dSquaredIncrement
-              avgValue = newAvg
+              timeStats = timeStats.tick(diff)
             }
-            counter = counter + 1
             lastMessageTime = time
             push(out, grab(in))
           }
 
 
           private def materialize = {
-
-            TimingStats(
-              (lastMessageTime - startTime) / deNano,
-              maxValue / deNano,
-              minValue / deNano,
-              avgValue / deNano,
-              counter,
-              dSquared,
-              (firstMessageTime - startTime) / deNano
+            StreamIntervalStats(
+              lastMessageTime - startTime,
+              firstMessageTime - startTime,
+              timeStats
             )
           }
 
