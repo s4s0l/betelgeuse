@@ -19,7 +19,6 @@ import akka.event.Logging
 import com.typesafe.config.{Config, ConfigFactory}
 import kamon.Kamon
 import kamon.prometheus.PrometheusReporter
-import kamon.spm.SPMReporter
 import kamon.system.SystemMetrics
 import org.s4s0l.betelgeuse.akkacommons.BgService
 import org.s4s0l.betelgeuse.akkacommons.kamon.LoggingReporter._
@@ -70,12 +69,12 @@ trait BgKamonService extends BgService {
       SystemMetrics.startCollecting()
       Kamon.loadReportersFromConfig()
 
-      if (config.hasPath("kamon.spm.token") && config.getString("kamon.spm.token").nonEmpty) {
-        LOGGER.info("SPM token found, enabling Kamon spm reporter")
-        Kamon.addReporter(new SPMReporter())
-      } else {
-        LOGGER.info("SPM Kamon reporter disabled as no kamon.spm.token provided")
-      }
+      //      if (config.hasPath("kamon.spm.token") && config.getString("kamon.spm.token").nonEmpty) {
+      //        LOGGER.info("SPM token found, enabling Kamon spm reporter")
+      //        Kamon.addReporter(new SPMReporter())
+      //      } else {
+      //        LOGGER.info("SPM Kamon reporter disabled as no kamon.spm.token provided")
+      //      }
 
       if (config.getBoolean("kamon.sql.enabled")) {
         ScalikeSqlMonitoring()

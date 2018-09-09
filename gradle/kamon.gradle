@@ -33,24 +33,4 @@ dependencies {
     compile group: 'io.kamon', name: "kamon-akka-http-${akkaBinaryVersion}_${scalaBinaryVersion}", version: kamonAkkHttpVersion
     compile group: 'io.kamon', name: "kamon-system-metrics_${scalaBinaryVersion}", version: kamonSystemMetricsVersion
     compile group: 'io.kamon', name: "kamon-prometheus_${scalaBinaryVersion}", version: kamonPrometheusVersion
-    compile group: "org.apache.thrift", name: "libthrift", version: "0.9.2"
-    //deoendency from kamon spm has class loading issues when used with google apis, this version seems to work fine for both
-    compile("io.kamon:kamon-spm_${scalaBinaryVersion}:${kamonSpmVersion}") {
-        exclude group: 'io.netty'
-    }
-    compile('org.asynchttpclient:async-http-client:2.5.2') {
-        exclude group: 'io.netty'
-    }
-    compile ('org.asynchttpclient:async-http-client-netty-utils:2.5.2') {
-        exclude group: 'io.netty'
-    }
-
-    compile 'io.netty:netty-buffer:4.1.16.Final'
-    compile 'io.netty:netty-codec-http:4.1.16.Final'
-    compile 'io.netty:netty-handler:4.1.16.Final'
-    compile 'io.netty:netty-codec-socks:4.1.16.Final'
-    compile 'io.netty:netty-handler-proxy:4.1.16.Final'
-    compile 'io.netty:netty-transport-native-epoll:4.1.16.Final'
-    compile 'io.netty:netty-resolver-dns:4.1.16.Final'
-    compile 'io.netty:netty-handler:4.1.16.Final'
 }
