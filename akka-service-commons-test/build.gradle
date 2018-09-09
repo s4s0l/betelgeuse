@@ -30,6 +30,7 @@ apply from: '../gradle/akka.gradle'
 dependencies {
     compile project(":akka-service-commons")
     compile "com.typesafe.akka:akka-http-testkit_${scalaBinaryVersion}:${akkaHttpVersion}"
+    compile "com.typesafe.akka:akka-stream-testkit_${scalaBinaryVersion}:${akkaVersion}"
     // https://mvnrepository.com/artifact/org.scalamock/scalamock-scalatest-support_2.12
     compile group: 'org.scalamock', name: "scalamock-scalatest-support_${scalaBinaryVersion}", version: '3.6.0'
     compile "org.scalatest:scalatest_${scalaBinaryVersion}:3.0.3"
