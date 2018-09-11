@@ -39,11 +39,11 @@ object PreciseThrottler {
 
 
   implicit class PreciseThrottlerSource[T, Mat](wrapped: Source[T, Mat]) {
-    def viaPreciseThrottler(delay: FiniteDuration, buffer: Int, onNoData: () => Unit): Source[T, Mat] = {
+    def viaPreciseThrottler(delay: FiniteDuration, buffer: Int, onNoData: () => Unit = () => {}): Source[T, Mat] = {
       wrapped.via(throttleFixed(delay, buffer, onNoData))
     }
 
-    def viaPreciseThrottlerAkka(delay: FiniteDuration, buffer: Int, onNoData: () => Unit,
+    def viaPreciseThrottlerAkka(delay: FiniteDuration, buffer: Int, onNoData: () => Unit = () => {},
                                 initialDelay: FiniteDuration = Duration.Zero): Source[T, Mat] = {
       wrapped.via(throttleLightAkka(delay, initialDelay, buffer, onNoData))
     }

@@ -82,7 +82,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
 
     scenario("the new way") {
       val silenceStream = Source(1 to 500)
-        .viaPreciseThrottler(20.millis, 100, warnOnNoData = false)
+        .viaPreciseThrottler(20.millis, 100)
         .viaIntervalStatsMat()
         .toMat(Sink.seq)(Keep.left)
         .run()
@@ -102,7 +102,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
       var count = 0
       var sum = 0d
       val silenceStream = (1 to 50).map(_ => Source(1 to 500)
-        .viaPreciseThrottler(20.millis, 100, warnOnNoData = false)
+        .viaPreciseThrottler(20.millis, 100)
         .viaIntervalStatsMat()
         .toMat(Sink.seq)(Keep.left)
         .run())
@@ -118,7 +118,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
       sum = 0d
 
       val silenceStream2 = (1 to 150).map(_ => Source(1 to 500)
-        .viaPreciseThrottler(20.millis, 100, warnOnNoData = false)
+        .viaPreciseThrottler(20.millis, 100)
         .viaIntervalStatsMat()
         .toMat(Sink.seq)(Keep.left)
         .run())
@@ -135,7 +135,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
 
     scenario("the new way with akka scheduler") {
       val silenceStream = Source(1 to 500)
-        .viaPreciseThrottlerAkka(20.millis, 100, warnOnNoData = false)
+        .viaPreciseThrottlerAkka(20.millis, 100)
         .viaIntervalStatsMat()
         .toMat(Sink.seq)(Keep.left)
         .run()
@@ -153,7 +153,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
     scenario("the new way with akka scheduler - slow consumer") {
 
       val d = Source(0 to 10000)
-        .viaPreciseThrottlerAkka(20.millis, 100, warnOnNoData = false)
+        .viaPreciseThrottlerAkka(20.millis, 100)
         .toMat(TestSink.probe[Int])(Keep.right)
         .run()
 
@@ -170,7 +170,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
     scenario("the new way with akka scheduler - slow producer") {
 
       val (s, d) = TestSource.probe[Int]
-        .viaPreciseThrottlerAkka(20.millis, 100, warnOnNoData = false)
+        .viaPreciseThrottlerAkka(20.millis, 100)
         .toMat(TestSink.probe[Int])(Keep.both)
         .run()
 
@@ -194,7 +194,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
       var count = 0
       var sum = 0d
       val silenceStream = (1 to 50).map(_ => Source(1 to 500)
-        .viaPreciseThrottlerAkka(20.millis, 100, warnOnNoData = false)
+        .viaPreciseThrottlerAkka(20.millis, 100)
         .viaIntervalStatsMat()
         .toMat(Sink.seq)(Keep.left)
         .run())
@@ -209,7 +209,7 @@ class PreciseThrottlerTest extends TestKit(ActorSystem("MySpec", ConfigFactory.p
       count = 0
       sum = 0d
       val silenceStream2 = (1 to 150).map(_ => Source(1 to 500)
-        .viaPreciseThrottlerAkka(20.millis, 100, warnOnNoData = false)
+        .viaPreciseThrottlerAkka(20.millis, 100)
         .viaIntervalStatsMat()
         .toMat(Sink.seq)(Keep.left)
         .run())
