@@ -39,13 +39,13 @@ object PreciseThrottler {
 
 
   implicit class PreciseThrottlerSource[T, Mat](wrapped: Source[T, Mat]) {
-    def viaPreciseThrottler(delay: FiniteDuration, buffer: Int, warnOnNoData: Boolean): Source[T, Mat] = {
-      wrapped.via(throttleFixed(delay, buffer, warnOnNoData))
+    def viaPreciseThrottler(delay: FiniteDuration, buffer: Int, onNoData: () => Unit): Source[T, Mat] = {
+      wrapped.via(throttleFixed(delay, buffer, onNoData))
     }
 
-    def viaPreciseThrottlerAkka(delay: FiniteDuration, buffer: Int, warnOnNoData: Boolean,
+    def viaPreciseThrottlerAkka(delay: FiniteDuration, buffer: Int, onNoData: () => Unit,
                                 initialDelay: FiniteDuration = Duration.Zero): Source[T, Mat] = {
-      wrapped.via(throttleLightAkka(delay, initialDelay, buffer, warnOnNoData))
+      wrapped.via(throttleLightAkka(delay, initialDelay, buffer, onNoData))
     }
   }
 
@@ -91,7 +91,7 @@ object PreciseThrottler {
   }
 
 
-  def throttleFixed[A](delay: FiniteDuration, buffer: Int, warnOnNoData: Boolean): GraphStage[FlowShape[A, A]] = {
+  def throttleFixed[A](delay: FiniteDuration, buffer: Int, onNoData: () => Unit): GraphStage[FlowShape[A, A]] = {
     val asMillis = delay.toMillis
     val ticker = tickers.synchronized {
       tickers.getOrElse(asMillis, {
@@ -101,13 +101,13 @@ object PreciseThrottler {
 
     }
     val shd: FixedScheduler = ticker.register
-    new FixedThrottle[A](delay.toMillis, shd, buffer, warnOnNoData)
+    new FixedThrottle[A](delay.toMillis, shd, buffer, onNoData)
   }
 
   def throttleLightAkka[A](delay: FiniteDuration,
                            initialDelay: FiniteDuration,
                            buffer: Int,
-                           warnOnNoData: Boolean
+                           onNoData: () => Unit
                           ): GraphStage[FlowShape[A, A]] = {
     implicit val ec: ExecutionContext = SameThreadExecutionContext
     val shd: FixedScheduler = cb => {
@@ -118,7 +118,7 @@ object PreciseThrottler {
       )
       () => ret.cancel()
     }
-    new FixedThrottle[A](delay.toMillis, shd, buffer, warnOnNoData)
+    new FixedThrottle[A](delay.toMillis, shd, buffer, onNoData)
   }
 
 
@@ -224,7 +224,7 @@ object PreciseThrottler {
                                                          intervalMillis: Long,
                                                          scheduler: FixedScheduler,
                                                          bufferSize: Int,
-                                                         warnOnNoData: Boolean
+                                                         onNoData: () => Unit
                                                        ) extends GraphStage[FlowShape[A, A]] {
 
     private val in = Inlet[A]("Map.in")
@@ -286,7 +286,10 @@ object PreciseThrottler {
             if (buffer.isEmpty) {
               //todo ??? we should leave info for onPull to catch up when  messagesToBeSend > 1
               //we do not warn before first message - this is very likely to happen regardless of upstream speed
-              if (warnOnNoData && lastMessageSend != -1) LOGGER.warn("Throttling has no data to pull, too slow producer")
+              if (lastMessageSend != -1) {
+                onNoData()
+                LOGGER.debug("Throttling has no data to pull, too slow producer")
+              }
             }
             else {
               dequeueAndPush(fireTimeNanos)

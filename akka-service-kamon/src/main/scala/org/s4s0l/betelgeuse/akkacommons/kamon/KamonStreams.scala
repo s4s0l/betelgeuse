@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.kamon
 import akka.stream.scaladsl.{Flow, Source}
 import akka.stream.stage._
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
-import kamon.metric.{Counter, StartedTimer, Timer}
+import kamon.metric.{Counter, Gauge, StartedTimer, Timer}
 import kamon.{Kamon, Tags}
 
 /**
@@ -78,7 +78,8 @@ object KamonStreams {
         Kamon.counter(metricName).refine(tags ++ Map("statistic" -> "start", "streamName" -> streamName)),
         Kamon.counter(metricName).refine(tags ++ Map("statistic" -> "fail", "streamName" -> streamName)),
         Kamon.counter(metricName).refine(tags ++ Map("statistic" -> "finish-down", "streamName" -> streamName)),
-        Kamon.counter(metricName).refine(tags ++ Map("statistic" -> "finish-up", "streamName" -> streamName))
+        Kamon.counter(metricName).refine(tags ++ Map("statistic" -> "finish-up", "streamName" -> streamName)),
+        Kamon.gauge(metricName).refine(tags ++ Map("statistic" -> "working", "streamName" -> streamName))
       )
     }
   }
@@ -89,6 +90,7 @@ object KamonStreams {
                                          failCounter: Counter,
                                          downFinish: Counter,
                                          upFinish: Counter,
+                                         inTransit: Gauge
                                        )
 
   private[KamonStreams] case class BasicCountersStage[A](metrics: StreamBasicMetrics)
@@ -136,7 +138,13 @@ object KamonStreams {
           }
         })
 
+        override def postStop(): Unit = {
+          metrics.inTransit.decrement()
+          super.postStop()
+        }
+
         override def preStart(): Unit = {
+          metrics.inTransit.increment()
           metrics.startCounter.increment()
           super.preStart()
         }
