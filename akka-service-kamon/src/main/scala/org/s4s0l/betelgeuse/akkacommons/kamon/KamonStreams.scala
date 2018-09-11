@@ -79,7 +79,7 @@ object KamonStreams {
         Kamon.counter(metricName).refine(tags ++ Map("statistic" -> "fail", "streamName" -> streamName)),
         Kamon.counter(metricName).refine(tags ++ Map("statistic" -> "finish-down", "streamName" -> streamName)),
         Kamon.counter(metricName).refine(tags ++ Map("statistic" -> "finish-up", "streamName" -> streamName)),
-        Kamon.gauge(metricName).refine(tags ++ Map("statistic" -> "working", "streamName" -> streamName))
+        Kamon.gauge(metricName + ".gauge").refine(tags ++ Map("statistic" -> "working", "streamName" -> streamName))
       )
     }
   }
