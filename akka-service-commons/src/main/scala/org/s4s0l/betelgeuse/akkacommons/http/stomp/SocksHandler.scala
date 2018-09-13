@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +24,6 @@
 
 package org.s4s0l.betelgeuse.akkacommons.http.stomp
 
-import java.util.UUID
-
 import akka.NotUsed
 import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage}
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
@@ -29,6 +33,7 @@ import akka.stream.FlowShape
 import akka.stream.scaladsl.{Flow, _}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.http.stomp.SocksHandler.{IncomingSocksMessage, SocksSessionId}
+import org.s4s0l.betelgeuse.utils.UuidUtils
 import org.s4s0l.betelgeuse.utils.stomp.SocksParser
 import org.slf4j.LoggerFactory
 
@@ -70,7 +75,7 @@ trait SocksHandler {
         } ~
           pathPrefix(
             Segment / Segment / "websocket") { (serverId, sessionId) =>
-            val internalSessionId = UUID.randomUUID().toString
+            val internalSessionId = UuidUtils.timeBasedUuid().toString
             val userId = internalSessionId
             val session = SocksSessionId(webSocketName, serverId, sessionId, internalSessionId, userId)
             handleWebSocketMessages(socksFlow(session, flowFactory(session)))

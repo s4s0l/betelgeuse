@@ -1,5 +1,11 @@
 
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +25,6 @@ package org.s4s0l.betelgeuse.akkacommons
 
 import java.lang.reflect.{Field, Modifier}
 import java.net.URI
-import java.util.UUID
 
 import akka.Done
 import akka.actor.CoordinatedShutdown.UnknownReason
@@ -29,6 +34,7 @@ import akka.stream.{ActorMaterializer, Materializer}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkacommons.serialization.{HttpMarshalling, JacksonJsonSerializer}
 import org.s4s0l.betelgeuse.akkacommons.utils.EventStreamListener
+import org.s4s0l.betelgeuse.utils.UuidUtils
 
 import scala.collection.mutable
 import scala.concurrent.duration._
@@ -171,7 +177,7 @@ trait BgService
 
   protected final def registerOnInitializedBlocker(): AnyRef = {
     initializedBlockers.synchronized {
-      val ret = UUID.randomUUID().toString
+      val ret = UuidUtils.timeBasedUuid().toString
       initializedBlockers += ret
       ret
     }

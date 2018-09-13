@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,6 +33,7 @@ import com.softwaremill.session.{SessionConfig, SessionManager}
 import org.s4s0l.betelgeuse.akkacommons.http.BgHttpSessionExtension.SessionContext
 import org.s4s0l.betelgeuse.akkacommons.http.SessionActor.{SessionActorSettings, SessionChildActorFactory}
 import org.s4s0l.betelgeuse.akkacommons.http.SessionManagerActor.Protocol
+import org.s4s0l.betelgeuse.utils.UuidUtils
 
 import scala.concurrent.Future
 import scala.language.postfixOps
@@ -59,7 +66,7 @@ class BgHttpSessionExtension(private val system: ExtendedActorSystem) extends Ex
         protocol.tick(session)
         route(SessionContext(newSession = false, session, protocol))
       case None =>
-        val newSession = UUID.randomUUID().toString
+        val newSession = UuidUtils.timeBasedUuid().toString
         LOGGER.info("Session created")
         setSession(oneOff, usingCookies, newSession) {
           protocol.tick(newSession)

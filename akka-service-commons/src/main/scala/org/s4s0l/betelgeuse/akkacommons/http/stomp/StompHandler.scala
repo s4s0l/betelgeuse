@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +23,6 @@
 
 package org.s4s0l.betelgeuse.akkacommons.http.stomp
 
-import java.util.UUID
-
 import akka.NotUsed
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Terminated}
 import akka.cluster.pubsub.DistributedPubSubMediator
@@ -32,6 +36,7 @@ import org.s4s0l.betelgeuse.akkacommons.http.stomp.SocksHandler.{IncomingSocksMe
 import org.s4s0l.betelgeuse.akkacommons.http.stomp.StompHandler.StompUserActor.{StompUserActorDone, _}
 import org.s4s0l.betelgeuse.akkacommons.http.stomp.StompHandler._
 import org.s4s0l.betelgeuse.akkacommons.http.stomp.StompHandlerApi._
+import org.s4s0l.betelgeuse.utils.UuidUtils
 import org.s4s0l.betelgeuse.utils.stomp.{Stomp, StompMessage, StompParser}
 import org.slf4j.LoggerFactory
 
@@ -101,7 +106,7 @@ object StompHandler extends StompHandler {
       val source = StompSource(value._1.internalSessionId, value._1.userId, value._1.webSocketName)
       value._2 match {
         case StompMessage("SEND", headers, payload) =>
-          StompClientSend(headers, source, headers.getOrElse(Stomp.Headers.Send.ID, s"sg:${UUID.randomUUID().toString}"), payload)
+          StompClientSend(headers, source, headers.getOrElse(Stomp.Headers.Send.ID, s"sg:${UuidUtils.timeBasedUuid().toString}"), payload)
         case StompMessage("ACK", headers, _) =>
           StompClientAck(headers, source, headers(Stomp.Headers.Ack.ID))
         case StompMessage("NACK", headers, _) =>

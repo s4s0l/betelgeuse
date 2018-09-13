@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +22,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
-import java.util.UUID
-
 import org.s4s0l.betelgeuse.akkacommons.test.DbCrateTest
+import org.s4s0l.betelgeuse.utils.UuidUtils
 import org.scalatest.FeatureSpec
 import scalikejdbc._
 
@@ -29,7 +34,7 @@ class DummyPersistenceTest extends FeatureSpec with DbCrateTest {
 
   def insert(recs: Int)(implicit session: DBSession): Unit = {
     val batchParams = (1 to recs).map { _ =>
-      val s = UUID.randomUUID().toString
+      val s = UuidUtils.timeBasedUuid().toString
       Seq(s, s)
     }
     sql"insert into dummy (k,s) values (?, ?)".batch(batchParams: _*).apply()

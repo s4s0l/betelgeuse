@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,9 +24,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.http.stomp
 
-import java.util.UUID
-
 import akka.http.scaladsl.model.headers.`Content-Type`
+import org.s4s0l.betelgeuse.utils.UuidUtils
 import org.s4s0l.betelgeuse.utils.stomp.Stomp
 
 /**
@@ -89,7 +94,7 @@ object StompHandlerApi {
 
   case class StompServerData(destination: StompMessageDestination,
                              payload: String,
-                             id: String = UUID.randomUUID().toString,
+                             id: String = UuidUtils.timeBasedUuid().toString,
                              contentType: Option[`Content-Type`] = None, headers:Map[String,String] = Map()) extends StompServerMessage
 
   case class StompServerReceipt(destination: StompMessageDestination, receiptId: String) extends StompServerMessage

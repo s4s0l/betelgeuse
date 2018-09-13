@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +24,6 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs
 
-import java.util.UUID
-
 import akka.actor.{Actor, ActorRef, ActorSystem}
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
@@ -29,6 +33,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigSupervis
 import org.s4s0l.betelgeuse.akkacommons.patterns.globalcfgs.GlobalConfigsFactory.GlobalConfigsEventPublisher
 import org.s4s0l.betelgeuse.akkacommons.persistence.journal.{JournalReader, PersistenceId}
 import org.s4s0l.betelgeuse.akkacommons.utils.PubSubWithDefaultMediator
+import org.s4s0l.betelgeuse.utils.UuidUtils
 
 import scala.concurrent.Future
 
@@ -72,7 +77,7 @@ object GlobalConfigsFactory extends GlobalConfigsFactory {
 
 
   trait GlobalConfigsEventPublisher[T] {
-    def emitChange(id: String, msg: T, uuid: String = UUID.randomUUID().toString): Future[ConfigurationChangedAck]
+    def emitChange(id: String, msg: T, uuid: String = UuidUtils.timeBasedUuid().toString): Future[ConfigurationChangedAck]
   }
 
 }

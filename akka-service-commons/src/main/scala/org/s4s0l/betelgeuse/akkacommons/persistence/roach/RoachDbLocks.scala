@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +23,7 @@
 package org.s4s0l.betelgeuse.akkacommons.persistence.roach
 
 import java.sql.Timestamp
-import java.util.{Calendar, Date, UUID}
+import java.util.{Calendar, Date}
 
 import akka.actor.{Cancellable, Scheduler}
 import com.typesafe.config.Config
@@ -25,8 +31,8 @@ import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSettings.{DbLoc
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbLocksSupport.TxExecutor
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{DbLocksSettings, DbLocksSupport}
 import org.s4s0l.betelgeuse.akkacommons.utils.DnsUtils
-import org.s4s0l.betelgeuse.utils.AllUtils
 import org.s4s0l.betelgeuse.utils.AllUtils._
+import org.s4s0l.betelgeuse.utils.{AllUtils, UuidUtils}
 import org.slf4j.LoggerFactory
 import scalikejdbc.interpolation.SQLSyntax
 import scalikejdbc.{DBSession, _}
@@ -48,7 +54,7 @@ class RoachDbLocks(val schema: String = "locks", locksTable: String = "locks")
 
   private val LOGGER = LoggerFactory.getLogger(getClass)
 
-  val uuid: String = UUID.randomUUID().toString
+  val uuid: String = UuidUtils.timeBasedUuid().toString
 
   val humanReadableName: String = DnsUtils.getCurrentNodeHostName
 

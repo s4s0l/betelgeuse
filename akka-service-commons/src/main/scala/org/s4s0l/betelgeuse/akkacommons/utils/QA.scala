@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2017 the original author or authors.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +22,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.utils
 
-import java.util.UUID
+import org.s4s0l.betelgeuse.utils.UuidUtils
 
 /**
   * @author Marcin Wielgus
@@ -25,7 +31,7 @@ object QA {
 
   type Uuid = String
 
-  def uuid: Uuid = UUID.randomUUID().toString
+  def uuid: Uuid = UuidUtils.timeBasedUuid().toString
 
   trait Question[ID] {
     def messageId: ID
