@@ -1,4 +1,3 @@
-
 /*
  * Copyright© 2017 the original author or authors.
  *
@@ -20,3 +19,4 @@ include 'akka-service-commons-test'
 include 'akka-service-kamon'
 include 'akka-service-typed'
 include 'akka-service-typed-test'
+include 'akka-service-auth'
