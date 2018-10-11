@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.utils
-
-import java.util.UUID
-
-import com.fasterxml.uuid.{EthernetAddress, Generators}
+package org.s4s0l.betelgeuse.akkaauth.common
 
 /**
   * @author Marcin Wielgus
   */
-object UuidUtils {
-  private lazy val timeBasedGenerator = Generators.timeBasedGenerator(EthernetAddress.fromInterface())
-
-  def timeBasedUuid(): UUID = {
-    timeBasedGenerator.generate()
-  }
+trait AdditionalAttrsManager[A] {
+  def unMarshallAttrs(tokenAttrs: Map[String, String])
+  : A
 }

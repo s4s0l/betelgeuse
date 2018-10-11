@@ -14,19 +14,23 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.utils
+package org.s4s0l.betelgeuse.akkaauth.manager
 
-import java.util.UUID
+import org.s4s0l.betelgeuse.akkaauth.common.AdditionalAttrsManager
+import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
 
-import com.fasterxml.uuid.{EthernetAddress, Generators}
+import scala.concurrent.{ExecutionContext, Future}
+
 
 /**
   * @author Marcin Wielgus
   */
-object UuidUtils {
-  private lazy val timeBasedGenerator = Generators.timeBasedGenerator(EthernetAddress.fromInterface())
+trait AdditionalUserAttrsManager[A] extends AdditionalAttrsManager[A] {
 
-  def timeBasedUuid(): UUID = {
-    timeBasedGenerator.generate()
-  }
+  def mapAttrsToToken(userAttrs: UserDetailedInfo)
+                     (implicit ec: ExecutionContext)
+  : Future[A]
+
+  def marshallAttrs(tokenAttrs: A)
+  : Map[String, String]
 }

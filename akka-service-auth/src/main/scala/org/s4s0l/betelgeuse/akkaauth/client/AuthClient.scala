@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.utils
+package org.s4s0l.betelgeuse.akkaauth.client
 
-import java.util.UUID
+import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, SerializedToken}
 
-import com.fasterxml.uuid.{EthernetAddress, Generators}
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * @author Marcin Wielgus
   */
-object UuidUtils {
-  private lazy val timeBasedGenerator = Generators.timeBasedGenerator(EthernetAddress.fromInterface())
+trait AuthClient[A] {
 
-  def timeBasedUuid(): UUID = {
-    timeBasedGenerator.generate()
-  }
+  def extract(token: SerializedToken)
+             (implicit ec: ExecutionContext)
+  : Future[AuthInfo[A]]
+
 }
