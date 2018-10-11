@@ -17,7 +17,7 @@
 package org.s4s0l.betelgeuse.akkaauth.manager
 
 import akka.Done
-import org.s4s0l.betelgeuse.akkaauth.common.{AccessToken, TokenId, TokenInfo}
+import org.s4s0l.betelgeuse.akkaauth.common.{TokenId, TokenInfo, TokenType}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -27,16 +27,18 @@ import scala.concurrent.{ExecutionContext, Future}
 trait TokenManager {
 
   /**
-    * saves token, does not persist token itself,
+    * saves token, does not persist serialized token itself,
     * persists token attributes for debugging info.
-    * Token saved is valid after save until revoke is called
+    * Token saved is valid after save until revoke is called.
+    * Apart from explicit attributes should persist type of token.
     */
-  def saveToken(token: TokenInfo[AccessToken])
+  def saveToken(token: TokenInfo[_ <: TokenType])
                (implicit ec: ExecutionContext)
   : Future[Done]
 
   /**
-    * marks token as revoked, all subsequent calls to isValid return false
+    * marks token as revoked, all subsequent calls to isValid return false.
+    * When called on revoked token does nothing.
     */
   def revokeToken(tokenId: TokenId)
                  (implicit ec: ExecutionContext)

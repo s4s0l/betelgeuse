@@ -26,22 +26,44 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 trait PasswordManager {
 
+  /**
+    * creates password credentials for user. Initially password will be disabled.
+    * When password is disabled [[verifyPassword]] always fails.
+    * When for given login there exists a password but is removed it will update
+    * userId and password, and un remove it.
+    *
+    */
   def createPassword(userId: UserId, credentials: PasswordCredentials)
                     (implicit ec: ExecutionContext)
   : Future[Done]
 
+  /**
+    * verifies given credentials returning UserId on success.
+    * Fails when password is disabled od removed for given login.
+    */
   def verifyPassword(credentials: PasswordCredentials)
                     (implicit ec: ExecutionContext)
   : Future[UserId]
 
+  /**
+    * Must be called after [[createPassword]] in order to enable password.
+    */
   def enablePassword(login: String)
                     (implicit ec: ExecutionContext)
   : Future[UserId]
 
+  /**
+    * Updated the password. Should fail when password is
+    * disabled od removed for given login.
+    */
   def updatePassword(credentials: PasswordCredentials)
                     (implicit ec: ExecutionContext)
   : Future[Done]
 
+  /**
+    * Deletes password for given login. After this operation only create password is allowed for
+    * given login.
+    */
   def removePassword(login: String)
                     (implicit ec: ExecutionContext)
   : Future[Done]

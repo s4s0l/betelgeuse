@@ -27,10 +27,16 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 trait UserManager {
 
+  /**
+    * Generated next UUID, is NOT be sequential.
+    */
   def generateUserId()
                     (implicit ec: ExecutionContext)
   : Future[UserId]
 
+  /**
+    * creates a user, when user with given id already exists will fail.
+    */
   def createUser(userInfo: UserDetailedInfo)
                 (implicit ec: ExecutionContext)
   : Future[Done]
@@ -40,6 +46,12 @@ trait UserManager {
                  (implicit ec: ExecutionContext)
   : Future[Done]
 
+  /**
+    * Updates additional attributes. When 'attr' -> None, attribute will be removed.
+    * When 'attr' -> Some(value), attr value will be set to value, when
+    * user already contains some key which is not included in attrs its value will
+    * not be affected.
+    */
   def updateAdditionalAttributes(userId: UserId,
                                  attrs: Map[String, Option[String]])
                                 (implicit ec: ExecutionContext)
@@ -49,10 +61,18 @@ trait UserManager {
              (implicit ec: ExecutionContext)
   : Future[UserDetailedInfo]
 
+  /**
+    *
+    * sets locked flag. If already set it has no effect and will be always successful.
+    */
   def lockUser(userId: UserId)
               (implicit ec: ExecutionContext)
   : Future[Done]
 
+  /**
+    *
+    * sets locked flag. If already set it has no effect and will be always successful.
+    */
   def unLockUser(userId: UserId)
                 (implicit ec: ExecutionContext)
   : Future[Done]
