@@ -16,7 +16,7 @@
 
 package org.s4s0l.betelgeuse.akkaauth.client
 
-import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, TokenType}
+import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, SerializedToken}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -25,7 +25,7 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 trait TokenVerifier {
 
-  def verify[A](tokenTy: TokenType,
+  def verify[A](serializedToken: SerializedToken,
                 attrsUnmarshaller: Map[String, String] => A)
                (implicit ec: ExecutionContext)
   : Future[AuthInfo[A]]
@@ -34,16 +34,35 @@ trait TokenVerifier {
 
 object TokenVerifier {
 
-  sealed trait TokenInvalidReason
+  case class TokenInvalidException(reason: TokenInvalidReason)
+    extends Exception(reason.msg)
 
-  case object TokenExpired extends TokenInvalidReason
+  sealed trait TokenInvalidReason {
+    def msg: String
+  }
 
-  case object TokenFormatError extends TokenInvalidReason
+  case class TokenExpired() extends TokenInvalidReason {
+    val msg = "Token expired"
+  }
 
-  case object TokenSignatureError extends TokenInvalidReason
+  case class TokenFormatError(message: String) extends TokenInvalidReason {
+    val msg = s"Token format error: $message"
+  }
 
-  case object TokenRevoked extends TokenInvalidReason
+  case class TokenProcessingError(message: String) extends TokenInvalidReason {
+    val msg = s"Error during token processing: $message"
+  }
 
-  case object TokenUnknownIssuer extends TokenInvalidReason
+  case class TokenSignatureError() extends TokenInvalidReason {
+    val msg = s"Token signature Error"
+  }
+
+  case class TokenRevoked() extends TokenInvalidReason {
+    val msg = s"Token revoked"
+  }
+
+  case class TokenUnknownIssuer() extends TokenInvalidReason {
+    val msg = s"Token issuer error"
+  }
 
 }

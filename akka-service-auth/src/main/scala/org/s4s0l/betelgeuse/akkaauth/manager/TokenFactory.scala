@@ -16,6 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkaauth.manager
 
+import java.util.Date
+
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
 import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, UserInfo}
 
@@ -26,8 +28,15 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 trait TokenFactory extends TokenVerifier {
 
-  def issueToken[A](userInfo: UserInfo[A], marshaller: A => Map[String, String])
-                   (implicit ec: ExecutionContext)
+  def issueLoginToken[A](userInfo: UserInfo[A],
+                         marshaller: A => Map[String, String])
+                        (implicit ec: ExecutionContext)
+  : Future[AuthInfo[A]]
+
+  def issueApiToken[A](userInfo: UserInfo[A],
+                       expiration: Date,
+                       marshaller: A => Map[String, String])
+                      (implicit ec: ExecutionContext)
   : Future[AuthInfo[A]]
 
 

@@ -14,11 +14,22 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.manager.impl
+package org.s4s0l.betelgeuse.akkaauth
+
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
+import org.s4s0l.betelgeuse.akkacommons.http.BgHttp
 
 /**
   * @author Marcin Wielgus
   */
-object AuthUtils {
+trait BgAuthHttpProvider[A]
+  extends BgAuthProvider[A]
+    with BgAuthProviderDirectives[A]
+    with BgHttp {
 
+  override def httpRoute: Route = {
+    bgAuthProviderDefaultRoutes ~
+      super.httpRoute
+  }
 }

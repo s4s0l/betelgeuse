@@ -14,13 +14,22 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.common
+package org.s4s0l.betelgeuse.akkaauth.sample
+
+import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
+import org.s4s0l.betelgeuse.akkaauth.{BgAuthHttpProvider, BgAuthRemoteProvider}
 
 /**
   * @author Marcin Wielgus
   */
-trait AdditionalAttrsManager[A] {
+object SampleProvider
+  extends BgAuthHttpProvider[String]
+    with BgAuthRemoteProvider[String] {
 
-  def unMarshallAttrs(tokenAttrs: Map[String, String])
-  : A
+  override protected def portBase: Int = 13
+
+  def jwtAttributeMapper
+  : AdditionalUserAttrsManager[String] = SampleJwtAttributes
 }
+
+

@@ -19,8 +19,4 @@ package org.s4s0l.betelgeuse.akkaauth.common
 /**
   * @author Marcin Wielgus
   */
-trait AdditionalAttrsManager[A] {
-
-  def unMarshallAttrs(tokenAttrs: Map[String, String])
-  : A
-}
+case class ResolveApiTokenRequest(token: SerializedToken)

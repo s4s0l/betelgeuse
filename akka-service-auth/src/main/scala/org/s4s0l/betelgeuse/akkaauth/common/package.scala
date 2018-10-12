@@ -39,6 +39,7 @@ package object common {
 
   object Grant {
     val API = Grant("API")
+    val MASTER = Grant("MASTER")
   }
 
   sealed trait TokenType {

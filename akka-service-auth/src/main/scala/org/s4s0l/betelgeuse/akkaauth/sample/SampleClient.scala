@@ -14,27 +14,27 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.manager
+package org.s4s0l.betelgeuse.akkaauth.sample
 
+import com.typesafe.config.Config
+import org.s4s0l.betelgeuse.akkaauth.BgAuthClient
 import org.s4s0l.betelgeuse.akkaauth.common.AdditionalAttrsManager
-import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
-
-import scala.concurrent.{ExecutionContext, Future}
-
+import org.s4s0l.betelgeuse.akkacommons.BgServiceId
 
 /**
   * @author Marcin Wielgus
   */
-trait AdditionalUserAttrsManager[A] extends AdditionalAttrsManager[A] {
+object SampleClient extends BgAuthClient[String] {
 
-  def mapAttrsToToken(userAttrs: UserDetailedInfo)
-                     (implicit ec: ExecutionContext)
-  : Future[A]
+  override protected def portBase: Int = 14
 
-  def beforeUserCreate(attrs: UserDetailedInfo)
-                      (implicit ec: ExecutionContext)
-  : Future[UserDetailedInfo] = Future.successful(attrs)
+  override def customizeConfiguration
+  : Config = super.customizeConfiguration
+    .withFallback(clusteringClientCreateConfig(bgAuthProviderServiceId))
 
-  def marshallAttrs(tokenAttrs: A)
-  : Map[String, String]
+  override protected def bgAuthProviderServiceId
+  : BgServiceId = BgServiceId("SampleProvider", 13)
+
+  override protected def jwtAttributeMapper: AdditionalAttrsManager[String] =
+    SampleJwtAttributes
 }

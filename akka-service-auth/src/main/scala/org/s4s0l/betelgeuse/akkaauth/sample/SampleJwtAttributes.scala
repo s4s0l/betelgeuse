@@ -14,23 +14,29 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.client
+package org.s4s0l.betelgeuse.akkaauth.sample
 
-import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, SerializedToken}
+import org.s4s0l.betelgeuse.akkaauth.manager.{AdditionalUserAttrsManager, UserManager}
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * @author Marcin Wielgus
   */
-trait AuthClient[A] {
+object SampleJwtAttributes
+  extends AdditionalUserAttrsManager[String] {
+  override def mapAttrsToToken(userAttrs: UserManager.UserDetailedInfo)
+                              (implicit ec: ExecutionContext)
+  : Future[String] = Future.successful(
+    userAttrs.attributes.additionalAttributes.getOrElse("something", "")
+  )
 
-  def extract(token: SerializedToken)
-             (implicit ec: ExecutionContext)
-  : Future[AuthInfo[A]]
+  override def marshallAttrs(tokenAttrs: String)
+  : Map[String, String] = Map(
+    "something" -> tokenAttrs
+  )
 
-  def resolveApiToken(accessToken: SerializedToken)
-                     (implicit ec: ExecutionContext)
-  : Future[AuthInfo[A]]
-
+  override def unMarshallAttrs(tokenAttrs: Map[String, String]): String = {
+    tokenAttrs.getOrElse("something", "")
+  }
 }

@@ -21,7 +21,8 @@ import java.util.Date
 import akka.Done
 import org.s4s0l.betelgeuse.akkaauth.common
 import org.s4s0l.betelgeuse.akkaauth.common._
-import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedAttributes, UserDetailedInfo}
+import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.RoleSet
+import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{UserDetailedAttributes, UserDetailedInfo}
 import org.s4s0l.betelgeuse.akkaauth.manager._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -40,7 +41,7 @@ class AuthManagerImpl[A](
 
   override def login(credentials: common.Credentials)
                     (implicit ec: ExecutionContext)
-  : Future[AccessToken] = {
+  : Future[TokenInfo[AccessToken]] = {
     credentials match {
       case pc: PasswordCredentials =>
         for (
@@ -50,9 +51,9 @@ class AuthManagerImpl[A](
             userDetails = userDetails,
             grants = userDetails.attributes.roles.map(it => Grant(it.name))
           );
-          issuedToken <- tokenFactory.issueToken(tokenUserInfo, additional.marshallAttrs(_));
-          _ <- tokenManager.saveToken(issuedToken.tokenInfo)
-        ) yield issuedToken.tokenInfo.tokenType
+          issuedToken <- tokenFactory.issueLoginToken(tokenUserInfo, additional.marshallAttrs(_));
+          _ <- tokenManager.saveToken(issuedToken.tokenInfo, userId)
+        ) yield issuedToken.tokenInfo
     }
   }
 
@@ -101,30 +102,32 @@ class AuthManagerImpl[A](
       case None =>
         for (
           userId <- userManager.generateUserId();
-          _ <- userManager.createUser(UserDetailedInfo(
+          info <- additional.beforeUserCreate(UserDetailedInfo(
             userId = userId,
             attributes = attrs,
             login = None,
             locked = false
-          ))
+          ));
+          _ <- userManager.createUser(info)
         ) yield userId
       case Some(pc: PasswordCredentials) =>
         for (
           userId <- userManager.generateUserId();
           _ <- passwordManager.createPassword(userId, pc);
-          _ <- userManager.createUser(UserDetailedInfo(
+          info <- additional.beforeUserCreate(UserDetailedInfo(
             userId = userId,
             attributes = attrs,
             login = Some(pc.login),
             locked = false
           ));
+          _ <- userManager.createUser(info);
           _ <- passwordManager.enablePassword(pc.login)
         ) yield userId
     }
   }
 
   override def createApiToken(userId: UserId,
-                              roles: Set[Role],
+                              roles: RoleSet,
                               grants: Set[Grant],
                               expiryDate: Date)
                              (implicit ec: ExecutionContext)
@@ -133,13 +136,23 @@ class AuthManagerImpl[A](
       userDetails <- userManager.getUser(userId) if !userDetails.locked;
       tokenAttrs <- createTokenUserInfo(
         userDetails = userDetails,
-        grants = userDetails.attributes.roles
-          .intersect(roles)
-          .map(it => Grant(it.name)) ++ grants
+        grants = calculateGrants(roles, userDetails) ++ grants
       );
-      token <- tokenFactory.issueToken(tokenAttrs, additional.marshallAttrs(_));
-      _ <- tokenManager.saveToken(token.tokenInfo)
+      token <- tokenFactory.issueApiToken(tokenAttrs, expiryDate, additional.marshallAttrs(_));
+      _ <- tokenManager.saveToken(token.tokenInfo, userId)
     ) yield token.tokenInfo.tokenType
+  }
+
+  private def calculateGrants(roles: RoleSet, userDetails: UserDetailedInfo) = {
+    roles match {
+      case AuthManager.AllRoles() =>
+        userDetails.attributes.roles
+          .map(it => Grant(it.name))
+      case AuthManager.GivenRoles(roleSet) =>
+        userDetails.attributes.roles
+          .intersect(roleSet)
+          .map(it => Grant(it.name))
+    }
   }
 
   override def invalidateApiToken(tokenId: TokenId)
@@ -148,12 +161,12 @@ class AuthManagerImpl[A](
     tokenManager.revokeToken(tokenId)
   }
 
-  override def resolveApiToken(accessToken: common.AccessToken)
+  override def resolveApiToken(accessToken: common.SerializedToken)
                               (implicit ec: ExecutionContext)
-  : Future[common.AccessToken] = {
+  : Future[common.SerializedToken] = {
     for (
       authInfo <- tokenFactory.verify(accessToken, additional.unMarshallAttrs);
       valid <- tokenManager.isValid(authInfo.tokenInfo.tokenType.tokenId) if valid
-    ) yield authInfo.tokenInfo.tokenType
+    ) yield authInfo.tokenInfo.tokenType.serializedToken
   }
 }

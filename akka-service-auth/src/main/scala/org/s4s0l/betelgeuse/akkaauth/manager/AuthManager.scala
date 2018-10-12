@@ -20,6 +20,7 @@ import java.util.Date
 
 import akka.Done
 import org.s4s0l.betelgeuse.akkaauth.common._
+import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.RoleSet
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedAttributes}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -28,16 +29,11 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * @author Marcin Wielgus
   */
-object AuthManager {
-
-
-}
-
 trait AuthManager[A] {
 
   def login(credentials: Credentials)
            (implicit ec: ExecutionContext)
-  : Future[AccessToken]
+  : Future[TokenInfo[AccessToken]]
 
   def changePassword(userId: UserId, newPassword: String)
                     (implicit ec: ExecutionContext)
@@ -57,7 +53,7 @@ trait AuthManager[A] {
   : Future[UserId]
 
   def createApiToken(userId: UserId,
-                     roles: Set[Role],
+                     roles: RoleSet,
                      grants: Set[Grant],
                      expiryDate: Date)
                     (implicit ec: ExecutionContext)
@@ -67,8 +63,18 @@ trait AuthManager[A] {
                         (implicit ec: ExecutionContext)
   : Future[Done]
 
-  def resolveApiToken(accessToken: AccessToken)
+  def resolveApiToken(accessToken: SerializedToken)
                      (implicit ec: ExecutionContext)
-  : Future[AccessToken]
+  : Future[SerializedToken]
+
+}
+
+object AuthManager {
+
+  sealed trait RoleSet
+
+  case class AllRoles() extends RoleSet
+
+  case class GivenRoles(roles: Set[Role]) extends RoleSet
 
 }

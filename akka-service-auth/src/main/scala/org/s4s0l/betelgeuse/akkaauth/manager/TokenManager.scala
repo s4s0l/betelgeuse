@@ -17,7 +17,7 @@
 package org.s4s0l.betelgeuse.akkaauth.manager
 
 import akka.Done
-import org.s4s0l.betelgeuse.akkaauth.common.{TokenId, TokenInfo, TokenType}
+import org.s4s0l.betelgeuse.akkaauth.common.{TokenId, TokenInfo, TokenType, UserId}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -32,7 +32,7 @@ trait TokenManager {
     * Token saved is valid after save until revoke is called.
     * Apart from explicit attributes should persist type of token.
     */
-  def saveToken(token: TokenInfo[_ <: TokenType])
+  def saveToken(token: TokenInfo[_ <: TokenType], userId: UserId)
                (implicit ec: ExecutionContext)
   : Future[Done]
 
@@ -50,5 +50,9 @@ trait TokenManager {
   def isValid(tokenId: TokenId)
              (implicit ec: ExecutionContext)
   : Future[Boolean]
+
+  def getSubject(tokenId: TokenId)
+                (implicit ec: ExecutionContext)
+  : Future[UserId]
 
 }

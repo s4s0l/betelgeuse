@@ -16,11 +16,19 @@
 
 package org.s4s0l.betelgeuse.akkaauth.common
 
+import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.TokenInvalidReason
+
 /**
   * @author Marcin Wielgus
   */
-trait AdditionalAttrsManager[A] {
+sealed trait ResolveApiTokenResponse
 
-  def unMarshallAttrs(tokenAttrs: Map[String, String])
-  : A
+object ResolveApiTokenResponse {
+
+  case class ResolveApiTokenResponseOk(token: SerializedToken)
+    extends ResolveApiTokenResponse
+
+  case class ResolveApiTokenResponseNotOk(reason: TokenInvalidReason)
+    extends ResolveApiTokenResponse
+
 }
