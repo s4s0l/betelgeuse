@@ -1,4 +1,4 @@
-package org.s4s0l.betelgeuse.akkaauth.manager.impl
+package org.s4s0l.betelgeuse.akkaauth.manager
 
 trait HashProvider {
   def hashPassword(password: String): String

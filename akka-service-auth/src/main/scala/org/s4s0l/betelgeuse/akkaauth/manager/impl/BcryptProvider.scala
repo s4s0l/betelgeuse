@@ -2,6 +2,7 @@ package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
 import org.bouncycastle.crypto.generators.SCrypt
 import org.mindrot.jbcrypt.BCrypt
+import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider
 
 /** Provides java Bcrypt hashing of strings
   *

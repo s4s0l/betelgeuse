@@ -10,9 +10,9 @@ import com.fasterxml.jackson.annotation.JsonSubTypes.Type
 import com.fasterxml.jackson.annotation.JsonTypeInfo.{As, Id}
 import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo}
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
-import org.s4s0l.betelgeuse.akkaauth.manager.PasswordManager
-import org.s4s0l.betelgeuse.akkaauth.manager.impl.PersistentPasswordManager.PasswordManagerCommand._
-import org.s4s0l.betelgeuse.akkaauth.manager.impl.PersistentPasswordManager.{PasswordManagerCommand, _}
+import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
+import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.PasswordManagerCommand._
+import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.{PasswordManagerCommand, _}
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
@@ -22,7 +22,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
 
-class PersistentPasswordManager(hashProvider: HashProvider) extends PersistentShardedActor {
+class PasswordManagerImpl(hashProvider: HashProvider) extends PersistentShardedActor {
 
   var state: Option[PasswordState] = None
 
@@ -108,7 +108,7 @@ class PersistentPasswordManager(hashProvider: HashProvider) extends PersistentSh
 }
 
 
-object PersistentPasswordManager {
+object PasswordManagerImpl {
 
   case class Settings(hashProvider: HashProvider, askTimeout: Timeout)
 
@@ -118,7 +118,7 @@ object PersistentPasswordManager {
   }
 
   def startSharded(settings: Settings)(implicit system: BgClusteringShardingExtension): PasswordManager = {
-    val ref = system.start("password-manager", Props(new PersistentPasswordManager(settings.hashProvider)), entityExtractor)
+    val ref = system.start("password-manager", Props(new PasswordManagerImpl(settings.hashProvider)), entityExtractor)
     new PasswordManager {
       val actorTarget: ActorTarget = ref
 
