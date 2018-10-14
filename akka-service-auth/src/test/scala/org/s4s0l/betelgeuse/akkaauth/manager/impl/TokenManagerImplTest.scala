@@ -20,6 +20,7 @@ import java.util.{Date, UUID}
 
 import akka.Done
 import org.s4s0l.betelgeuse.akkaauth.common._
+import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
@@ -34,7 +35,7 @@ import scala.concurrent.duration._
 class TokenManagerImplTest extends BgTestRoach with ScalaFutures {
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(5.second, 300.millis)
   private val aService = testWith(new BgPersistenceJournalRoach with BgClusteringSharding {
-    lazy val tokenManager = TokenManagerImpl.start
+    lazy val tokenManager: TokenManager = TokenManagerImpl.start
 
     override protected def initialize(): Unit = {
       super.initialize()
@@ -53,9 +54,9 @@ class TokenManagerImplTest extends BgTestRoach with ScalaFutures {
 
   feature("Token manager can persist generated token information") {
     scenario("Smoke test") {
+      val tokenId = TokenId("tokenId1")
+      val userId = UserId("userId")
       new WithService(aService) {
-        private val tokenId = TokenId("tokenId1")
-        private val userId = UserId("userId")
         private val tokenSaved = service.tokenManager.saveToken(sampleToken(tokenId), userId)
         whenReady(tokenSaved) { done =>
           assert(done == Done)
@@ -85,6 +86,12 @@ class TokenManagerImplTest extends BgTestRoach with ScalaFutures {
         whenReady(service.tokenManager
           .revokeToken(TokenId(UUID.randomUUID().toString)).failed) { ex =>
           assert(ex.getMessage.contains("not exist"))
+        }
+      }
+      aService.restartService()
+      new WithService(aService) {
+        whenReady(service.tokenManager.isValid(tokenId)) { ok =>
+          assert(!ok)
         }
       }
     }

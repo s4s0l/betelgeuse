@@ -19,29 +19,33 @@ package org.s4s0l.betelgeuse.akkaauth.common
 import java.net.URI
 import java.util.{Date, Locale, TimeZone}
 
+import com.fasterxml.jackson.annotation.JsonInclude.Include
+import com.fasterxml.jackson.annotation.JsonSubTypes.Type
+import com.fasterxml.jackson.annotation.JsonTypeInfo.{As, Id}
+import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo}
 import org.s4s0l.betelgeuse.akkaauth.common.UserAttributes._
 
 /**
   * @author Marcin Wielgus
   */
 case class UserAttributes(
-                           given_name: Option[String],
-                           family_name: Option[String],
-                           middle_name: Option[String],
-                           nickname: Option[String],
-                           preferred_username: Option[String],
-                           profile: Option[URI],
-                           picture: Option[URI],
-                           website: Option[URI],
-                           email: Option[Email],
-                           gender: Option[Gender],
-                           birthDate: Option[Date],
-                           zoneInfo: Option[TimeZone],
-                           locale: Option[Locale],
-                           phone_number: Option[PhoneNumber],
-                           address: Option[String],
-                           country: Option[Country],
-                           city: Option[City]
+                           given_name: Option[String] = None,
+                           family_name: Option[String] = None,
+                           middle_name: Option[String] = None,
+                           nickname: Option[String] = None,
+                           preferred_username: Option[String] = None,
+                           profile: Option[URI] = None,
+                           picture: Option[URI] = None,
+                           website: Option[URI] = None,
+                           email: Option[Email] = None,
+                           gender: Option[Gender] = None,
+                           birthDate: Option[Date] = None,
+                           zoneInfo: Option[TimeZone] = None,
+                           locale: Option[Locale] = None,
+                           phone_number: Option[PhoneNumber] = None,
+                           address: Option[String] = None,
+                           country: Option[Country] = None,
+                           city: Option[City] = None
                          )
 
 object UserAttributes {
@@ -54,11 +58,18 @@ object UserAttributes {
 
   case class PhoneNumber(number: String)
 
+  @JsonInclude(Include.NON_NULL)
+  @JsonTypeInfo(use = Id.NAME, include = As.PROPERTY, property = "type")
+  @JsonSubTypes(Array(
+    new Type(name = "male", value = classOf[Male]),
+    new Type(name = "female", value = classOf[Female]),
+    new Type(name = "other", value = classOf[Other])
+  ))
   sealed trait Gender
 
-  case object Male extends Gender
+  case class Male() extends Gender
 
-  case object Female extends Gender
+  case class Female() extends Gender
 
   case class Other(name: String) extends Gender
 
