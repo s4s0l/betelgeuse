@@ -37,6 +37,7 @@ apply from: '../gradle/scala.gradle'
 
 dependencies {
     testCompile project(":akka-service-commons-test")
+    compile "org.mindrot:jbcrypt:0.4" 
     compile "com.pauldijou:jwt-json4s-jackson_${scalaBinaryVersion}:0.18.0"
     compile project(":akka-service-commons")
 }
