@@ -1,12 +1,14 @@
 package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
+import java.security.SecureRandom
+
 import org.scalatest.{FeatureSpec, FunSuite, Matchers}
 
 class BcryptProviderTest extends FeatureSpec with Matchers {
 
   feature("BcryptProvider"){
     scenario("different hashes for password match same secret"){
-      val hasher = new BcryptProvider(11)
+      val hasher = new BcryptProvider(11, new SecureRandom())
       val secret = "password"
 
       val hash = hasher.hashPassword(secret)

@@ -1,10 +1,13 @@
 package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
+import java.security.MessageDigest
+
 import akka.Done
 import akka.actor.Status.Failure
 import akka.actor.{ActorRef, Props, Scheduler}
 import com.miguno.akka.testing.VirtualTime
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
+import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider.HashedValue
 import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.PasswordManagerCommand._
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.Settings
@@ -30,9 +33,9 @@ class PasswordManagerImplTest extends BgTestRoach with  ScalaFutures {
   implicit val scheduler: Scheduler = (new VirtualTime).scheduler
 
   object NoopHasher extends HashProvider {
-    override def hashPassword(password: String): String = password
+    override def hashPassword(password: String): HashedValue = HashedValue(password.getBytes("UTF-8"), Array.empty)
 
-    override def checkPassword(hash: String, password: String): Boolean = hash == password
+    override def checkPassword(hash: HashedValue, password: String): Boolean = MessageDigest.isEqual(password.getBytes("UTF-8"), hash.hash)
   }
 
   feature("PersistentPasswordManager enables password holding") {
