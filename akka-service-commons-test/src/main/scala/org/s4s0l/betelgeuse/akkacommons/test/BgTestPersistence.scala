@@ -35,7 +35,7 @@ trait BgTestPersistence extends BgTestService {
   def isCleanupOn: Boolean = false
 
   def prepareDatabase(): Unit = {
-    servicesUnderTest.filter(_.isInstanceOf[BgPersistenceRoach]).foreach { service =>
+    servicesUnderTest.filter(_.service.isInstanceOf[BgPersistenceRoach]).foreach { service =>
       import scala.collection.JavaConverters._
       val config = service.service.asInstanceOf[BgService].config
       val dbs = config.getConfig("db").root.keySet.asScala.toList

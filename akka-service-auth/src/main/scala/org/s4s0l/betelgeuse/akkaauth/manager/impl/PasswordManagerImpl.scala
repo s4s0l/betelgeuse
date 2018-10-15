@@ -1,16 +1,34 @@
+/*
+ * Copyright© 2018 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
+import java.security.SecureRandom
 import java.util.Base64
 
 import akka.Done
 import akka.actor.Props
 import akka.actor.Status.Failure
 import akka.cluster.sharding.ShardRegion
-import akka.util.{ByteString, Timeout}
+import akka.util.Timeout
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.annotation.JsonSubTypes.Type
 import com.fasterxml.jackson.annotation.JsonTypeInfo.{As, Id}
 import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo}
+import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
 import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider.HashedValue
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.PasswordManagerCommand._
@@ -21,6 +39,7 @@ import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
@@ -57,7 +76,7 @@ class PasswordManagerImpl(hashProvider: HashProvider) extends PersistentShardedA
   override def receiveCommand: Receive = {
     case CreatePassword(userId, PasswordCredentials(_, password)) =>
       state match {
-        case Some(currentState) => sender() ! Failure(new Exception("Password already initialized"))
+        case Some(_) => sender() ! Failure(new Exception("Password already initialized"))
         case None =>
           val h = hashProvider.hashPassword(password)
           persist(PasswordCreated(userId, encoder.encodeToString(h.hash), encoder.encodeToString(h.salt), System.currentTimeMillis())) { event =>
@@ -125,6 +144,12 @@ object PasswordManagerImpl {
       (a.login, a)
   }
 
+  def start(implicit system: BgClusteringShardingExtension,
+            config: Config): PasswordManager = {
+    val rounds = config.getInt("bg.auth.hash-rounds")
+    startSharded(Settings(new BcryptProvider(rounds, new SecureRandom()), 5.seconds))
+  }
+
   def startSharded(settings: Settings)(implicit system: BgClusteringShardingExtension): PasswordManager = {
     val ref = system.start("password-manager", Props(new PasswordManagerImpl(settings.hashProvider)), entityExtractor)
     new PasswordManager {
@@ -186,28 +211,30 @@ object PasswordManagerImpl {
   private[impl] trait PasswordManagerEvent extends JacksonJsonSerializable
 
   /** Signals successful creation of user
-    * @param userId - uuid generated for user
-    * @param hash - base64 string hash
-    * @param salt - base64 salt
+    *
+    * @param userId    - uuid generated for user
+    * @param hash      - base64 string hash
+    * @param salt      - base64 salt
     * @param createdAt - timestamp of creation date
     */
-  private[impl] case class PasswordCreated(userId: UserId, hash: String, salt:String, createdAt: Long) extends PasswordManagerEvent
+  private[impl] case class PasswordCreated(userId: UserId, hash: String, salt: String, createdAt: Long) extends PasswordManagerEvent
 
   private[impl] case class PasswordEnabled() extends PasswordManagerEvent
 
   private[impl] case class PasswordRemoved() extends PasswordManagerEvent
 
   /** Signals that password has been successfully changed
+    *
     * @param hash base64 string hashed password
     * @param salt base64 string salt
     */
-  private[impl] case class PasswordChanged(hash: String, salt:String) extends PasswordManagerEvent
+  private[impl] case class PasswordChanged(hash: String, salt: String) extends PasswordManagerEvent
 
 
   case class PasswordState(
                             hash: HashedValue,
                             userId: UserId,
-                            createdat: Long,
+                            createdAt: Long,
                             enabled: Boolean,
                             updatedCount: Int = 0,
                             initialized: Boolean

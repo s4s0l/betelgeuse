@@ -1,23 +1,39 @@
+/*
+ * Copyright© 2018 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
 import java.security.SecureRandom
 
-import org.scalatest.{FeatureSpec, FunSuite, Matchers}
+import org.scalatest.{FeatureSpec, Matchers}
 
 class BcryptProviderTest extends FeatureSpec with Matchers {
 
-  feature("BcryptProvider"){
-    scenario("different hashes for password match same secret"){
-      val hasher = new BcryptProvider(11, new SecureRandom())
+  feature("BcryptProvider") {
+    scenario("different hashes for password match same secret") {
+      val hashProvider = new BcryptProvider(11, new SecureRandom())
       val secret = "password"
 
-      val hash = hasher.hashPassword(secret)
-      val hash2 = hasher.hashPassword(secret)
+      val hash = hashProvider.hashPassword(secret)
+      val hash2 = hashProvider.hashPassword(secret)
 
       hash should not be equal(hash2)
 
-      hasher.checkPassword(hash, secret) shouldBe true
-      hasher.checkPassword(hash2, secret) shouldBe true
+      hashProvider.checkPassword(hash, secret) shouldBe true
+      hashProvider.checkPassword(hash2, secret) shouldBe true
     }
   }
 

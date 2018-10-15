@@ -22,12 +22,10 @@ import org.s4s0l.betelgeuse.akkaauth.client.impl.AuthClientImpl
 import org.s4s0l.betelgeuse.akkaauth.common.KeyManager
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
 import org.s4s0l.betelgeuse.akkaauth.manager._
-import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.Settings
 import org.s4s0l.betelgeuse.akkaauth.manager.impl._
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 
 import scala.concurrent.Future
-import scala.concurrent.duration._
 
 /**
   * @author Marcin Wielgus
@@ -35,7 +33,6 @@ import scala.concurrent.duration._
 trait BgAuthProvider[A]
   extends BgAuthBase[A]
     with BgClusteringSharding {
-
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgAuthProvider[_]])
 
@@ -49,7 +46,7 @@ trait BgAuthProvider[A]
     val authKeys: KeyManager = new KeyManager
     private val tokenFactory = new TokenFactoryImpl[A](authKeys.publicKey, authKeys.privateKey, jwtAttributeMapper)
     val userManager: UserManager = UserManagerImpl.start
-    val passwordManager: PasswordManager = PasswordManagerImpl.startSharded(Settings(new BcryptProvider(11), 5.seconds))
+    val passwordManager: PasswordManager = PasswordManagerImpl.start
     val tokenManager: TokenManager = TokenManagerImpl.start
     val authManager: AuthManager[A] = new AuthManagerImpl[A](
       userManager = userManager,

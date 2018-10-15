@@ -1,3 +1,19 @@
+/*
+ * Copyright© 2018 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
 import java.security.MessageDigest
@@ -8,9 +24,9 @@ import akka.actor.{ActorRef, Props, Scheduler}
 import com.miguno.akka.testing.VirtualTime
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
 import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider.HashedValue
-import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.PasswordManagerCommand._
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.Settings
+import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.{BgClusteringSharding, BgClusteringShardingExtension}
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.{BgPersistenceJournalRoach, BgPersistenceSnapStoreRoach}
@@ -20,14 +36,16 @@ import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
-class PasswordManagerImplTest extends BgTestRoach with  ScalaFutures {
+class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
 
-  private val aService = testWith(new
-      BgPersistenceJournalRoach
-        with BgPersistenceSnapStoreRoach
-        with BgClusteringSharding {
-  })
+  private val aService = testWith(
+    new BgPersistenceJournalRoach
+      with BgPersistenceSnapStoreRoach
+      with BgClusteringSharding {
+    }
+  )
 
   implicit val ec: ExecutionContext = ExecutionContext.global
   implicit val scheduler: Scheduler = (new VirtualTime).scheduler
@@ -94,11 +112,11 @@ class PasswordManagerImplTest extends BgTestRoach with  ScalaFutures {
           assert(ex.getMessage contains "does not exist")
         }
 
-        whenReady(manager.createPassword(UserId("id"),PasswordCredentials("admin", "password"))) { rsp =>
+        whenReady(manager.createPassword(UserId("id"), PasswordCredentials("admin", "password"))) { rsp =>
           assert(rsp == Done)
         }
 
-        whenReady(manager.updatePassword(PasswordCredentials("admin","password2")).failed) { ex =>
+        whenReady(manager.updatePassword(PasswordCredentials("admin", "password2")).failed) { ex =>
           assert(ex.getMessage contains "not enabled") // we cannot update password when it was not enabled
         }
 
