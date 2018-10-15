@@ -1,10 +1,12 @@
 package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
-import org.bouncycastle.crypto.generators.SCrypt
-import org.mindrot.jbcrypt.BCrypt
-import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider
+import java.security.{MessageDigest, SecureRandom}
 
-/** Provides java Bcrypt hashing of strings
+import org.bouncycastle.crypto.generators.{BCrypt, SCrypt}
+import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider
+import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider.HashedValue
+
+/** Provides bouncy castle Bcrypt hashing implementation of strings
   *
   * https://en.wikipedia.org/wiki/Bcrypt
   *
@@ -14,9 +16,17 @@ import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider
   *                  the work factor therefore increases as
   *                  2**log_rounds.
   */
-class BcryptProvider(logRounds: Int) extends HashProvider {
+class BcryptProvider(logRounds: Int, randomProvider: SecureRandom) extends HashProvider {
 
-  override def hashPassword(password: String): String = BCrypt.hashpw(password, BCrypt.gensalt(logRounds))
+  override def hashPassword(password: String): HashedValue = {
+    val salt = new Array[Byte](16)
+    randomProvider.nextBytes(salt)
+    val hash = BCrypt.generate(password.getBytes("UTF-8"), salt, logRounds)
+    HashedValue(hash, salt)
+  }
 
-  override def checkPassword(hash: String, password: String): Boolean = BCrypt.checkpw(password, hash)
+  override def checkPassword(hash: HashedValue, password: String): Boolean = {
+    val calculatedHash = BCrypt.generate(password.getBytes("UTF-8"),  hash.salt, logRounds)
+    MessageDigest.isEqual(hash.hash, calculatedHash)
+  }
 }
