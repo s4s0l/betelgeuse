@@ -23,10 +23,9 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * @author Marcin Wielgus
   */
-trait TokenVerifier {
+trait TokenVerifier[A] {
 
-  def verify[A](serializedToken: SerializedToken,
-                attrsUnmarshaller: Map[String, String] => A)
+  def verify(serializedToken: SerializedToken)
                (implicit ec: ExecutionContext)
   : Future[AuthInfo[A]]
 

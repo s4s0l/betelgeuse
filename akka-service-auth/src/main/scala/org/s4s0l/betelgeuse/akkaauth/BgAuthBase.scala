@@ -18,9 +18,9 @@ package org.s4s0l.betelgeuse.akkaauth
 
 import akka.NotUsed
 import com.softwaremill.session._
-import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl
-import org.s4s0l.betelgeuse.akkaauth.client.{AuthClient, TokenVerifier}
-import org.s4s0l.betelgeuse.akkaauth.common.{AdditionalAttrsManager, KeyManager}
+import com.typesafe.config.{Config, ConfigFactory}
+import org.s4s0l.betelgeuse.akkaauth.client.AuthClient
+import org.s4s0l.betelgeuse.akkaauth.common.AdditionalAttrsManager
 import org.s4s0l.betelgeuse.akkacommons.BgService
 
 import scala.util.Try
@@ -32,7 +32,12 @@ private[akkaauth] trait BgAuthBase[A]
   extends BgService
     with BgAuthClientDirectives[A] {
 
-  protected[akkaauth] lazy val bgAuthKeys: KeyManager = new KeyManager(config)
+  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgAuthBase[_]])
+
+  abstract override def customizeConfiguration: Config = {
+    LOGGER.info("Customize config with auth-client.conf with fallback to...")
+    ConfigFactory.parseResources("auth-client.conf").withFallback(super.customizeConfiguration)
+  }
 
   def bgAuthClient: AuthClient[A]
 
@@ -46,9 +51,6 @@ private[akkaauth] trait BgAuthBase[A]
         throw new IllegalStateException("session manager cannot be used")
     })
   }
-
-  protected[akkaauth] def bgTokenVerifier: TokenVerifier = new TokenVerifierImpl(
-    bgAuthKeys.publicKey)
 
   protected def jwtAttributeMapper: AdditionalAttrsManager[A]
 

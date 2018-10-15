@@ -18,7 +18,7 @@ package org.s4s0l.betelgeuse.akkaauth.client.impl
 
 import org.s4s0l.betelgeuse.akkaauth.client.{AuthClient, TokenVerifier}
 import org.s4s0l.betelgeuse.akkaauth.common
-import org.s4s0l.betelgeuse.akkaauth.common.{AdditionalAttrsManager, SerializedToken}
+import org.s4s0l.betelgeuse.akkaauth.common.SerializedToken
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -26,8 +26,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * @author Marcin Wielgus
   */
 class AuthClientImpl[A](
-                         verifier: TokenVerifier,
-                         attrsManager: AdditionalAttrsManager[A],
+                         verifier: TokenVerifier[A],
                          externalResolver: SerializedToken => Future[SerializedToken]
                        )
   extends AuthClient[A] {
@@ -35,7 +34,7 @@ class AuthClientImpl[A](
   override def extract(token: common.SerializedToken)
                       (implicit ec: ExecutionContext)
   : Future[common.AuthInfo[A]] = {
-    verifier.verify(token, attrsManager.unMarshallAttrs)
+    verifier.verify(token)
   }
 
   override def resolveApiToken(accessToken: common.SerializedToken)

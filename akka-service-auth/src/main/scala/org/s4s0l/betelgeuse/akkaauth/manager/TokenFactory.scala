@@ -19,24 +19,25 @@ package org.s4s0l.betelgeuse.akkaauth.manager
 import java.util.Date
 
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
-import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, UserInfo}
+import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, Grant}
+import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * @author Marcin Wielgus
   */
-trait TokenFactory extends TokenVerifier {
+trait TokenFactory[A] extends TokenVerifier[A] {
 
-  def issueLoginToken[A](userInfo: UserInfo[A],
-                         marshaller: A => Map[String, String])
-                        (implicit ec: ExecutionContext)
+  def issueLoginToken(userDetails: UserDetailedInfo,
+                      grants: Set[Grant])
+                     (implicit ec: ExecutionContext)
   : Future[AuthInfo[A]]
 
-  def issueApiToken[A](userInfo: UserInfo[A],
-                       expiration: Date,
-                       marshaller: A => Map[String, String])
-                      (implicit ec: ExecutionContext)
+  def issueApiToken(userDetails: UserDetailedInfo,
+                    grants: Set[Grant],
+                    expiration: Date)
+                   (implicit ec: ExecutionContext)
   : Future[AuthInfo[A]]
 
 

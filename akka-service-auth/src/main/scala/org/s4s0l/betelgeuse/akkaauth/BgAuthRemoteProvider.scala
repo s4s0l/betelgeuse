@@ -18,8 +18,8 @@ package org.s4s0l.betelgeuse.akkaauth
 
 import akka.actor.{Actor, ActorRef, Props}
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.{TokenInvalidException, TokenProcessingError}
-import org.s4s0l.betelgeuse.akkaauth.common.ResolveApiTokenRequest
-import org.s4s0l.betelgeuse.akkaauth.common.ResolveApiTokenResponse.{ResolveApiTokenResponseNotOk, ResolveApiTokenResponseOk}
+import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.ResolveApiTokenResponse.{ResolveApiTokenResponseNotOk, ResolveApiTokenResponseOk}
+import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.{GetPublicKeyRequest, GetPublicKeyResponse, ResolveApiTokenRequest}
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
 
 import scala.concurrent.ExecutionContext
@@ -43,10 +43,12 @@ trait BgAuthRemoteProvider[A]
     system.actorOf(
       Props(new Actor() {
         override def receive: Receive = {
+          case GetPublicKeyRequest() =>
+            sender() ! GetPublicKeyResponse(bgAuthKeys.publicKeyBase64)
           case ResolveApiTokenRequest(token) =>
             import akka.pattern.pipe
             implicit val ec: ExecutionContext = context.dispatcher
-            authManager.resolveApiToken(token)
+            bgAuthManager.resolveApiToken(token)
               .map(it => ResolveApiTokenResponseOk(it))
               .recover {
                 case TokenInvalidException(reason) =>
@@ -58,6 +60,6 @@ trait BgAuthRemoteProvider[A]
               .pipeTo(sender())
         }
       }),
-      "bgAuthManager"
+      "bg-auth-manager"
     )
 }

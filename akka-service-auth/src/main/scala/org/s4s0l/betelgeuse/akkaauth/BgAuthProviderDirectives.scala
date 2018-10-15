@@ -60,16 +60,21 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
 
   def bgAuthProviderLoginRoutes: Route = {
     pathPrefix("auth") {
-      bgAuthCsrf {
-        concat(
-          path("login") {
-            login
-          },
-          path("verify") {
-            verify
-          }
-        )
-      }
+      concat(
+        path("pub-key") {
+          bgAuthGetKey()
+        },
+        bgAuthCsrf {
+          concat(
+            path("login") {
+              login
+            },
+            path("verify") {
+              verify
+            }
+          )
+        }
+      )
     }
   }
 
@@ -110,17 +115,22 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   def bgAuthCurrentUserDetails(grantRequired: Grant*): Route =
     get {
       bgAuthGrantsAllowed(grantRequired: _*) { authInfo =>
-        onSuccess(userManager.getUser(authInfo.userInfo.userId)) {
+        onSuccess(bgAuthUserManager.getUser(authInfo.userInfo.userId)) {
           details => complete(details)
         }
       }
+    }
+
+  def bgAuthGetKey(): Route =
+    get {
+      complete(bgAuthKeys.publicKeyBase64)
     }
 
   def bgAuthCreateApiToken(grants: Set[Grant], grantRequired: Grant*): Route = {
     post {
       bgAuthGrantsAllowed(grantRequired: _*) { authInfo =>
         entity(as[CreateApiTokenRequest]) { request =>
-          val creationProcess = authManager.createApiToken(
+          val creationProcess = bgAuthManager.createApiToken(
             authInfo.userInfo.userId,
             request.asRoleSet,
             grants,
@@ -147,7 +157,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
             request.roles.map(it => Role(it)).toSet,
             request.additionalAttributes
           )
-          onSuccess(authManager.createUser(userDetails, request.credentials)) { userId =>
+          onSuccess(bgAuthManager.createUser(userDetails, request.credentials)) { userId =>
             complete(userId)
           }
         }
@@ -159,8 +169,8 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
       bgAuthGrantsAllowed(grantRequired: _*) { authInfo =>
         entity(as[TokenId]) { id =>
           val process = for (
-            subjectId <- tokenManager.getSubject(id) if subjectId == authInfo.userInfo.userId;
-            inv <- authManager.invalidateApiToken(id)
+            subjectId <- bgAuthTokenManager.getSubject(id) if subjectId == authInfo.userInfo.userId;
+            inv <- bgAuthManager.invalidateApiToken(id)
           ) yield inv
           onSuccess(process) { _ =>
             complete(JustSuccess())
@@ -173,7 +183,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     put {
       bgAuthGrantsAllowed(grantRequired) { _ =>
         entity(as[UserId]) { id =>
-          onSuccess(authManager.lockUser(id)) { _ =>
+          onSuccess(bgAuthManager.lockUser(id)) { _ =>
             complete(JustSuccess())
           }
         }
@@ -185,7 +195,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     put {
       bgAuthGrantsAllowed(grantRequired) { _ =>
         entity(as[UserId]) { id =>
-          onSuccess(authManager.unlockUser(id)) { _ =>
+          onSuccess(bgAuthManager.unlockUser(id)) { _ =>
             complete(JustSuccess())
           }
         }
@@ -203,8 +213,8 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
             case Some(login) =>
               val passwordCredentials = PasswordCredentials(login, request.oldPassword)
               val updateProcess = for (
-                userId <- passwordManager.verifyPassword(passwordCredentials) if userId == authInfo.userInfo.userId;
-                done <- authManager.changePassword(userId, request.newPassword)
+                userId <- bgAuthPasswordManager.verifyPassword(passwordCredentials) if userId == authInfo.userInfo.userId;
+                done <- bgAuthManager.changePassword(userId, request.newPassword)
               ) yield done
               onSuccess(updateProcess) { _ =>
                 complete(JustSuccess())
@@ -224,7 +234,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   private def login =
     post {
       entity(as[PasswordCredentials]) { login =>
-        onComplete(authManager.login(login)) {
+        onComplete(bgAuthManager.login(login)) {
           case Success(token) =>
             setToken(token) {
               complete(SuccessfulLoginResult())

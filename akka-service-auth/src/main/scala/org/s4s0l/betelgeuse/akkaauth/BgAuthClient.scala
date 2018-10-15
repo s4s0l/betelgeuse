@@ -16,16 +16,17 @@
 
 package org.s4s0l.betelgeuse.akkaauth
 
+import akka.Done
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClient
-import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.TokenInvalidException
-import org.s4s0l.betelgeuse.akkaauth.client.impl.AuthClientImpl
-import org.s4s0l.betelgeuse.akkaauth.common.ResolveApiTokenResponse.{ResolveApiTokenResponseNotOk, ResolveApiTokenResponseOk}
-import org.s4s0l.betelgeuse.akkaauth.common.{ResolveApiTokenRequest, ResolveApiTokenResponse, SerializedToken}
+import org.s4s0l.betelgeuse.akkaauth.client.impl.RemoteKeyTokenVerifier.Verifier
+import org.s4s0l.betelgeuse.akkaauth.client.impl.{AuthClientImpl, RemoteAuthProviderApi, RemoteKeyTokenVerifier}
+import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClient
+import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
-import scala.concurrent.Future
-import scala.concurrent.duration._
+import scala.concurrent.Promise
+import scala.util.{Failure, Success}
 
 /**
   * @author Marcin Wielgus
@@ -33,31 +34,50 @@ import scala.concurrent.duration._
 trait BgAuthClient[A]
   extends BgAuthBase[A]
     with BgClusteringClient {
-
-  override lazy val bgAuthClient: AuthClient[A] = {
-    new AuthClientImpl[A](
-      bgTokenVerifier,
-      jwtAttributeMapper,
-      resolveTokenRemotely
-    )
-  }
-
-  private def resolveTokenRemotely(token: SerializedToken)
-  : Future[SerializedToken] = {
-    remoteManagerTarget.?(ResolveApiTokenRequest(token))(3.seconds)
-      .map(_.asInstanceOf[ResolveApiTokenResponse])
-      .map {
-        case ResolveApiTokenResponseOk(resultingToken) =>
-          resultingToken
-        case ResolveApiTokenResponseNotOk(reason) =>
-          throw TokenInvalidException(reason)
-      }
-  }
-
-  private lazy val remoteManagerTarget = clusteringClientExtension
-    .client(bgAuthProviderServiceId)
-    .toActorTarget(s"/user/bgAuthManager")
+  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgAuthClient[_]])
 
   protected def bgAuthProviderServiceId: BgServiceId
+
+  private lazy val internals = new {
+    LOGGER.info("Lazy Initializing ...")
+    private val remoteManagerTarget: ActorTarget =
+      clusteringClientExtension
+        .client(bgAuthProviderServiceId)
+        .toActorTarget(s"/user/bg-auth-manager")
+
+    private val remoteApi: RemoteApi = new RemoteAuthProviderApi(remoteManagerTarget)
+    val keyAvailable: Promise[Done] = Promise()
+    private val bgTokenVerifier: Verifier[A] =
+      RemoteKeyTokenVerifier.start(remoteApi, keyAvailable, jwtAttributeMapper.unMarshallAttrs)
+
+    clusteringClientExtension
+      .client(bgAuthProviderServiceId).whenAvailable {
+      bgTokenVerifier.init()
+    }
+
+    val bgAuthClient: AuthClient[A] =
+      new AuthClientImpl[A](
+        bgTokenVerifier,
+        token => remoteApi.resolveToken(token)
+      )
+    LOGGER.info("Lazy Initializing done.")
+  }
+
+  override lazy val bgAuthClient: AuthClient[A] = internals.bgAuthClient
+
+  def bgAuthOnPublicKeyAvailable(cb: => Unit): Unit = {
+    internals.keyAvailable.future.onComplete {
+      case Success(Done) => cb
+      case Failure(ex) =>
+        LOGGER.error("Should not happen: key available promise failed.", ex)
+    }
+  }
+
+  override protected def initialize(): Unit = {
+    super.initialize()
+    LOGGER.info("Initializing...")
+    bgAuthClient
+    LOGGER.info("Initializing done.")
+  }
 
 }

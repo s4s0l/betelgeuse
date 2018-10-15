@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons.clustering.receptionist
 
-import akka.actor.{Actor, ActorRef, ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
+import akka.actor.{Actor, ActorRef, ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider, Props}
 import akka.cluster.Cluster
 import akka.cluster.client.{ClusterReceptionist, ClusterReceptionistSettings}
 import akka.cluster.pubsub.DistributedPubSubMediator
@@ -113,8 +113,14 @@ class BgClusteringReceptionistExtension(private val system: ExtendedActorSystem)
       }
       // important to use val mediator here to activate it outside of ClusterReceptionist constructor
       val mediator = pubSubMediator
-      system.systemActorOf(ClusterReceptionist.props(mediator, ClusterReceptionistSettings(config))
+      val ret = system.systemActorOf(ClusterReceptionist.props(mediator, ClusterReceptionistSettings(config))
         .withDispatcher(dispatcher), name)
+      register(system.actorOf(Props(new Actor {
+        override def receive: Receive = {
+          case message => sender() ! message
+        }
+      }), "bg-receptionist-echo"))
+      ret
     }
   }
 

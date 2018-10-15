@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.sample
+package org.s4s0l.betelgeuse.akkaauth
 
 import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
-import org.s4s0l.betelgeuse.akkaauth.{BgAuthHttpProvider, BgAuthRemoteProvider}
+import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 
 /**
   * @author Marcin Wielgus
   */
-object SampleProvider
-  extends BgAuthHttpProvider[String]
-    with BgAuthRemoteProvider[String] {
+class BgAuthProviderTestProvider extends BgPersistenceJournalRoach
+  with BgAuthRemoteProvider[String]
+  with BgAuthHttpProvider[String] {
 
-  override protected def portBase: Int = 13
+  override protected def systemName: String = "BgAuthProviderTestProvider"
 
-  def jwtAttributeMapper
-  : AdditionalUserAttrsManager[String] = SampleJwtAttributes
+  override protected def portBase: Int = 1
+
+  override protected def jwtAttributeMapper: AdditionalUserAttrsManager[String] =
+    SampleJwtAttributes
 }
-
-

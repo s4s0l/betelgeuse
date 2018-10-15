@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkacommons.clustering.client
 
-import akka.actor.{Actor, ActorRef}
-import akka.cluster.client.ClusterClient
+import akka.actor.{Actor, ActorRef, ActorRefFactory, Props}
+import akka.cluster.client.{ClusterClient, SubscribeContactPoints}
 import akka.pattern.AskableActorRef
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
@@ -27,7 +27,7 @@ import scala.concurrent.Future
 /**
   * @author Marcin Wielgus
   */
-class ClusterClientTarget(client: ActorRef) {
+class ClusterClientTarget(client: ActorRef, actorRefFactory: ActorRefFactory) {
 
   def send(actorPath: String, msg: Any, localAffinity: Boolean = true)(implicit sender: ActorRef = Actor.noSender): Unit = {
     client ! ClusterClient.Send(actorPath, msg, localAffinity)
@@ -43,6 +43,11 @@ class ClusterClientTarget(client: ActorRef) {
 
   def question(actorPath: String, msg: Any, localAffinity: Boolean = true)(implicit timeout: Timeout, sender: ActorRef = Actor.noSender): Future[Any] = {
     new AskableActorRef(client) ? ClusterClient.Send(actorPath, msg, localAffinity)
+  }
+
+  def whenAvailable(callback: => Unit): Unit = {
+    val ref = actorRefFactory.actorOf(Props(new ClusterClientListener(this, () => callback)))
+    client.tell(SubscribeContactPoints, ref)
   }
 
   /**

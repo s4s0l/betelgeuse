@@ -29,7 +29,7 @@ import com.typesafe.config.Config
 /**
   * @author Marcin Wielgus
   */
-class KeyManager(config: Config) {
+class KeyManager(implicit config: Config) {
 
   private def loadPEM(resource: URL) = {
     val in = resource.openStream
@@ -45,6 +45,8 @@ class KeyManager(config: Config) {
 
   lazy val privateKey: PrivateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(loadPEM(privateKeyPath)))
   lazy val publicKey: PublicKey = kf.generatePublic(new X509EncodedKeySpec(loadPEM(publicKeyPath)))
+  lazy val publicKeyBase64: String =
+    Base64.getEncoder.encodeToString(loadPEM(publicKeyPath))
 
   private def readAllBytes(in: InputStream) = {
     val baos = new ByteArrayOutputStream
@@ -58,5 +60,14 @@ class KeyManager(config: Config) {
       read = in.read(buf)
     }
     baos.toByteArray
+  }
+}
+
+
+object KeyManager {
+  def publicKeyFromBase64(encoded: String): PublicKey = {
+    val kf = KeyFactory.getInstance("RSA")
+    val decoded = Base64.getDecoder.decode(encoded)
+    kf.generatePublic(new X509EncodedKeySpec(decoded))
   }
 }

@@ -34,8 +34,8 @@ class AuthManagerImpl[A](
                           userManager: UserManager,
                           tokenManager: TokenManager,
                           passwordManager: PasswordManager,
-                          additional: AdditionalUserAttrsManager[A],
-                          tokenFactory: TokenFactory
+                          beforeUserCreate: UserDetailedInfo => Future[UserDetailedInfo],
+                          tokenFactory: TokenFactory[A]
                         )
   extends AuthManager[A] {
 
@@ -47,29 +47,10 @@ class AuthManagerImpl[A](
         for (
           userId <- passwordManager.verifyPassword(pc);
           userDetails <- userManager.getUser(userId) if !userDetails.locked;
-          tokenUserInfo <- createTokenUserInfo(
-            userDetails = userDetails,
-            grants = userDetails.attributes.roles.map(it => Grant(it.name))
-          );
-          issuedToken <- tokenFactory.issueLoginToken(tokenUserInfo, additional.marshallAttrs(_));
+          issuedToken <- tokenFactory.issueLoginToken(userDetails, userDetails.attributes.roles.map(it => Grant(it.name)));
           _ <- tokenManager.saveToken(issuedToken.tokenInfo, userId)
         ) yield issuedToken.tokenInfo
     }
-  }
-
-  private def createTokenUserInfo(
-                                   userDetails: UserDetailedInfo,
-                                   grants: Set[Grant])
-                                 (implicit ec: ExecutionContext) = {
-    additional.mapAttrsToToken(userDetails)
-      .map { tokenAttributes =>
-        common.UserInfo(
-          login = userDetails.login,
-          userId = userDetails.userId,
-          grants = grants,
-          attributes = tokenAttributes)
-      }
-
   }
 
   override def changePassword(userId: common.UserId, newPassword: String)
@@ -102,7 +83,7 @@ class AuthManagerImpl[A](
       case None =>
         for (
           userId <- userManager.generateUserId();
-          info <- additional.beforeUserCreate(UserDetailedInfo(
+          info <- beforeUserCreate(UserDetailedInfo(
             userId = userId,
             attributes = attrs,
             login = None,
@@ -114,7 +95,7 @@ class AuthManagerImpl[A](
         for (
           userId <- userManager.generateUserId();
           _ <- passwordManager.createPassword(userId, pc);
-          info <- additional.beforeUserCreate(UserDetailedInfo(
+          info <- beforeUserCreate(UserDetailedInfo(
             userId = userId,
             attributes = attrs,
             login = Some(pc.login),
@@ -134,11 +115,7 @@ class AuthManagerImpl[A](
   : Future[common.AccessToken] = {
     for (
       userDetails <- userManager.getUser(userId) if !userDetails.locked;
-      tokenAttrs <- createTokenUserInfo(
-        userDetails = userDetails,
-        grants = calculateGrants(roles, userDetails) ++ grants
-      );
-      token <- tokenFactory.issueApiToken(tokenAttrs, expiryDate, additional.marshallAttrs(_));
+      token <- tokenFactory.issueApiToken(userDetails, calculateGrants(roles, userDetails) ++ grants, expiryDate);
       _ <- tokenManager.saveToken(token.tokenInfo, userId)
     ) yield token.tokenInfo.tokenType
   }
@@ -165,7 +142,7 @@ class AuthManagerImpl[A](
                               (implicit ec: ExecutionContext)
   : Future[common.SerializedToken] = {
     for (
-      authInfo <- tokenFactory.verify(accessToken, additional.unMarshallAttrs);
+      authInfo <- tokenFactory.verify(accessToken);
       valid <- tokenManager.isValid(authInfo.tokenInfo.tokenType.tokenId) if valid
     ) yield authInfo.tokenInfo.tokenType.serializedToken
   }

@@ -27,7 +27,8 @@ import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl
 import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl.JwtAttributes
 import org.s4s0l.betelgeuse.akkaauth.common
 import org.s4s0l.betelgeuse.akkaauth.common._
-import org.s4s0l.betelgeuse.akkaauth.manager.TokenFactory
+import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
+import org.s4s0l.betelgeuse.akkaauth.manager.{AdditionalUserAttrsManager, TokenFactory}
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializer
 import pdi.jwt.{JwtAlgorithm, JwtClaim, JwtHeader, JwtJson4s}
 
@@ -36,20 +37,20 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * @author Marcin Wielgus
   */
-class TokenFactoryImpl(publicKey: PublicKey,
-                       privateKey: PrivateKey,
-                       config: Config)
-                      (implicit serializer: JacksonJsonSerializer)
-  extends TokenVerifierImpl(publicKey)
-    with TokenFactory {
+class TokenFactoryImpl[A](publicKey: PublicKey,
+                          privateKey: PrivateKey,
+                          attrsUnmarshaller: AdditionalUserAttrsManager[A])
+                         (implicit serializer: JacksonJsonSerializer, config: Config)
+  extends TokenVerifierImpl(publicKey, attrsUnmarshaller.unMarshallAttrs)
+    with TokenFactory[A] {
 
   private val issuer = config.getString("bg.auth.jwt.issuer")
   private val keyId = config.getString("bg.auth.jwt.keys.id")
   private val loginTokenValidity = config.getDuration("bg.auth.jwt.login-time")
 
-  override def issueLoginToken[A](userInfo: common.UserInfo[A],
-                                  marshaller: A => Map[String, String])
-                                 (implicit ec: ExecutionContext)
+  override def issueLoginToken(userDetails: UserDetailedInfo,
+                               grants: Set[Grant])
+                              (implicit ec: ExecutionContext)
   : Future[common.AuthInfo[A]] = {
     val now = new Date()
     val expiry = loginTokenValidity
@@ -57,30 +58,46 @@ class TokenFactoryImpl(publicKey: PublicKey,
     val nanos = expiry.getLong(ChronoField.NANO_OF_SECOND)
     val epochSeconds = expiry.getLong(ChronoField.INSTANT_SECONDS)
     val expiryDate = Date.from(Instant.ofEpochSecond(epochSeconds, nanos))
-    issueToken(userInfo, now, expiryDate, marshaller)
+    issueToken(userDetails, grants, now, expiryDate)
   }
 
-  override def issueApiToken[A](userInfo: common.UserInfo[A],
-                                expiration: Date,
-                                marshaller: A => Map[String, String])
-                               (implicit ec: ExecutionContext)
+  override def issueApiToken(userDetails: UserDetailedInfo,
+                             grants: Set[Grant],
+                             expiration: Date)
+                            (implicit ec: ExecutionContext)
   : Future[common.AuthInfo[A]] = {
-    issueToken(userInfo, new Date(), expiration, marshaller)
+    issueToken(userDetails, grants, new Date(), expiration)
   }
 
-  private def issueToken[A](userInfo: common.UserInfo[A],
-                            now: Date,
-                            expiration: Date,
-                            marshaller: A => Map[String, String])
-                           (implicit ec: ExecutionContext)
+  private def toUserInfo(userDetails: UserDetailedInfo,
+                         grants: Set[Grant])
+                        (implicit ec: ExecutionContext)
+  : Future[UserInfo[A]] = {
+    attrsUnmarshaller.mapAttrsToToken(userDetails)
+      .map { tokenInfo =>
+        common.UserInfo[A](
+          userDetails.login,
+          userDetails.userId,
+          grants,
+          tokenInfo
+        )
+      }
+  }
+
+  private def issueToken(userDetails: UserDetailedInfo,
+                         grants: Set[Grant],
+                         now: Date,
+                         expiration: Date)
+                        (implicit ec: ExecutionContext)
   : Future[common.AuthInfo[A]] = {
-    Future.successful {
+
+    toUserInfo(userDetails, grants).map { userInfo =>
       val roles = userInfo.grants.map(_.name)
       val serialized = serializer.simpleToString(JwtAttributes(
         accessTokenName,
         userInfo.login,
         roles.toList.sorted,
-        marshaller(userInfo.attributes)
+        attrsUnmarshaller.marshallAttrs(userInfo.attributes)
       ))
       val jwtHeader = JwtHeader(
         algorithm = Some(JwtAlgorithm.RS256),

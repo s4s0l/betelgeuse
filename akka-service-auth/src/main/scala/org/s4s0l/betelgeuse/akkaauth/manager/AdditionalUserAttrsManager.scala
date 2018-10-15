@@ -31,10 +31,6 @@ trait AdditionalUserAttrsManager[A] extends AdditionalAttrsManager[A] {
                      (implicit ec: ExecutionContext)
   : Future[A]
 
-  def beforeUserCreate(attrs: UserDetailedInfo)
-                      (implicit ec: ExecutionContext)
-  : Future[UserDetailedInfo] = Future.successful(attrs)
-
   def marshallAttrs(tokenAttrs: A)
   : Map[String, String]
 }

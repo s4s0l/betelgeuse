@@ -14,27 +14,34 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.sample
+/*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+package org.s4s0l.betelgeuse.akkaauth
 
 import com.typesafe.config.Config
-import org.s4s0l.betelgeuse.akkaauth.BgAuthClient
-import org.s4s0l.betelgeuse.akkaauth.common.AdditionalAttrsManager
+import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
 
 /**
   * @author Marcin Wielgus
   */
-object SampleClient extends BgAuthClient[String] {
+class BgAuthProviderTestClient extends BgAuthClient[String] {
 
-  override protected def portBase: Int = 14
+  override protected def systemName: String = "BgAuthProviderTestClient"
+
+  override protected def portBase: Int = 2
 
   override def customizeConfiguration
   : Config = super.customizeConfiguration
     .withFallback(clusteringClientCreateConfig(bgAuthProviderServiceId))
 
   override protected def bgAuthProviderServiceId
-  : BgServiceId = BgServiceId("SampleProvider", 13)
+  : BgServiceId = BgServiceId("BgAuthProviderTestProvider", 1)
 
-  override protected def jwtAttributeMapper: AdditionalAttrsManager[String] =
+  override protected def jwtAttributeMapper: AdditionalUserAttrsManager[String] =
     SampleJwtAttributes
 }

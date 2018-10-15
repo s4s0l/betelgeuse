@@ -32,16 +32,15 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * @author Marcin Wielgus
   */
-class TokenVerifierImpl(publicKey: PublicKey)
-                       (implicit serializer: JacksonJsonSerializer)
-  extends TokenVerifier {
+class TokenVerifierImpl[A](publicKey: PublicKey, attrsUnmarshaller: Map[String, String] => A)
+                          (implicit serializer: JacksonJsonSerializer)
+  extends TokenVerifier[A] {
 
   private def throwFormatEx(message: String) =
     throw TokenInvalidException(TokenFormatError(message))
 
-  override def verify[A](token: common.SerializedToken,
-                         attrsUnmarshaller: Map[String, String] => A)
-                        (implicit ec: ExecutionContext)
+  override def verify(token: common.SerializedToken)
+                     (implicit ec: ExecutionContext)
   : Future[common.AuthInfo[A]] = {
     val decodingResult = JwtJson4s
       .decodeAll(token.token, publicKey, Seq(JwtAlgorithm.RS256))

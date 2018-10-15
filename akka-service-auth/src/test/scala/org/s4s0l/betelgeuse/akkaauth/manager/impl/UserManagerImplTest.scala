@@ -33,7 +33,9 @@ import scala.concurrent.duration._
   * @author Marcin Wielgus
   */
 class UserManagerImplTest extends BgTestRoach with ScalaFutures {
+
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(5.second, 300.millis)
+
   private val aService = testWith(new BgPersistenceJournalRoach with BgClusteringSharding {
     lazy val userManager: UserManager = UserManagerImpl.start
 

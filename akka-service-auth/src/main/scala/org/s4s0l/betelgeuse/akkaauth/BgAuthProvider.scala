@@ -16,37 +16,76 @@
 
 package org.s4s0l.betelgeuse.akkaauth
 
+import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClient
 import org.s4s0l.betelgeuse.akkaauth.client.impl.AuthClientImpl
+import org.s4s0l.betelgeuse.akkaauth.common.KeyManager
+import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
 import org.s4s0l.betelgeuse.akkaauth.manager._
-import org.s4s0l.betelgeuse.akkaauth.manager.impl.{AuthManagerImpl, TokenFactoryImpl}
-import org.s4s0l.betelgeuse.akkacommons.http.BgHttp
+import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.Settings
+import org.s4s0l.betelgeuse.akkaauth.manager.impl._
+import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
+
+import scala.concurrent.Future
+import scala.concurrent.duration._
 
 /**
   * @author Marcin Wielgus
   */
 trait BgAuthProvider[A]
   extends BgAuthBase[A]
-    with BgHttp {
+    with BgClusteringSharding {
 
-  override lazy val bgAuthClient: AuthClient[A] = {
-    new AuthClientImpl[A](
-      bgTokenVerifier,
-      jwtAttributeMapper,
-      authManager.resolveApiToken
-    )
+
+  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgAuthProvider[_]])
+
+  abstract override def customizeConfiguration: Config = {
+    LOGGER.info("Customize config with auth-provider.conf with fallback to...")
+    ConfigFactory.parseResources("auth-provider.conf").withFallback(super.customizeConfiguration)
   }
 
-  lazy val userManager: UserManager = null
-  lazy val passwordManager: PasswordManager = null
-  lazy val tokenManager: TokenManager = null
-  lazy val authManager: AuthManager[A] = new AuthManagerImpl[A](
-    userManager = userManager,
-    tokenManager = tokenManager,
-    passwordManager = passwordManager,
-    additional = jwtAttributeMapper,
-    tokenFactory = new TokenFactoryImpl(bgAuthKeys.publicKey, bgAuthKeys.privateKey, config)
-  )
+  private lazy val internals = new {
+    LOGGER.info("Lazy Initializing ...")
+    val authKeys: KeyManager = new KeyManager
+    private val tokenFactory = new TokenFactoryImpl[A](authKeys.publicKey, authKeys.privateKey, jwtAttributeMapper)
+    val userManager: UserManager = UserManagerImpl.start
+    val passwordManager: PasswordManager = PasswordManagerImpl.startSharded(Settings(new BcryptProvider(11), 5.seconds))
+    val tokenManager: TokenManager = TokenManagerImpl.start
+    val authManager: AuthManager[A] = new AuthManagerImpl[A](
+      userManager = userManager,
+      tokenManager = tokenManager,
+      passwordManager = passwordManager,
+      tokenFactory = tokenFactory,
+      beforeUserCreate = bgAuthBeforeUserCreateHook
+    )
+    val authClient = new AuthClientImpl[A](
+      tokenFactory,
+      authManager.resolveApiToken
+    )
+    LOGGER.info("Lazy Initializing done.")
+  }
+
+  def bgAuthKeys: KeyManager = internals.authKeys
+
+  def bgAuthUserManager: UserManager = internals.userManager
+
+  def bgAuthPasswordManager: PasswordManager = internals.passwordManager
+
+  def bgAuthTokenManager: TokenManager = internals.tokenManager
+
+  def bgAuthManager: AuthManager[A] = internals.authManager
+
+  override def bgAuthClient: AuthClient[A] = internals.authClient
 
   override protected def jwtAttributeMapper: AdditionalUserAttrsManager[A]
+
+  def bgAuthBeforeUserCreateHook: UserDetailedInfo => Future[UserDetailedInfo] = Future.successful
+
+  override protected def initialize(): Unit = {
+    super.initialize()
+    LOGGER.info("Initializing...")
+    bgAuthClient
+    bgAuthManager
+    LOGGER.info("Initializing done.")
+  }
 }
