@@ -16,9 +16,10 @@
 
 package org.s4s0l.betelgeuse.akkaauth.client.impl
 
-import org.s4s0l.betelgeuse.akkaauth.client.{AuthClient, TokenVerifier}
+import akka.actor.ActorRef
+import akka.util.Timeout
+import org.s4s0l.betelgeuse.akkaauth.client.{AuthClient, TokenResolver, TokenVerifier}
 import org.s4s0l.betelgeuse.akkaauth.common
-import org.s4s0l.betelgeuse.akkaauth.common.SerializedToken
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -27,21 +28,25 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class AuthClientImpl[A](
                          verifier: TokenVerifier[A],
-                         externalResolver: SerializedToken => Future[SerializedToken]
+                         externalResolver: TokenResolver
                        )
   extends AuthClient[A] {
 
   override def extract(token: common.SerializedToken)
-                      (implicit ec: ExecutionContext)
+                      (implicit ec: ExecutionContext,
+                       timeout: Timeout,
+                       sender: ActorRef = ActorRef.noSender)
   : Future[common.AuthInfo[A]] = {
     verifier.verify(token)
   }
 
   override def resolveApiToken(accessToken: common.SerializedToken)
-                              (implicit ec: ExecutionContext)
+                              (implicit ec: ExecutionContext,
+                               timeout: Timeout,
+                               sender: ActorRef = ActorRef.noSender)
   : Future[common.AuthInfo[A]] = {
     for (
-      external <- externalResolver(accessToken);
+      external <- externalResolver.resolveToken(accessToken);
       extracted <- extract(external)
     ) yield extracted
   }

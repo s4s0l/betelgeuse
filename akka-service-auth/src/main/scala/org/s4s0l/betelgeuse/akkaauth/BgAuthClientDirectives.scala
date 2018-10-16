@@ -19,9 +19,13 @@ package org.s4s0l.betelgeuse.akkaauth
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive, Directive0, Directive1}
-import com.softwaremill.session._
+import akka.util.Timeout
+import com.softwaremill.session.{SetSessionTransport, _}
+import org.s4s0l.betelgeuse.akkaauth.BgAuthClientDirectives.{LocalResolution, RemoteResolution, ResolutionType}
 import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, Grant, SerializedToken}
+import org.s4s0l.betelgeuse.utils.AllUtils._
 
+import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success}
 
 /**
@@ -29,6 +33,9 @@ import scala.util.{Failure, Success}
   */
 private[akkaauth] trait BgAuthClientDirectives[A] {
   this: BgAuthBase[A] =>
+
+  lazy val bgAuthClientResolveTimeout: FiniteDuration = config.getDuration("bg.auth.client.token-resolve-timeout")
+  lazy val bgAuthClientExtractTimeout: FiniteDuration = config.getDuration("bg.auth.client.token-extract-timeout")
 
   def bgAuthCsrf: Directive0 =
     readHeader.flatMap {
@@ -54,24 +61,40 @@ private[akkaauth] trait BgAuthClientDirectives[A] {
       }
     }
 
+  def bgAuthResolutionType(token: AuthInfo[A], transport: SetSessionTransport): ResolutionType = {
+    if (token.userInfo.grants.contains(Grant.API)) {
+      RemoteResolution
+    } else {
+      LocalResolution
+    }
+  }
+
   private def requiredToken: Directive1[AuthInfo[A]] = {
     readToken.flatMap {
       case None =>
         complete(HttpResponse(StatusCodes.Unauthorized, entity = "Authorization required"))
-      case Some((v, CookieST)) =>
+      case Some((v, transport)) =>
+        implicit val to: Timeout = bgAuthClientExtractTimeout
         onComplete(bgAuthClient.extract(v)).flatMap {
           case Success(a) =>
-            provide(a)
+            bgAuthResolutionType(a, transport) match {
+              case LocalResolution => provide(a)
+              case RemoteResolution =>
+                resolveRemotely(v)
+            }
           case Failure(exception) =>
             complete(HttpResponse(StatusCodes.Forbidden, entity = exception.getMessage))
         }
-      case Some((v, HeaderST)) =>
-        onComplete(bgAuthClient.resolveApiToken(v)).flatMap {
-          case Success(a) =>
-            provide(a)
-          case Failure(exception) =>
-            complete(HttpResponse(StatusCodes.Forbidden, entity = exception.getMessage))
-        }
+    }
+  }
+
+  private def resolveRemotely(v: SerializedToken): Directive1[AuthInfo[A]] = {
+    implicit val to: Timeout = bgAuthClientResolveTimeout
+    onComplete(bgAuthClient.resolveApiToken(v)).flatMap {
+      case Success(auth2) =>
+        provide(auth2)
+      case Failure(exception) =>
+        complete(HttpResponse(StatusCodes.Forbidden, entity = exception.getMessage))
     }
   }
 
@@ -95,4 +118,14 @@ private[akkaauth] trait BgAuthClientDirectives[A] {
       SerializedToken(s"${h.value}.${c.value}.${s.value}"),
       CookieST: SetSessionTransport
     )
+}
+
+object BgAuthClientDirectives {
+
+  sealed trait ResolutionType
+
+  case object LocalResolution extends ResolutionType
+
+  case object RemoteResolution extends ResolutionType
+
 }

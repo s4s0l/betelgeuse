@@ -19,6 +19,8 @@ package org.s4s0l.betelgeuse.akkaauth.manager.impl
 import java.util.Date
 
 import akka.Done
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.common
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.RoleSet
@@ -39,8 +41,11 @@ class AuthManagerImpl[A](
                         )
   extends AuthManager[A] {
 
+
   override def login(credentials: common.Credentials)
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[TokenInfo[AccessToken]] = {
     credentials match {
       case pc: PasswordCredentials =>
@@ -54,7 +59,9 @@ class AuthManagerImpl[A](
   }
 
   override def changePassword(userId: common.UserId, newPassword: String)
-                             (implicit ec: ExecutionContext)
+                             (implicit ec: ExecutionContext,
+                              timeout: Timeout,
+                              sender: ActorRef = ActorRef.noSender)
   : Future[Done] = {
     for (
       userDetails <- userManager.getUser(userId) if !userDetails.locked;
@@ -63,21 +70,27 @@ class AuthManagerImpl[A](
   }
 
   override def lockUser(userId: common.UserId)
-                       (implicit ec: ExecutionContext)
+                       (implicit ec: ExecutionContext,
+                        timeout: Timeout,
+                        sender: ActorRef = ActorRef.noSender)
   : Future[Done] = {
     //TODO lock all tokens
     userManager.lockUser(userId)
   }
 
   override def unlockUser(userId: common.UserId)
-                         (implicit ec: ExecutionContext)
+                         (implicit ec: ExecutionContext,
+                          timeout: Timeout,
+                          sender: ActorRef = ActorRef.noSender)
   : Future[Done] = {
     userManager.unLockUser(userId)
   }
 
   override def createUser(attrs: UserDetailedAttributes,
                           password: Option[Credentials])
-                         (implicit ec: ExecutionContext)
+                         (implicit ec: ExecutionContext,
+                          timeout: Timeout,
+                          sender: ActorRef = ActorRef.noSender)
   : Future[common.UserId] = {
     password match {
       case None =>
@@ -111,7 +124,9 @@ class AuthManagerImpl[A](
                               roles: RoleSet,
                               grants: Set[Grant],
                               expiryDate: Date)
-                             (implicit ec: ExecutionContext)
+                             (implicit ec: ExecutionContext,
+                              timeout: Timeout,
+                              sender: ActorRef = ActorRef.noSender)
   : Future[common.AccessToken] = {
     for (
       userDetails <- userManager.getUser(userId) if !userDetails.locked;
@@ -133,13 +148,17 @@ class AuthManagerImpl[A](
   }
 
   override def invalidateApiToken(tokenId: TokenId)
-                                 (implicit ec: ExecutionContext)
+                                 (implicit ec: ExecutionContext,
+                                  timeout: Timeout,
+                                  sender: ActorRef = ActorRef.noSender)
   : Future[Done] = {
     tokenManager.revokeToken(tokenId)
   }
 
-  override def resolveApiToken(accessToken: common.SerializedToken)
-                              (implicit ec: ExecutionContext)
+  override def resolveToken(accessToken: common.SerializedToken)
+                           (implicit ec: ExecutionContext,
+                            timeout: Timeout,
+                            sender: ActorRef = ActorRef.noSender)
   : Future[common.SerializedToken] = {
     for (
       authInfo <- tokenFactory.verify(accessToken);

@@ -18,6 +18,8 @@ package org.s4s0l.betelgeuse.akkaauth.manager
 
 import java.util.Date
 
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
 import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, Grant}
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
@@ -31,13 +33,17 @@ trait TokenFactory[A] extends TokenVerifier[A] {
 
   def issueLoginToken(userDetails: UserDetailedInfo,
                       grants: Set[Grant])
-                     (implicit ec: ExecutionContext)
+                     (implicit ec: ExecutionContext,
+                      timeout: Timeout,
+                      sender: ActorRef = ActorRef.noSender)
   : Future[AuthInfo[A]]
 
   def issueApiToken(userDetails: UserDetailedInfo,
                     grants: Set[Grant],
                     expiration: Date)
-                   (implicit ec: ExecutionContext)
+                   (implicit ec: ExecutionContext,
+                    timeout: Timeout,
+                    sender: ActorRef = ActorRef.noSender)
   : Future[AuthInfo[A]]
 
 

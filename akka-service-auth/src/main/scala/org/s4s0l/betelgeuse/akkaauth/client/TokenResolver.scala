@@ -20,53 +20,31 @@
  * This file is proprietary and confidential.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.common
+package org.s4s0l.betelgeuse.akkaauth.client
 
 import akka.actor.ActorRef
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkaauth.client.TokenResolver
-import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.TokenInvalidReason
-import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.GetPublicKeyResponse
-import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
+import org.s4s0l.betelgeuse.akkaauth.common.SerializedToken
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
-  * Api exposed by auth provider for auth client services.
-  *
   * @author Marcin Wielgus
   */
-trait RemoteApi extends TokenResolver {
-
-  def getPublicKey()
+trait TokenResolver {
+  /**
+    * Verifies and translates token to known format.
+    * User by AuthClient service to check received token if it was
+    * invalidated in provider (even when token is not yet expired and
+    * passed local validation of signature). When Auth Client receives a token that
+    * is not issued by provider it can be used to validate and translate token to
+    * provider format.
+    *
+    */
+  def resolveToken(token: SerializedToken)
                   (implicit ec: ExecutionContext,
                    timeout: Timeout,
                    sender: ActorRef = ActorRef.noSender)
-  : Future[GetPublicKeyResponse]
-}
-
-object RemoteApi {
-
-  case class ResolveApiTokenRequest(token: SerializedToken)
-    extends JacksonJsonSerializable
-
-  sealed trait ResolveApiTokenResponse
-    extends JacksonJsonSerializable
-
-  object ResolveApiTokenResponse {
-
-    case class ResolveApiTokenResponseOk(token: SerializedToken)
-      extends ResolveApiTokenResponse
-
-    case class ResolveApiTokenResponseNotOk(reason: TokenInvalidReason)
-      extends ResolveApiTokenResponse
-
-  }
-
-  case class GetPublicKeyRequest()
-    extends JacksonJsonSerializable
-
-  case class GetPublicKeyResponse(base64Key: String)
-    extends JacksonJsonSerializable
+  : Future[SerializedToken]
 
 }

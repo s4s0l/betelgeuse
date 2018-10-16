@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkaauth.manager.impl
 import java.util.Date
 
 import akka.Done
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.pattern.AskableActorRef
 import akka.persistence.fsm.PersistentFSM
 import akka.persistence.fsm.PersistentFSM.FSMState
@@ -37,6 +37,7 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
+import org.s4s0l.betelgeuse.utils.AllUtils._
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -50,6 +51,8 @@ private class TokenManagerImpl()(implicit val domainEventClassTag: ClassTag[Doma
     with PersistentFSM[TokenState, TokenData, DomainEvent]
     with TimeoutShardedActor
     with ActorLogging {
+
+  override val timeoutTime: FiniteDuration = context.system.settings.config.getDuration("bg.auth.provider.entity-passivation-timeout")
 
   startWith(InitialState, InitialData)
 
@@ -91,6 +94,7 @@ private class TokenManagerImpl()(implicit val domainEventClassTag: ClassTag[Doma
   whenUnhandled {
     case Event(_, InitialData) =>
       sender() ! Result(Right(ErrorMessage(s"Token does not exist: $shardedActorId")))
+      shardedPassivate()
       stay()
     case Event(_: CreateEvent, _) =>
       sender() ! Result(Right(ErrorMessage(s"duplicate token id: $shardedActorId")))
@@ -126,11 +130,11 @@ object TokenManagerImpl {
           (tokenId.id, msg)
       })
 
-    implicit val timeout: Timeout = 5.seconds
-    implicit val sender: ActorRef = Actor.noSender
 
     def ask[T](userId: TokenId, message: Any)
-              (implicit ec: ExecutionContext)
+              (implicit ec: ExecutionContext,
+               timeout: Timeout,
+               sender: ActorRef = ActorRef.noSender)
     : Future[T] = {
       (new AskableActorRef(ref) ? (userId, message))
         .map {
@@ -143,7 +147,9 @@ object TokenManagerImpl {
     new TokenManager() {
       override def saveToken(token: common.TokenInfo[_ <: common.TokenType],
                              userId: common.UserId)
-                            (implicit ec: ExecutionContext)
+                            (implicit ec: ExecutionContext,
+                             timeout: Timeout,
+                             sender: ActorRef = ActorRef.noSender)
       : Future[Done] =
         ask(token.tokenType.tokenId, CreateEvent(
           token.tokenType.tokenId.id,
@@ -158,15 +164,21 @@ object TokenManagerImpl {
         ))
 
       override def revokeToken(tokenId: TokenId)
-                              (implicit ec: ExecutionContext)
+                              (implicit ec: ExecutionContext,
+                               timeout: Timeout,
+                               sender: ActorRef = ActorRef.noSender)
       : Future[Done] =
         ask(tokenId, "revoke")
 
-      override def isValid(tokenId: TokenId)(implicit ec: ExecutionContext)
+      override def isValid(tokenId: TokenId)(implicit ec: ExecutionContext,
+                                             timeout: Timeout,
+                                             sender: ActorRef = ActorRef.noSender)
       : Future[Boolean] =
         ask(tokenId, "is-valid")
 
-      override def getSubject(tokenId: TokenId)(implicit ec: ExecutionContext)
+      override def getSubject(tokenId: TokenId)(implicit ec: ExecutionContext,
+                                                timeout: Timeout,
+                                                sender: ActorRef = ActorRef.noSender)
       : Future[common.UserId] =
         ask(tokenId, "get-subject")
     }

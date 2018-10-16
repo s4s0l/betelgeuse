@@ -24,13 +24,16 @@ import akka.http.scaladsl.model.{DateTime, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, Route}
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.BgAuthProviderDirectives._
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.{AllRoles, GivenRoles, RoleSet}
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedAttributes, UserDetailedInfo}
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
+import org.s4s0l.betelgeuse.utils.AllUtils._
 import pdi.jwt.exceptions.JwtLengthException
 
+import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success}
 
 /**
@@ -50,6 +53,8 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   private implicit val u4: FromEntityUnmarshaller[TokenId] = httpMarshalling.unmarshaller
   private implicit val u5: FromEntityUnmarshaller[UserId] = httpMarshalling.unmarshaller
   private implicit val u6: FromEntityUnmarshaller[CreateUserRequest] = httpMarshalling.unmarshaller
+
+  lazy val bgAuthProviderRestTimeout: FiniteDuration = config.getDuration("bg.auth.provider.rest-api-timeout")
 
   def bgAuthProviderDefaultRoutes: Route =
     concat(
@@ -115,6 +120,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   def bgAuthCurrentUserDetails(grantRequired: Grant*): Route =
     get {
       bgAuthGrantsAllowed(grantRequired: _*) { authInfo =>
+        implicit val to: Timeout = bgAuthProviderRestTimeout
         onSuccess(bgAuthUserManager.getUser(authInfo.userInfo.userId)) {
           details => complete(details)
         }
@@ -130,6 +136,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     post {
       bgAuthGrantsAllowed(grantRequired: _*) { authInfo =>
         entity(as[CreateApiTokenRequest]) { request =>
+          implicit val to: Timeout = bgAuthProviderRestTimeout
           val creationProcess = bgAuthManager.createApiToken(
             authInfo.userInfo.userId,
             request.asRoleSet,
@@ -152,6 +159,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     post {
       bgAuthGrantsAllowed(grantRequired: _*) { _ =>
         entity(as[CreateUserRequest]) { request =>
+          implicit val to: Timeout = bgAuthProviderRestTimeout
           val userDetails = UserDetailedAttributes(
             request.userAttributed,
             request.roles.map(it => Role(it)).toSet,
@@ -167,6 +175,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   def bgAuthInvalidateApiToken(grantRequired: Grant*): Route =
     put {
       bgAuthGrantsAllowed(grantRequired: _*) { authInfo =>
+        implicit val to: Timeout = bgAuthProviderRestTimeout
         entity(as[TokenId]) { id =>
           val process = for (
             subjectId <- bgAuthTokenManager.getSubject(id) if subjectId == authInfo.userInfo.userId;
@@ -183,6 +192,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     put {
       bgAuthGrantsAllowed(grantRequired) { _ =>
         entity(as[UserId]) { id =>
+          implicit val to: Timeout = bgAuthProviderRestTimeout
           onSuccess(bgAuthManager.lockUser(id)) { _ =>
             complete(JustSuccess())
           }
@@ -195,6 +205,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     put {
       bgAuthGrantsAllowed(grantRequired) { _ =>
         entity(as[UserId]) { id =>
+          implicit val to: Timeout = bgAuthProviderRestTimeout
           onSuccess(bgAuthManager.unlockUser(id)) { _ =>
             complete(JustSuccess())
           }
@@ -212,6 +223,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
               complete(HttpResponse(StatusCodes.BadRequest, entity = "User has no password credentials"))
             case Some(login) =>
               val passwordCredentials = PasswordCredentials(login, request.oldPassword)
+              implicit val to: Timeout = bgAuthProviderRestTimeout
               val updateProcess = for (
                 userId <- bgAuthPasswordManager.verifyPassword(passwordCredentials) if userId == authInfo.userInfo.userId;
                 done <- bgAuthManager.changePassword(userId, request.newPassword)
@@ -234,6 +246,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   private def login =
     post {
       entity(as[PasswordCredentials]) { login =>
+        implicit val to: Timeout = bgAuthProviderRestTimeout
         onComplete(bgAuthManager.login(login)) {
           case Success(token) =>
             setToken(token) {

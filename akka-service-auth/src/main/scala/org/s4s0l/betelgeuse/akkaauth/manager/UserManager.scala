@@ -17,6 +17,8 @@
 package org.s4s0l.betelgeuse.akkaauth.manager
 
 import akka.Done
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.common.{UserAttributes, UserId}
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedInfo}
 
@@ -31,19 +33,25 @@ trait UserManager {
     * Generated next UUID, is NOT be sequential.
     */
   def generateUserId()
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[UserId]
 
   /**
     * creates a user, when user with given id already exists will fail.
     */
   def createUser(userInfo: UserDetailedInfo)
-                (implicit ec: ExecutionContext)
+                (implicit ec: ExecutionContext,
+                 timeout: Timeout,
+                 sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   def updateRoles(userId: UserId,
                   roles: Set[Role])
-                 (implicit ec: ExecutionContext)
+                 (implicit ec: ExecutionContext,
+                  timeout: Timeout,
+                  sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   /**
@@ -54,11 +62,15 @@ trait UserManager {
     */
   def updateAdditionalAttributes(userId: UserId,
                                  attrs: Map[String, Option[String]])
-                                (implicit ec: ExecutionContext)
+                                (implicit ec: ExecutionContext,
+                                 timeout: Timeout,
+                                 sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   def getUser(userId: UserId)
-             (implicit ec: ExecutionContext)
+             (implicit ec: ExecutionContext,
+              timeout: Timeout,
+              sender: ActorRef = ActorRef.noSender)
   : Future[UserDetailedInfo]
 
   /**
@@ -66,7 +78,9 @@ trait UserManager {
     * sets locked flag. If already set it has no effect and will be always successful.
     */
   def lockUser(userId: UserId)
-              (implicit ec: ExecutionContext)
+              (implicit ec: ExecutionContext,
+               timeout: Timeout,
+               sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   /**
@@ -74,7 +88,9 @@ trait UserManager {
     * sets locked flag. If already set it has no effect and will be always successful.
     */
   def unLockUser(userId: UserId)
-                (implicit ec: ExecutionContext)
+                (implicit ec: ExecutionContext,
+                 timeout: Timeout,
+                 sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 }
 

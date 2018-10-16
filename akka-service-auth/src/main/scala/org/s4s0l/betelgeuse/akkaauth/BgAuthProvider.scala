@@ -57,7 +57,7 @@ trait BgAuthProvider[A]
     )
     val authClient = new AuthClientImpl[A](
       tokenFactory,
-      authManager.resolveApiToken
+      authManager
     )
     LOGGER.info("Lazy Initializing done.")
   }

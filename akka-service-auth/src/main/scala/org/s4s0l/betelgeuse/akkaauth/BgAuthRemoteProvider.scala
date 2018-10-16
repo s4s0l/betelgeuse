@@ -17,12 +17,14 @@
 package org.s4s0l.betelgeuse.akkaauth
 
 import akka.actor.{Actor, ActorRef, Props}
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.{TokenInvalidException, TokenProcessingError}
 import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.ResolveApiTokenResponse.{ResolveApiTokenResponseNotOk, ResolveApiTokenResponseOk}
 import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.{GetPublicKeyRequest, GetPublicKeyResponse, ResolveApiTokenRequest}
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionist
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.FiniteDuration
 
 /**
   * @author Marcin Wielgus
@@ -42,13 +44,20 @@ trait BgAuthRemoteProvider[A]
   private def remoteAuthManagerFacade(): ActorRef =
     system.actorOf(
       Props(new Actor() {
+
+        import org.s4s0l.betelgeuse.utils.AllUtils._
+
+        implicit val resolveTimeout: Timeout =
+          context.system.settings.config.getDuration("bg.auth.client.token-resolve-timeout"): FiniteDuration
+
         override def receive: Receive = {
           case GetPublicKeyRequest() =>
             sender() ! GetPublicKeyResponse(bgAuthKeys.publicKeyBase64)
           case ResolveApiTokenRequest(token) =>
             import akka.pattern.pipe
             implicit val ec: ExecutionContext = context.dispatcher
-            bgAuthManager.resolveApiToken(token)
+
+            bgAuthManager.resolveToken(token)
               .map(it => ResolveApiTokenResponseOk(it))
               .recover {
                 case TokenInvalidException(reason) =>

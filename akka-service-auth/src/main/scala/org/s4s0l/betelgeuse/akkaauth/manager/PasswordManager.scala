@@ -17,6 +17,8 @@
 package org.s4s0l.betelgeuse.akkaauth.manager
 
 import akka.Done
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -34,7 +36,9 @@ trait PasswordManager {
     *
     */
   def createPassword(userId: UserId, credentials: PasswordCredentials)
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   /**
@@ -42,14 +46,18 @@ trait PasswordManager {
     * Fails when password is disabled od removed for given login.
     */
   def verifyPassword(credentials: PasswordCredentials)
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[UserId]
 
   /**
     * Must be called after [[createPassword]] in order to enable password.
     */
   def enablePassword(login: String)
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[UserId]
 
   /**
@@ -57,7 +65,9 @@ trait PasswordManager {
     * disabled od removed for given login.
     */
   def updatePassword(credentials: PasswordCredentials)
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   /**
@@ -65,6 +75,8 @@ trait PasswordManager {
     * given login.
     */
   def removePassword(login: String)
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 }

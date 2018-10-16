@@ -16,6 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkaauth.manager
 
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.common.AdditionalAttrsManager
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
 
@@ -28,7 +30,9 @@ import scala.concurrent.{ExecutionContext, Future}
 trait AdditionalUserAttrsManager[A] extends AdditionalAttrsManager[A] {
 
   def mapAttrsToToken(userAttrs: UserDetailedInfo)
-                     (implicit ec: ExecutionContext)
+                     (implicit ec: ExecutionContext,
+                      timeout: Timeout,
+                      sender: ActorRef = ActorRef.noSender)
   : Future[A]
 
   def marshallAttrs(tokenAttrs: A)

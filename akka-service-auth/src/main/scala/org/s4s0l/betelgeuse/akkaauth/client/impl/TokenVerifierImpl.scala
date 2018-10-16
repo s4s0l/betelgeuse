@@ -19,6 +19,8 @@ package org.s4s0l.betelgeuse.akkaauth.client.impl
 import java.security.PublicKey
 import java.util.Date
 
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.{TokenFormatError, TokenInvalidException}
 import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl.JwtAttributes
@@ -40,12 +42,14 @@ class TokenVerifierImpl[A](publicKey: PublicKey, attrsUnmarshaller: Map[String, 
     throw TokenInvalidException(TokenFormatError(message))
 
   override def verify(token: common.SerializedToken)
-                     (implicit ec: ExecutionContext)
+                     (implicit ec: ExecutionContext,
+                      timeout: Timeout,
+                      sender: ActorRef = ActorRef.noSender)
   : Future[common.AuthInfo[A]] = {
     val decodingResult = JwtJson4s
       .decodeAll(token.token, publicKey, Seq(JwtAlgorithm.RS256))
       .map { it =>
-        val (h, c, s) = it
+        val (_, c, _) = it
         val content = serializer.simpleFromString[JwtAttributes](c.content)
         common.AuthInfo[A](
           common.UserInfo[A](

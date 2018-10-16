@@ -22,13 +22,14 @@
 
 package org.s4s0l.betelgeuse.akkaauth.client.impl
 
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.TokenInvalidException
 import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.ResolveApiTokenResponse.{ResolveApiTokenResponseNotOk, ResolveApiTokenResponseOk}
 import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.{GetPublicKeyRequest, GetPublicKeyResponse, ResolveApiTokenRequest, ResolveApiTokenResponse}
 import org.s4s0l.betelgeuse.akkaauth.common.{RemoteApi, SerializedToken}
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -36,9 +37,11 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class RemoteAuthProviderApi(remoteManagerTarget: ActorTarget) extends RemoteApi {
   override def resolveToken(token: SerializedToken)
-                           (implicit ec: ExecutionContext)
+                           (implicit ec: ExecutionContext,
+                            timeout: Timeout,
+                            sender: ActorRef = ActorRef.noSender)
   : Future[SerializedToken] = {
-    remoteManagerTarget.?(ResolveApiTokenRequest(token))(3.seconds)
+    remoteManagerTarget.?(ResolveApiTokenRequest(token))
       .map(_.asInstanceOf[ResolveApiTokenResponse])
       .map {
         case ResolveApiTokenResponseOk(resultingToken) =>
@@ -49,9 +52,11 @@ class RemoteAuthProviderApi(remoteManagerTarget: ActorTarget) extends RemoteApi 
   }
 
   override def getPublicKey()
-                           (implicit ec: ExecutionContext)
+                           (implicit ec: ExecutionContext,
+                            timeout: Timeout,
+                            sender: ActorRef = ActorRef.noSender)
   : Future[RemoteApi.GetPublicKeyResponse] = {
-    remoteManagerTarget.?(GetPublicKeyRequest())(3.seconds)
+    remoteManagerTarget.?(GetPublicKeyRequest())
       .map(_.asInstanceOf[GetPublicKeyResponse])
   }
 

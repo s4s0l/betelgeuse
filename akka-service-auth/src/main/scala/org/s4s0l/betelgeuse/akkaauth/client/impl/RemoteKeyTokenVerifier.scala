@@ -22,10 +22,10 @@
 
 package org.s4s0l.betelgeuse.akkaauth.client.impl
 
-import akka.Done
-import akka.actor.{Actor, ActorLogging, ActorRefFactory, FSM, Props, Timers}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, FSM, Props, Timers}
 import akka.pattern._
 import akka.util.Timeout
+import akka.{Done, util}
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
 import org.s4s0l.betelgeuse.akkaauth.client.impl.RemoteKeyTokenVerifier._
 import org.s4s0l.betelgeuse.akkaauth.common
@@ -49,14 +49,14 @@ class RemoteKeyTokenVerifier[A](remoteApi: RemoteApi,
     with FSM[KeyState, Option[(String, TokenVerifier[A])]] {
 
   private implicit val ec: ExecutionContext = context.dispatcher
-
+  private val getKeyTimeout: FiniteDuration = context.system.settings.config.getDuration("bg.auth.client.public-key-timeout")
   startWith(KeyAbsent, None)
 
   when(KeyAbsent) {
     case Event(GetKey, _) =>
       fetchKey()
       stay()
-    case Event(Verify(_), _) =>
+    case Event(Verify(_, _), _) =>
       sender() ! Result(new Exception("public key missing"))
       stay()
     case Event(RemoteResponse(Some(theKey)), _) =>
@@ -73,7 +73,8 @@ class RemoteKeyTokenVerifier[A](remoteApi: RemoteApi,
     case Event(GetKey, _) =>
       fetchKey()
       stay()
-    case Event(Verify(token), Some((_, verifier))) =>
+    case Event(Verify(token, timeout), Some((_, verifier))) =>
+      implicit val to: util.Timeout = timeout
       verifier.verify(token)
         .map(authInfo => Result(authInfo))
         .recover {
@@ -100,6 +101,7 @@ class RemoteKeyTokenVerifier[A](remoteApi: RemoteApi,
     timers.startPeriodicTimer("KeyRefreshTimer", GetKey, 15.minutes)
 
   private def fetchKey(): Unit = {
+    implicit val to: util.Timeout = getKeyTimeout
     remoteApi.getPublicKey()
       .map(it => RemoteResponse(Some(it.base64Key)))
       .recover {
@@ -125,10 +127,11 @@ object RemoteKeyTokenVerifier {
     )
     new Verifier[A] {
       override def verify(serializedToken: SerializedToken)
-                         (implicit ec: ExecutionContext)
+                         (implicit ec: ExecutionContext,
+                          timeout: Timeout,
+                          sender: ActorRef = ActorRef.noSender)
       : Future[common.AuthInfo[A]] = {
-        implicit val timeout: Timeout = 5.seconds
-        (new AskableActorRef(ref) ? Verify(serializedToken))
+        (new AskableActorRef(ref) ? Verify(serializedToken, timeout))
           .map {
             case Result(Left(exception)) =>
               throw new Exception(exception)
@@ -156,7 +159,7 @@ object RemoteKeyTokenVerifier {
 
   case object GetKey
 
-  case class Verify(serializedToken: SerializedToken)
+  case class Verify(serializedToken: SerializedToken, timeout: Timeout)
 
   case class Result[A](res: Either[Throwable, common.AuthInfo[A]])
 

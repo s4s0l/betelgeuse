@@ -17,6 +17,8 @@
 package org.s4s0l.betelgeuse.akkaauth.manager
 
 import akka.Done
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.common.{TokenId, TokenInfo, TokenType, UserId}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -33,7 +35,9 @@ trait TokenManager {
     * Apart from explicit attributes should persist type of token.
     */
   def saveToken(token: TokenInfo[_ <: TokenType], userId: UserId)
-               (implicit ec: ExecutionContext)
+               (implicit ec: ExecutionContext,
+                timeout: Timeout,
+                sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   /**
@@ -41,18 +45,24 @@ trait TokenManager {
     * When called on revoked token does nothing.
     */
   def revokeToken(tokenId: TokenId)
-                 (implicit ec: ExecutionContext)
+                 (implicit ec: ExecutionContext,
+                  timeout: Timeout,
+                  sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   /**
     * checks if token was revoked
     */
   def isValid(tokenId: TokenId)
-             (implicit ec: ExecutionContext)
+             (implicit ec: ExecutionContext,
+              timeout: Timeout,
+              sender: ActorRef = ActorRef.noSender)
   : Future[Boolean]
 
   def getSubject(tokenId: TokenId)
-                (implicit ec: ExecutionContext)
+                (implicit ec: ExecutionContext,
+                 timeout: Timeout,
+                 sender: ActorRef = ActorRef.noSender)
   : Future[UserId]
 
 }

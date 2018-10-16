@@ -17,6 +17,7 @@
 package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
 import akka.Done
+import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkaauth.common.UserAttributes.{City, Male}
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager
@@ -39,6 +40,12 @@ class UserManagerImplTest extends BgTestRoach with ScalaFutures {
   private val aService = testWith(new BgPersistenceJournalRoach with BgClusteringSharding {
     lazy val userManager: UserManager = UserManagerImpl.start
 
+    override def customizeConfiguration: Config = {
+      ConfigFactory.parseResources("auth-client.conf")
+        .withFallback(ConfigFactory.parseResources("auth-provider.conf"))
+        .withFallback(super.customizeConfiguration)
+    }
+
     override protected def initialize(): Unit = {
       super.initialize()
       userManager
@@ -56,7 +63,7 @@ class UserManagerImplTest extends BgTestRoach with ScalaFutures {
   feature("User manager can persist user information") {
     scenario("Smoke test") {
       val userId = whenReady(aService.service.userManager
-        .generateUserId()(aService.execContext)) { id =>
+        .generateUserId()(aService.execContext, aService.to, aService.self)) { id =>
         assert(id.id.length > 16)
         id
       }

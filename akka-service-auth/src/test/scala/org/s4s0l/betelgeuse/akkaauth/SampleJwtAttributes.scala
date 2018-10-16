@@ -22,6 +22,8 @@
 
 package org.s4s0l.betelgeuse.akkaauth
 
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.manager.{AdditionalUserAttrsManager, UserManager}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -32,7 +34,9 @@ import scala.concurrent.{ExecutionContext, Future}
 object SampleJwtAttributes
   extends AdditionalUserAttrsManager[String] {
   override def mapAttrsToToken(userAttrs: UserManager.UserDetailedInfo)
-                              (implicit ec: ExecutionContext)
+                              (implicit ec: ExecutionContext,
+                               timeout: Timeout,
+                               sender: ActorRef = ActorRef.noSender)
   : Future[String] = Future.successful(
     userAttrs.attributes.additionalAttributes.getOrElse("something", "")
   )

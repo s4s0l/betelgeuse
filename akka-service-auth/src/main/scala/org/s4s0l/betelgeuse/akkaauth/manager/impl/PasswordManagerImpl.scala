@@ -20,8 +20,8 @@ import java.security.SecureRandom
 import java.util.Base64
 
 import akka.Done
-import akka.actor.Props
 import akka.actor.Status.Failure
+import akka.actor.{ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.util.Timeout
 import com.fasterxml.jackson.annotation.JsonInclude.Include
@@ -37,19 +37,23 @@ import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
-import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
+import org.s4s0l.betelgeuse.akkacommons.utils.{ActorTarget, TimeoutShardedActor}
+import org.s4s0l.betelgeuse.utils.AllUtils._
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
-
-class PasswordManagerImpl(hashProvider: HashProvider) extends PersistentShardedActor {
+class PasswordManagerImpl(hashProvider: HashProvider)
+  extends PersistentShardedActor
+    with TimeoutShardedActor {
 
   var state: Option[PasswordState] = None
 
   private val encoder = Base64.getEncoder
   private val decoder = Base64.getDecoder
+
+  override val timeoutTime: FiniteDuration = context.system.settings.config.getDuration("bg.auth.provider.entity-passivation-timeout")
 
   private def isInitialized: Boolean = state isDefined
 
@@ -129,6 +133,7 @@ class PasswordManagerImpl(hashProvider: HashProvider) extends PersistentShardedA
     case cmd: PasswordManagerCommand if !isInitialized =>
       log.warning("Request to login for uninitialized password {}", cmd)
       sender() ! Failure(new Exception("Password does not exist"))
+      shardedPassivate()
 
   }
 
@@ -137,7 +142,7 @@ class PasswordManagerImpl(hashProvider: HashProvider) extends PersistentShardedA
 
 object PasswordManagerImpl {
 
-  case class Settings(hashProvider: HashProvider, askTimeout: Timeout)
+  case class Settings(hashProvider: HashProvider)
 
   private def entityExtractor: ShardRegion.ExtractEntityId = {
     case a: PasswordManagerCommand =>
@@ -146,8 +151,8 @@ object PasswordManagerImpl {
 
   def start(implicit system: BgClusteringShardingExtension,
             config: Config): PasswordManager = {
-    val rounds = config.getInt("bg.auth.hash-rounds")
-    startSharded(Settings(new BcryptProvider(rounds, new SecureRandom()), 5.seconds))
+    val rounds = config.getInt("bg.auth.provider.hash-rounds")
+    startSharded(Settings(new BcryptProvider(rounds, new SecureRandom())))
   }
 
   def startSharded(settings: Settings)(implicit system: BgClusteringShardingExtension): PasswordManager = {
@@ -155,23 +160,36 @@ object PasswordManagerImpl {
     new PasswordManager {
       val actorTarget: ActorTarget = ref
 
-      implicit val timeout: Timeout = settings.askTimeout
-
       import PasswordManagerCommand._
 
-      override def createPassword(userId: UserId, credentials: PasswordCredentials)(implicit ec: ExecutionContext): Future[Done] =
+      override def createPassword(userId: UserId, credentials: PasswordCredentials)
+                                 (implicit ec: ExecutionContext,
+                                  timeout: Timeout,
+                                  sender: ActorRef = ActorRef.noSender): Future[Done] =
         actorTarget.?(CreatePassword(userId, credentials)).mapTo[Done]
 
-      override def verifyPassword(credentials: PasswordCredentials)(implicit ec: ExecutionContext): Future[UserId] =
+      override def verifyPassword(credentials: PasswordCredentials)
+                                 (implicit ec: ExecutionContext,
+                                  timeout: Timeout,
+                                  sender: ActorRef = ActorRef.noSender): Future[UserId] =
         actorTarget.?(VerifyPassword(credentials)).mapTo[UserId]
 
-      override def enablePassword(login: String)(implicit ec: ExecutionContext): Future[UserId] =
+      override def enablePassword(login: String)
+                                 (implicit ec: ExecutionContext,
+                                  timeout: Timeout,
+                                  sender: ActorRef = ActorRef.noSender): Future[UserId] =
         actorTarget.?(EnablePassword(login)).mapTo[UserId]
 
-      override def updatePassword(credentials: PasswordCredentials)(implicit ec: ExecutionContext): Future[Done] =
+      override def updatePassword(credentials: PasswordCredentials)
+                                 (implicit ec: ExecutionContext,
+                                  timeout: Timeout,
+                                  sender: ActorRef = ActorRef.noSender): Future[Done] =
         actorTarget.?(UpdatePassword(credentials)).mapTo[Done]
 
-      override def removePassword(login: String)(implicit ec: ExecutionContext): Future[Done] =
+      override def removePassword(login: String)
+                                 (implicit ec: ExecutionContext,
+                                  timeout: Timeout,
+                                  sender: ActorRef = ActorRef.noSender): Future[Done] =
         actorTarget.?(RemovePassword(login)).mapTo[Done]
     }
   }

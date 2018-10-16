@@ -58,7 +58,7 @@ trait BgAuthClient[A]
     val bgAuthClient: AuthClient[A] =
       new AuthClientImpl[A](
         bgTokenVerifier,
-        token => remoteApi.resolveToken(token)
+        remoteApi
       )
     LOGGER.info("Lazy Initializing done.")
   }

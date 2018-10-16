@@ -34,7 +34,7 @@ private[akkaauth] trait BgAuthBase[A]
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgAuthBase[_]])
 
-  abstract override def customizeConfiguration: Config = {
+  override def customizeConfiguration: Config = {
     LOGGER.info("Customize config with auth-client.conf with fallback to...")
     ConfigFactory.parseResources("auth-client.conf").withFallback(super.customizeConfiguration)
   }

@@ -14,21 +14,29 @@
  * limitations under the License.
  */
 
+/*
+ * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
 package org.s4s0l.betelgeuse.utils
 
-import com.typesafe.config.Config
+import java.time.{Duration => ConfigDuration}
+import java.util.concurrent.TimeUnit
 
+import scala.concurrent.duration.FiniteDuration
 import scala.language.implicitConversions
+import scala.util.{Failure, Success, Try}
 
 /**
   * @author Marcin Wielgus
   */
-object AllUtils extends TryNTimes
-  with TryWith
-  with CompanionFinder
-  with ConfigUtils
-  with PlaceholderUtils
-  with FutureUtils {
-
-  implicit def toConfigOptionApi(typeSafeConfig: Config): ConfigOptionApi = ConfigOptionApi.toConfigOptionApi(typeSafeConfig)
+trait ConfigUtils {
+  implicit def toFiniteDuration(configDuration: ConfigDuration): FiniteDuration = {
+    Try(FiniteDuration(configDuration.toNanos, TimeUnit.NANOSECONDS)) match {
+      case Success(duration) => duration
+      case Failure(f) => throw new Exception(s"unable to get duration from configuration $configDuration", f)
+    }
+  }
 }

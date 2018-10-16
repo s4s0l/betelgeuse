@@ -21,7 +21,9 @@ import java.time.Instant
 import java.time.temporal.ChronoField
 import java.util.{Date, UUID}
 
+import akka.actor.ActorRef
 import akka.http.scaladsl.model.MediaTypes
+import akka.util.Timeout
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl
 import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl.JwtAttributes
@@ -50,7 +52,9 @@ class TokenFactoryImpl[A](publicKey: PublicKey,
 
   override def issueLoginToken(userDetails: UserDetailedInfo,
                                grants: Set[Grant])
-                              (implicit ec: ExecutionContext)
+                              (implicit ec: ExecutionContext,
+                               timeout: Timeout,
+                               sender: ActorRef = ActorRef.noSender)
   : Future[common.AuthInfo[A]] = {
     val now = new Date()
     val expiry = loginTokenValidity
@@ -64,14 +68,18 @@ class TokenFactoryImpl[A](publicKey: PublicKey,
   override def issueApiToken(userDetails: UserDetailedInfo,
                              grants: Set[Grant],
                              expiration: Date)
-                            (implicit ec: ExecutionContext)
+                            (implicit ec: ExecutionContext,
+                             timeout: Timeout,
+                             sender: ActorRef = ActorRef.noSender)
   : Future[common.AuthInfo[A]] = {
     issueToken(userDetails, grants, new Date(), expiration)
   }
 
   private def toUserInfo(userDetails: UserDetailedInfo,
                          grants: Set[Grant])
-                        (implicit ec: ExecutionContext)
+                        (implicit ec: ExecutionContext,
+                         timeout: Timeout,
+                         sender: ActorRef = ActorRef.noSender)
   : Future[UserInfo[A]] = {
     attrsUnmarshaller.mapAttrsToToken(userDetails)
       .map { tokenInfo =>
@@ -88,7 +96,9 @@ class TokenFactoryImpl[A](publicKey: PublicKey,
                          grants: Set[Grant],
                          now: Date,
                          expiration: Date)
-                        (implicit ec: ExecutionContext)
+                        (implicit ec: ExecutionContext,
+                         timeout: Timeout,
+                         sender: ActorRef = ActorRef.noSender)
   : Future[common.AuthInfo[A]] = {
 
     toUserInfo(userDetails, grants).map { userInfo =>

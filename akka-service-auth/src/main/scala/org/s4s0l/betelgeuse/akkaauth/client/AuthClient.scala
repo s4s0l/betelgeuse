@@ -16,6 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkaauth.client
 
+import akka.actor.ActorRef
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, SerializedToken}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -26,11 +28,15 @@ import scala.concurrent.{ExecutionContext, Future}
 trait AuthClient[A] {
 
   def extract(token: SerializedToken)
-             (implicit ec: ExecutionContext)
+             (implicit ec: ExecutionContext,
+              timeout: Timeout,
+              sender: ActorRef = ActorRef.noSender)
   : Future[AuthInfo[A]]
 
   def resolveApiToken(accessToken: SerializedToken)
-                     (implicit ec: ExecutionContext)
+                     (implicit ec: ExecutionContext,
+                      timeout: Timeout,
+                      sender: ActorRef = ActorRef.noSender)
   : Future[AuthInfo[A]]
 
 }

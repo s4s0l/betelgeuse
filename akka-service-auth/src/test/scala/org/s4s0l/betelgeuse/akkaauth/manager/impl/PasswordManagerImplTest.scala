@@ -22,13 +22,13 @@ import akka.Done
 import akka.actor.Status.Failure
 import akka.actor.{ActorRef, Props, Scheduler}
 import com.miguno.akka.testing.VirtualTime
+import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
 import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider.HashedValue
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.PasswordManagerCommand._
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.Settings
 import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.{BgClusteringSharding, BgClusteringShardingExtension}
-import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.{BgPersistenceJournalRoach, BgPersistenceSnapStoreRoach}
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
@@ -44,6 +44,11 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
     new BgPersistenceJournalRoach
       with BgPersistenceSnapStoreRoach
       with BgClusteringSharding {
+      override def customizeConfiguration: Config = {
+        ConfigFactory.parseResources("auth-client.conf")
+          .withFallback(ConfigFactory.parseResources("auth-provider.conf"))
+          .withFallback(super.customizeConfiguration)
+      }
     }
   )
 
@@ -59,12 +64,11 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
   feature("PersistentPasswordManager enables password holding") {
     scenario("standard password path") {
       new WithService(aService) {
-        private val extension = BgPersistenceExtension.apply(system)
 
         val manager: ActorRef = system.actorOf(Props(new PasswordManagerImpl(NoopHasher)), "manager")
 
         manager ! CreatePassword(UserId("id"), PasswordCredentials("login", "password"))
-        testKit.expectMsg(2 seconds, Done)
+        testKit.expectMsg(10 seconds, Done)
 
         manager ! CreatePassword(UserId("id"), PasswordCredentials("login", "password"))
         testKit.expectMsgType[Failure](500 millis) // creating
@@ -104,7 +108,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
     scenario("we want to use Protocol") {
       new WithService(aService) {
         implicit val sharding: BgClusteringShardingExtension = BgClusteringShardingExtension(system)
-        val manager: PasswordManager = PasswordManagerImpl.startSharded(Settings(NoopHasher, 5 seconds))
+        val manager: PasswordManager = PasswordManagerImpl.startSharded(Settings(NoopHasher))
 
         implicit val patienceConfig: PatienceConfig = PatienceConfig(5.seconds, 500.millis)
 

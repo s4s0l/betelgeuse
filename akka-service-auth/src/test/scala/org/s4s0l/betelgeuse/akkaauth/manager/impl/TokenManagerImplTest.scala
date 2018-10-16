@@ -19,6 +19,7 @@ package org.s4s0l.betelgeuse.akkaauth.manager.impl
 import java.util.{Date, UUID}
 
 import akka.Done
+import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
@@ -36,6 +37,12 @@ class TokenManagerImplTest extends BgTestRoach with ScalaFutures {
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(5.second, 300.millis)
   private val aService = testWith(new BgPersistenceJournalRoach with BgClusteringSharding {
     lazy val tokenManager: TokenManager = TokenManagerImpl.start
+
+    override def customizeConfiguration: Config = {
+      ConfigFactory.parseResources("auth-client.conf")
+        .withFallback(ConfigFactory.parseResources("auth-provider.conf"))
+        .withFallback(super.customizeConfiguration)
+    }
 
     override protected def initialize(): Unit = {
       super.initialize()

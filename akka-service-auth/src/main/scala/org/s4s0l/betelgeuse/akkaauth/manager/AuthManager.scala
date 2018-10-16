@@ -19,6 +19,9 @@ package org.s4s0l.betelgeuse.akkaauth.manager
 import java.util.Date
 
 import akka.Done
+import akka.actor.ActorRef
+import akka.util.Timeout
+import org.s4s0l.betelgeuse.akkaauth.client.TokenResolver
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.RoleSet
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedAttributes}
@@ -29,43 +32,53 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * @author Marcin Wielgus
   */
-trait AuthManager[A] {
+trait AuthManager[A] extends TokenResolver {
 
   def login(credentials: Credentials)
-           (implicit ec: ExecutionContext)
+           (implicit ec: ExecutionContext,
+            timeout: Timeout,
+            sender: ActorRef = ActorRef.noSender)
   : Future[TokenInfo[AccessToken]]
 
   def changePassword(userId: UserId, newPassword: String)
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   def lockUser(userId: UserId)
-              (implicit ec: ExecutionContext)
+              (implicit ec: ExecutionContext,
+               timeout: Timeout,
+               sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   def unlockUser(userId: UserId)
-                (implicit ec: ExecutionContext)
+                (implicit ec: ExecutionContext,
+                 timeout: Timeout,
+                 sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   def createUser(attrs: UserDetailedAttributes,
                  password: Option[Credentials])
-                (implicit ec: ExecutionContext)
+                (implicit ec: ExecutionContext,
+                 timeout: Timeout,
+                 sender: ActorRef = ActorRef.noSender)
   : Future[UserId]
 
   def createApiToken(userId: UserId,
                      roles: RoleSet,
                      grants: Set[Grant],
                      expiryDate: Date)
-                    (implicit ec: ExecutionContext)
+                    (implicit ec: ExecutionContext,
+                     timeout: Timeout,
+                     sender: ActorRef = ActorRef.noSender)
   : Future[AccessToken]
 
   def invalidateApiToken(tokenId: TokenId)
-                        (implicit ec: ExecutionContext)
+                        (implicit ec: ExecutionContext,
+                         timeout: Timeout,
+                         sender: ActorRef = ActorRef.noSender)
   : Future[Done]
-
-  def resolveApiToken(accessToken: SerializedToken)
-                     (implicit ec: ExecutionContext)
-  : Future[SerializedToken]
 
 }
 

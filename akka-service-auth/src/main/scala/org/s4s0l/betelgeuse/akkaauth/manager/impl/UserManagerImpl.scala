@@ -24,7 +24,7 @@ package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
 import java.util.UUID
 
-import akka.actor.{ActorLogging, Props}
+import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.pattern.AskableActorRef
 import akka.persistence.fsm.PersistentFSM
 import akka.persistence.fsm.PersistentFSM.FSMState
@@ -43,6 +43,7 @@ import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
+import org.s4s0l.betelgeuse.utils.AllUtils._
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -56,6 +57,8 @@ class UserManagerImpl()(implicit val domainEventClassTag: ClassTag[DomainEvent])
     with PersistentFSM[UserState, UserData, DomainEvent]
     with TimeoutShardedActor
     with ActorLogging {
+
+  override val timeoutTime: FiniteDuration = context.system.settings.config.getDuration("bg.auth.provider.entity-passivation-timeout")
 
   startWith(InitialState, NotExistsData)
 
@@ -162,10 +165,10 @@ object UserManagerImpl {
           (userId.id, msg)
       })
 
-    implicit val timeout: Timeout = 5.seconds
-
     def ask[T](command: String, userId: UserId, message: Any)
-              (implicit ec: ExecutionContext)
+              (implicit ec: ExecutionContext,
+               timeout: Timeout,
+               sender: ActorRef = ActorRef.noSender)
     : Future[T] = {
       (new AskableActorRef(ref) ? (userId, (command, message)))
         .map {
@@ -177,33 +180,48 @@ object UserManagerImpl {
 
     new UserManager() {
 
-      override def generateUserId()(implicit ec: ExecutionContext): Future[UserId] = {
+      override def generateUserId()
+                                 (implicit ec: ExecutionContext,
+                                  timeout: Timeout,
+                                  sender: ActorRef = ActorRef.noSender): Future[UserId] = {
         Future.successful(UserId(UUID.randomUUID().toString))
       }
 
       override def createUser(userInfo: UserManager.UserDetailedInfo)
-                             (implicit ec: ExecutionContext)
+                             (implicit ec: ExecutionContext,
+                              timeout: Timeout,
+                              sender: ActorRef = ActorRef.noSender)
       : Future[Done] = ask("createUser", userInfo.userId, userInfo)
 
 
       override def updateRoles(userId: UserId, roles: Set[UserManager.Role])
-                              (implicit ec: ExecutionContext)
+                              (implicit ec: ExecutionContext,
+                               timeout: Timeout,
+                               sender: ActorRef = ActorRef.noSender)
       : Future[Done] = ask("updateRoles", userId, roles)
 
       override def updateAdditionalAttributes(userId: UserId, attrs: Map[String, Option[String]])
-                                             (implicit ec: ExecutionContext)
+                                             (implicit ec: ExecutionContext,
+                                              timeout: Timeout,
+                                              sender: ActorRef = ActorRef.noSender)
       : Future[Done] = ask("updateAdditionalAttributes", userId, attrs)
 
       override def getUser(userId: UserId)
-                          (implicit ec: ExecutionContext)
+                          (implicit ec: ExecutionContext,
+                           timeout: Timeout,
+                           sender: ActorRef = ActorRef.noSender)
       : Future[UserManager.UserDetailedInfo] = ask("getUser", userId, NotUsed)
 
       override def lockUser(userId: UserId)
-                           (implicit ec: ExecutionContext)
+                           (implicit ec: ExecutionContext,
+                            timeout: Timeout,
+                            sender: ActorRef = ActorRef.noSender)
       : Future[Done] = ask("lockUser", userId, NotUsed)
 
       override def unLockUser(userId: UserId)
-                             (implicit ec: ExecutionContext)
+                             (implicit ec: ExecutionContext,
+                              timeout: Timeout,
+                              sender: ActorRef = ActorRef.noSender)
       : Future[Done] = ask("unLockUser", userId, NotUsed)
     }
   }
