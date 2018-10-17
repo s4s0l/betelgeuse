@@ -16,6 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkaauth
 
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
 import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 
@@ -32,4 +34,24 @@ class BgAuthProviderTestProvider extends BgPersistenceJournalRoach
 
   override protected def jwtAttributeMapper: AdditionalUserAttrsManager[String] =
     SampleJwtAttributes
+
+  override def httpRoute: Route = {
+    super.httpRoute ~
+      pathPrefix("sample") {
+        bgAuthCsrf {
+          pathPrefix("csrf") {
+            path("get") {
+              get {
+                complete("ok")
+              }
+            } ~
+              path("post") {
+                post {
+                  complete("ok")
+                }
+              }
+          }
+        }
+      }
+  }
 }

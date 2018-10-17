@@ -98,6 +98,10 @@ object UserManager {
 
   case class Role(name: String)
 
+  object Role {
+    val MASTER = Role("MASTER")
+  }
+
   case class UserDetailedAttributes(
                                      userAttributed: UserAttributes,
                                      roles: Set[Role],

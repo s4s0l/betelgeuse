@@ -13,15 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/*
- * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
-
 package org.s4s0l.betelgeuse.akkaauth.client.impl
 
+import akka.actor.Status.Failure
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, FSM, Props, Timers}
 import akka.pattern._
 import akka.util.Timeout
@@ -57,7 +51,7 @@ class RemoteKeyTokenVerifier[A](remoteApi: RemoteApi,
       fetchKey()
       stay()
     case Event(Verify(_, _), _) =>
-      sender() ! Result(new Exception("public key missing"))
+      sender() ! Failure(new Exception("public key missing"))
       stay()
     case Event(RemoteResponse(Some(theKey)), _) =>
       val key = KeyManager.publicKeyFromBase64(theKey)
@@ -76,9 +70,8 @@ class RemoteKeyTokenVerifier[A](remoteApi: RemoteApi,
     case Event(Verify(token, timeout), Some((_, verifier))) =>
       implicit val to: util.Timeout = timeout
       verifier.verify(token)
-        .map(authInfo => Result(authInfo))
         .recover {
-          case ex: Throwable => Result(ex)
+          case ex: Throwable => Failure(ex)
         }.pipeTo(sender())
       stay()
     case Event(RemoteResponse(Some(theKey)), Some((oldKey, _))) =>
@@ -131,13 +124,7 @@ object RemoteKeyTokenVerifier {
                           timeout: Timeout,
                           sender: ActorRef = ActorRef.noSender)
       : Future[common.AuthInfo[A]] = {
-        (new AskableActorRef(ref) ? Verify(serializedToken, timeout))
-          .map {
-            case Result(Left(exception)) =>
-              throw new Exception(exception)
-            case Result(Right(result)) =>
-              result.asInstanceOf[common.AuthInfo[A]]
-          }
+        (new AskableActorRef(ref) ? Verify(serializedToken, timeout)).mapTo[common.AuthInfo[A]]
       }
 
       override def init(): Unit =
@@ -160,14 +147,5 @@ object RemoteKeyTokenVerifier {
   case object GetKey
 
   case class Verify(serializedToken: SerializedToken, timeout: Timeout)
-
-  case class Result[A](res: Either[Throwable, common.AuthInfo[A]])
-
-  object Result {
-    def apply[A](error: Throwable): Result[A] = new Result(Left(error))
-
-    def apply[A](value: common.AuthInfo[A]): Result[A] = new Result(Right(value))
-
-  }
 
 }

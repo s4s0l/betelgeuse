@@ -31,6 +31,7 @@ import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
 import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider.HashedValue
+import org.s4s0l.betelgeuse.akkaauth.manager.PasswordManager.PasswordLoginAlreadyTaken
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.PasswordManagerCommand._
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.{PasswordManagerCommand, _}
 import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
@@ -78,9 +79,9 @@ class PasswordManagerImpl(hashProvider: HashProvider)
   }
 
   override def receiveCommand: Receive = {
-    case CreatePassword(userId, PasswordCredentials(_, password)) =>
+    case CreatePassword(userId, PasswordCredentials(login, password)) =>
       state match {
-        case Some(_) => sender() ! Failure(new Exception("Password already initialized"))
+        case Some(_) => sender() ! Failure(PasswordLoginAlreadyTaken(login))
         case None =>
           val h = hashProvider.hashPassword(password)
           persist(PasswordCreated(userId, encoder.encodeToString(h.hash), encoder.encodeToString(h.salt), System.currentTimeMillis())) { event =>
@@ -88,13 +89,13 @@ class PasswordManagerImpl(hashProvider: HashProvider)
             sender() ! Done
           }
       }
-    case VerifyPassword(PasswordCredentials(_, password)) if isInitialized =>
+    case VerifyPassword(PasswordCredentials(login, password)) if isInitialized =>
       state.foreach { currentState =>
         if (currentState.enabled) {
           if (hashProvider.checkPassword(currentState.hash, password)) {
             sender() ! currentState.userId
           } else {
-            sender() ! Failure(new Exception("Invalid password"))
+            sender() ! Failure(PasswordManager.PasswordValidationError(login))
           }
         } else {
           sender() ! Failure(new Exception("Password not enabled"))
@@ -131,8 +132,8 @@ class PasswordManagerImpl(hashProvider: HashProvider)
     }
 
     case cmd: PasswordManagerCommand if !isInitialized =>
-      log.warning("Request to login for uninitialized password {}", cmd)
-      sender() ! Failure(new Exception("Password does not exist"))
+      log.warning("Request to login for uninitialized password, login = {}", cmd.login)
+      sender() ! Failure(PasswordManager.PasswordNotFound(cmd.login))
       shardedPassivate()
 
   }

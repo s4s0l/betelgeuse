@@ -19,6 +19,7 @@ package org.s4s0l.betelgeuse.akkaauth.manager.impl
 import java.util.Date
 
 import akka.Done
+import akka.actor.Status.Failure
 import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.pattern.AskableActorRef
 import akka.persistence.fsm.PersistentFSM
@@ -59,7 +60,7 @@ private class TokenManagerImpl()(implicit val domainEventClassTag: ClassTag[Doma
   when(InitialState, 5.second) {
     case Event(ce: CreateEvent, InitialData) =>
       goto(CreatedState) applying ce andThen { _ =>
-        sender() ! Result(Left(Done))
+        sender() ! Done
       }
     case Event(StateTimeout, _) =>
       shardedPassivate()
@@ -69,38 +70,38 @@ private class TokenManagerImpl()(implicit val domainEventClassTag: ClassTag[Doma
   when(CreatedState) {
     case Event("revoke", CreatedData(_)) =>
       goto(RevokedState) applying RevokeEvent(new Date()) andThen { _ =>
-        sender() ! Result(Left(Done))
+        sender() ! Done
       }
     case Event("is-valid", CreatedData(_)) =>
-      sender() ! Result(Left(true))
+      sender() ! true
       stay()
     case Event("get-subject", CreatedData(ce)) =>
-      sender() ! Result(Left(UserId(ce.userId)))
+      sender() ! UserId(ce.userId)
       stay()
   }
 
   when(RevokedState) {
     case Event("revoke", RevokedData(_, _)) =>
-      sender() ! Result(Left(Done))
+      sender() ! Done
       stay()
     case Event("is-valid", RevokedData(_, _)) =>
-      sender() ! Result(Left(false))
+      sender() ! false
       stay()
     case Event("get-subject", RevokedData(ce, _)) =>
-      sender() ! Result(Left(UserId(ce.userId)))
+      sender() ! UserId(ce.userId)
       stay()
   }
 
   whenUnhandled {
     case Event(_, InitialData) =>
-      sender() ! Result(Right(ErrorMessage(s"Token does not exist: $shardedActorId")))
+      sender() ! Failure(new Exception(s"Token does not exist: $shardedActorId"))
       shardedPassivate()
       stay()
     case Event(_: CreateEvent, _) =>
-      sender() ! Result(Right(ErrorMessage(s"duplicate token id: $shardedActorId")))
+      sender() ! Failure(new Exception(s"duplicate token id: $shardedActorId"))
       stay()
     case Event(_, data) =>
-      sender() ! Result(Right(ErrorMessage(s"token in invalid state: $shardedActorId ($data)")))
+      sender() ! Failure(new Exception(s"token in invalid state: $shardedActorId ($data)"))
       stay()
   }
 
@@ -126,22 +127,19 @@ object TokenManagerImpl {
       typeName = "token-manager",
       entityProps = Props(new TokenManagerImpl()),
       extractEntityId = {
-        case (tokenId: TokenId, msg) =>
-          (tokenId.id, msg)
+        case (TokenId(id), msg) =>
+          (id, msg)
       })
 
 
-    def ask[T](userId: TokenId, message: Any)
+    def ask[T](tokenId: TokenId, message: Any)
               (implicit ec: ExecutionContext,
                timeout: Timeout,
-               sender: ActorRef = ActorRef.noSender)
+               sender: ActorRef = ActorRef.noSender,
+               classTag: ClassTag[T]
+              )
     : Future[T] = {
-      (new AskableActorRef(ref) ? (userId, message))
-        .map {
-          case Result(Left(value)) => value.asInstanceOf[T]
-          case Result(Right(ErrorMessage(errorMessage))) =>
-            throw new Exception(errorMessage)
-        }
+      (new AskableActorRef(ref) ? (tokenId, message)).mapTo[T]
     }
 
     new TokenManager() {
@@ -151,7 +149,7 @@ object TokenManagerImpl {
                              timeout: Timeout,
                              sender: ActorRef = ActorRef.noSender)
       : Future[Done] =
-        ask(token.tokenType.tokenId, CreateEvent(
+        ask[Done](token.tokenType.tokenId, CreateEvent(
           token.tokenType.tokenId.id,
           userId.id,
           token.expiration,
@@ -168,27 +166,22 @@ object TokenManagerImpl {
                                timeout: Timeout,
                                sender: ActorRef = ActorRef.noSender)
       : Future[Done] =
-        ask(tokenId, "revoke")
+        ask[Done](tokenId, "revoke")
 
       override def isValid(tokenId: TokenId)(implicit ec: ExecutionContext,
                                              timeout: Timeout,
                                              sender: ActorRef = ActorRef.noSender)
       : Future[Boolean] =
-        ask(tokenId, "is-valid")
+        ask[Boolean](tokenId, "is-valid")
 
       override def getSubject(tokenId: TokenId)(implicit ec: ExecutionContext,
                                                 timeout: Timeout,
                                                 sender: ActorRef = ActorRef.noSender)
       : Future[common.UserId] =
-        ask(tokenId, "get-subject")
+        ask[common.UserId](tokenId, "get-subject")
     }
 
   }
-
-
-  private case class ErrorMessage(message: String)
-
-  private case class Result[T](res: Either[T, ErrorMessage])
 
   sealed trait TokenData
 

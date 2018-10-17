@@ -120,7 +120,8 @@ class TokenFactoryImpl[A](publicKey: PublicKey,
         issuer = Some(issuer),
         expiration = Some(expiration.getTime),
         issuedAt = Some(now.getTime),
-        jwtId = Some(jwtId)
+        jwtId = Some(jwtId),
+        subject = Some(userInfo.userId.id)
       )
       val encoded = JwtJson4s.encode(jwtHeader, jwtClaim, privateKey)
       common.AuthInfo[A](

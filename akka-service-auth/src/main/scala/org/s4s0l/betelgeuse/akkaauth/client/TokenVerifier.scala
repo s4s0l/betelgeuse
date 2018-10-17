@@ -18,6 +18,10 @@ package org.s4s0l.betelgeuse.akkaauth.client
 
 import akka.actor.ActorRef
 import akka.util.Timeout
+import com.fasterxml.jackson.annotation.JsonInclude.Include
+import com.fasterxml.jackson.annotation.JsonSubTypes.Type
+import com.fasterxml.jackson.annotation.JsonTypeInfo.{As, Id}
+import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo}
 import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, SerializedToken}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -40,32 +44,42 @@ object TokenVerifier {
   case class TokenInvalidException(reason: TokenInvalidReason)
     extends Exception(reason.msg)
 
+  @JsonInclude(Include.NON_NULL)
+  @JsonTypeInfo(use = Id.NAME, include = As.PROPERTY, property = "type")
+  @JsonSubTypes(Array(
+    new Type(name = "expired", value = classOf[TokenExpired]),
+    new Type(name = "format", value = classOf[TokenFormatError]),
+    new Type(name = "processing", value = classOf[TokenProcessingError]),
+    new Type(name = "signature", value = classOf[TokenSignatureError]),
+    new Type(name = "revoked", value = classOf[TokenRevoked]),
+    new Type(name = "issuer", value = classOf[TokenUnknownIssuer]),
+  ))
   sealed trait TokenInvalidReason {
     def msg: String
   }
 
   case class TokenExpired() extends TokenInvalidReason {
-    val msg = "Token expired"
+    def msg = "Token expired"
   }
 
   case class TokenFormatError(message: String) extends TokenInvalidReason {
-    val msg = s"Token format error: $message"
+    def msg = s"Token format error: $message"
   }
 
   case class TokenProcessingError(message: String) extends TokenInvalidReason {
-    val msg = s"Error during token processing: $message"
+    def msg = s"Error during token processing: $message"
   }
 
   case class TokenSignatureError() extends TokenInvalidReason {
-    val msg = s"Token signature Error"
+    def msg = s"Token signature Error"
   }
 
   case class TokenRevoked() extends TokenInvalidReason {
-    val msg = s"Token revoked"
+    def msg = s"Token revoked"
   }
 
   case class TokenUnknownIssuer() extends TokenInvalidReason {
-    val msg = s"Token issuer error"
+    def msg = s"Token issuer error"
   }
 
 }

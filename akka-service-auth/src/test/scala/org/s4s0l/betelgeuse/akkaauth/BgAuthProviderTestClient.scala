@@ -13,23 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/*
- * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
-
 package org.s4s0l.betelgeuse.akkaauth
 
+import akka.http.scaladsl.server.Directives.{complete, get, path, pathPrefix, post, _}
+import akka.http.scaladsl.server.Route
 import com.typesafe.config.Config
+import org.s4s0l.betelgeuse.akkaauth.common.Grant
 import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
+import org.s4s0l.betelgeuse.akkacommons.http.BgHttp
+
 
 /**
   * @author Marcin Wielgus
   */
-class BgAuthProviderTestClient extends BgAuthClient[String] {
+class BgAuthProviderTestClient
+  extends BgAuthClient[String]
+    with BgHttp {
 
   override protected def systemName: String = "BgAuthProviderTestClient"
 
@@ -39,9 +39,64 @@ class BgAuthProviderTestClient extends BgAuthClient[String] {
   : Config = super.customizeConfiguration
     .withFallback(clusteringClientCreateConfig(bgAuthProviderServiceId))
 
-  override protected def bgAuthProviderServiceId
-  : BgServiceId = BgServiceId("BgAuthProviderTestProvider", 1)
+  override def httpRoute: Route = {
+    super.httpRoute ~
+      pathPrefix("protected") {
+        path("any") {
+          bgAuthRequire { info =>
+            get {
+              complete(info.userInfo.attributes)
+            } ~
+              post {
+                complete(info.userInfo.attributes)
+              }
+          }
+        } ~
+          path("role") {
+            bgAuthGrantsAllowed(Grant("CUSTOM_ROLE")) { info =>
+              get {
+                complete(info.userInfo.attributes)
+              } ~
+                post {
+                  complete(info.userInfo.attributes)
+                }
+            }
+          } ~
+          path("dummy") {
+            bgAuthGrantsAllowed(Grant("DUMMY")) { _ =>
+              get {
+                complete("This should not be possible")
+              }
+            }
+          } ~
+          path("master") {
+            bgAuthGrantsAllowed(Grant.MASTER) { info =>
+              get {
+                complete(info.userInfo.attributes)
+              }
+            }
+          } ~
+          path("api") {
+            bgAuthGrantsAllowed(Grant.API) { info =>
+              get {
+                complete(info.userInfo.attributes)
+              } ~
+                post {
+                  complete(info.userInfo.attributes)
+                }
+            }
+          }
 
-  override protected def jwtAttributeMapper: AdditionalUserAttrsManager[String] =
+      }
+  }
+
+  override protected def bgAuthProviderServiceId
+  : BgServiceId
+
+  = BgServiceId("BgAuthProviderTestProvider", 1)
+
+  override protected def jwtAttributeMapper: AdditionalUserAttrsManager[String]
+
+  =
     SampleJwtAttributes
 }

@@ -103,7 +103,15 @@ private[akkaauth] trait BgAuthClientDirectives[A] {
 
   private def readHeader: Directive[Tuple1[Option[(SerializedToken, SetSessionTransport)]]] =
     optionalHeaderValueByName(sessionManager.config.sessionHeaderConfig.getFromClientHeaderName)
-      .map(_.map(h => (SerializedToken(h), HeaderST: SetSessionTransport)))
+      .flatMap {
+        case None =>
+          provide(None)
+        case Some(value) if value.startsWith("Bearer ") =>
+          val token = value.substring(7)
+          provide(Some((SerializedToken(token), HeaderST: SetSessionTransport)))
+        case Some(_) =>
+          complete(HttpResponse(StatusCodes.BadRequest, entity = "Authorization not supported"))
+      }
 
   private def readCookies: Directive[Tuple1[Option[(SerializedToken, SetSessionTransport)]]] =
     for (

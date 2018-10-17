@@ -28,6 +28,8 @@ import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.BgAuthProviderDirectives._
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.{AllRoles, GivenRoles, RoleSet}
+import org.s4s0l.betelgeuse.akkaauth.manager.PasswordManager
+import org.s4s0l.betelgeuse.akkaauth.manager.PasswordManager.PasswordLoginAlreadyTaken
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedAttributes, UserDetailedInfo}
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.utils.AllUtils._
@@ -41,6 +43,8 @@ import scala.util.{Failure, Success}
   */
 private[akkaauth] trait BgAuthProviderDirectives[A] {
   this: BgAuthProvider[A] =>
+
+  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgAuthProviderDirectives[_]])
 
   private implicit val m1: ToEntityMarshaller[SuccessfulLoginResult] = httpMarshalling.marshaller
   private implicit val m3: ToEntityMarshaller[UserId] = httpMarshalling.marshaller
@@ -65,11 +69,11 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
 
   def bgAuthProviderLoginRoutes: Route = {
     pathPrefix("auth") {
-      concat(
-        path("pub-key") {
-          bgAuthGetKey()
-        },
-        bgAuthCsrf {
+      bgAuthCsrf {
+        concat(
+          path("public-key") {
+            bgAuthGetKey()
+          },
           concat(
             path("login") {
               login
@@ -78,24 +82,24 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
               verify
             }
           )
-        }
-      )
+        )
+      }
     }
   }
 
   def bgAuthProviderSelfUserManagement: Route = {
     pathPrefix("current-user") {
       concat(
-        path("get-details") {
+        path("details") {
           bgAuthCurrentUserDetails()
         },
         path("change-password") {
           bgAuthCurrentUserPassChange()
         },
-        path("create-api-token") {
+        path("api-token-create") {
           bgAuthCreateApiToken(Set(Grant.API))
         },
-        path("invalidate-api-token") {
+        path("api-token-invalidate") {
           bgAuthInvalidateApiToken()
         }
       )
@@ -165,8 +169,14 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
             request.roles.map(it => Role(it)).toSet,
             request.additionalAttributes
           )
-          onSuccess(bgAuthManager.createUser(userDetails, request.credentials)) { userId =>
-            complete(userId)
+          onComplete(bgAuthManager.createUser(userDetails, request.credentials)) {
+            case Success(userId) =>
+              complete(userId)
+            case Failure(PasswordLoginAlreadyTaken(_)) =>
+              complete(HttpResponse(StatusCodes.Conflict, entity = "Login already taken"))
+            case Failure(ex) =>
+              LOGGER.error("User creation failed", ex)
+              complete(HttpResponse(StatusCodes.InternalServerError, entity = ex.getMessage))
           }
         }
       }
@@ -217,21 +227,30 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   def bgAuthCurrentUserPassChange(grantRequired: Grant*): Route =
     put {
       bgAuthGrantsAllowed(grantRequired: _*) { authInfo =>
-        entity(as[NewPassRequest]) { request =>
-          authInfo.userInfo.login match {
-            case None =>
-              complete(HttpResponse(StatusCodes.BadRequest, entity = "User has no password credentials"))
-            case Some(login) =>
-              val passwordCredentials = PasswordCredentials(login, request.oldPassword)
-              implicit val to: Timeout = bgAuthProviderRestTimeout
-              val updateProcess = for (
-                userId <- bgAuthPasswordManager.verifyPassword(passwordCredentials) if userId == authInfo.userInfo.userId;
-                done <- bgAuthManager.changePassword(userId, request.newPassword)
-              ) yield done
-              onSuccess(updateProcess) { _ =>
-                complete(JustSuccess())
-              }
-          }
+        entity(as[NewPassRequest]) {
+          case NewPassRequest(null, _) | NewPassRequest(_, null) =>
+            complete(HttpResponse(StatusCodes.BadRequest, entity = "Passwords missing"))
+          case NewPassRequest(oldPassword, newPassword) =>
+            authInfo.userInfo.login match {
+              case None =>
+                complete(HttpResponse(StatusCodes.BadRequest, entity = "User has no password credentials"))
+              case Some(login) =>
+                val passwordCredentials = PasswordCredentials(login, oldPassword)
+                implicit val to: Timeout = bgAuthProviderRestTimeout
+                val updateProcess = for (
+                  userId <- bgAuthPasswordManager.verifyPassword(passwordCredentials) if userId == authInfo.userInfo.userId;
+                  done <- bgAuthManager.changePassword(userId, newPassword)
+                ) yield done
+                onComplete(updateProcess) {
+                  case Success(_) =>
+                    complete(JustSuccess())
+                  case Failure(PasswordManager.PasswordValidationError(_) | PasswordManager.PasswordValidationError(_)) =>
+                    complete(HttpResponse(StatusCodes.Forbidden, entity = "Bad password"))
+                  case Failure(ex) =>
+                    LOGGER.error("Password update error: " + ex.getMessage)
+                    complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal server error"))
+                }
+            }
         }
       }
     }
@@ -247,15 +266,23 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     post {
       entity(as[PasswordCredentials]) { login =>
         implicit val to: Timeout = bgAuthProviderRestTimeout
-        onComplete(bgAuthManager.login(login)) {
-          case Success(token) =>
-            setToken(token) {
-              complete(SuccessfulLoginResult())
+        login match {
+          case PasswordCredentials(null, _) | PasswordCredentials(_, null) =>
+            complete(HttpResponse(StatusCodes.BadRequest, entity = "Credentials missing"))
+          case _ =>
+            onComplete(bgAuthManager.login(login)) {
+              case Success(token) =>
+                setToken(token) {
+                  complete(SuccessfulLoginResult())
+                }
+              case Failure(PasswordManager.PasswordValidationError(_) | PasswordManager.PasswordValidationError(_)) =>
+                complete(HttpResponse(StatusCodes.Unauthorized, entity = "Bad password"))
+              case Failure(ex) =>
+                LOGGER.error("Password verification error: " + ex.getMessage)
+                complete(HttpResponse(StatusCodes.Unauthorized, entity = "Authorization failed"))
             }
-          case Failure(ex) =>
-            ex.printStackTrace() //todo: introduce some ex for bad pass and log only when other problems
-            complete(HttpResponse(StatusCodes.Unauthorized, entity = "Authorization failed"))
         }
+
       }
     }
 

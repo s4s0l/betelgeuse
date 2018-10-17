@@ -80,3 +80,13 @@ trait PasswordManager {
                      sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 }
+
+object PasswordManager {
+
+  case class PasswordLoginAlreadyTaken(login: String) extends Exception(s"Login has been already initialized: $login")
+
+  case class PasswordNotFound(login: String) extends Exception(s"No credentials found for login $login")
+
+  case class PasswordValidationError(login: String) extends Exception(s"Bad password for login $login")
+
+}

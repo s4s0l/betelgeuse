@@ -86,7 +86,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
 
         manager ! VerifyPassword(PasswordCredentials("login", "otherPassword"))
         testKit.expectMsgPF(500 millis, "not yet changed") {
-          case Failure(reason) => assert(reason.getMessage.contains("Invalid password"))
+          case Failure(reason) => assert(reason.getMessage.contains("Bad password"))
         }
 
         manager ! UpdatePassword(PasswordCredentials("login", "otherPassword"))
@@ -100,7 +100,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
 
         manager ! VerifyPassword(PasswordCredentials("login", "otherPassword"))
         testKit.expectMsgPF(500 millis, "removed") {
-          case Failure(reason) => assert(reason.getMessage.contains("does not exist"))
+          case Failure(reason) => assert(reason.getMessage.contains("No credentials found"))
         }
       }
     }
@@ -113,7 +113,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
         implicit val patienceConfig: PatienceConfig = PatienceConfig(5.seconds, 500.millis)
 
         whenReady(manager.verifyPassword(PasswordCredentials("admin", "password")).failed) { ex =>
-          assert(ex.getMessage contains "does not exist")
+          assert(ex.getMessage contains "No credentials found")
         }
 
         whenReady(manager.createPassword(UserId("id"), PasswordCredentials("admin", "password"))) { rsp =>
@@ -141,7 +141,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
         }
 
         whenReady(manager.verifyPassword(PasswordCredentials("admin", "wrong")).failed) { ex =>
-          assert(ex.getMessage contains "Invalid password")
+          assert(ex.getMessage contains "Bad password")
         }
 
         whenReady(manager.updatePassword(PasswordCredentials("admin", "new_password"))) { rsp =>

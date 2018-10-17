@@ -13,13 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/*
- * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
-
 package org.s4s0l.betelgeuse.akkaauth.client.impl
 
 import akka.actor.ActorRef

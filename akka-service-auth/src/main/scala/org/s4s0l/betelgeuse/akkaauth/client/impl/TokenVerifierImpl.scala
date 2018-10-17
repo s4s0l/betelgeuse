@@ -22,7 +22,7 @@ import java.util.Date
 import akka.actor.ActorRef
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
-import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.{TokenFormatError, TokenInvalidException}
+import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.{TokenExpired, TokenFormatError, TokenInvalidException}
 import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl.JwtAttributes
 import org.s4s0l.betelgeuse.akkaauth.common
 import org.s4s0l.betelgeuse.akkaauth.common._
@@ -51,7 +51,7 @@ class TokenVerifierImpl[A](publicKey: PublicKey, attrsUnmarshaller: Map[String, 
       .map { it =>
         val (_, c, _) = it
         val content = serializer.simpleFromString[JwtAttributes](c.content)
-        common.AuthInfo[A](
+        val info = common.AuthInfo[A](
           common.UserInfo[A](
             login = content.login,
             userId = UserId(c.subject.getOrElse(throwFormatEx("subject missing"))),
@@ -76,7 +76,10 @@ class TokenVerifierImpl[A](publicKey: PublicKey, attrsUnmarshaller: Map[String, 
             }
           )
         )
-
+        if (info.tokenInfo.expiration.getTime < System.currentTimeMillis()) {
+          throw TokenInvalidException(TokenExpired())
+        }
+        info
       }
     Future.fromTry(decodingResult)
   }

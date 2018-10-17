@@ -13,17 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/*
- * Copyright© 2018 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
-
 package org.s4s0l.betelgeuse.akkaauth.manager.impl
 
 import java.util.UUID
 
+import akka.actor.Status.Failure
 import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.pattern.AskableActorRef
 import akka.persistence.fsm.PersistentFSM
@@ -72,7 +66,7 @@ class UserManagerImpl()(implicit val domainEventClassTag: ClassTag[DomainEvent])
         ud.locked
       )
       goto(CreatedState) applying createEvent andThen { _ =>
-        sender() ! Result(Left(Done))
+        sender() ! Done
       }
     case Event(StateTimeout, _) =>
       shardedPassivate()
@@ -82,46 +76,46 @@ class UserManagerImpl()(implicit val domainEventClassTag: ClassTag[DomainEvent])
   when(CreatedState) {
     case Event(("updateRoles", roles: Set[_]), _: ExistsData) =>
       stay() applying UpdateRoleEvent(roles.map(_.asInstanceOf[Role].name)) andThen { _ =>
-        sender() ! Result(Left(Done))
+        sender() ! Done
       }
     case Event(("updateAdditionalAttributes", attrs: Map[_, _]), _: ExistsData) =>
       stay() applying UpdateAttrsEvent(attrs.asInstanceOf[Map[String, Option[String]]]) andThen { _ =>
-        sender() ! Result(Left(Done))
+        sender() ! Done
       }
     case Event(("getUser", _), d: ExistsData) =>
-      sender() ! Result(Left(
+      sender() !
         UserManager.UserDetailedInfo(
           userId = UserId(shardedActorId),
           attributes = UserDetailedAttributes(
             userAttributed = d.userAttributed,
-            roles = d.roles.map(Role),
+            roles = d.roles.map(it => Role(it)),
             additionalAttributes = d.additionalAttributes
           ),
           login = d.login,
           locked = d.locked
         )
-      ))
+
       stay()
     case Event(("lockUser", _), _: ExistsData) =>
       stay() applying UpdateLockEvent(true) andThen { _ =>
-        sender() ! Result(Left(Done))
+        sender() ! Done
       }
     case Event(("unLockUser", _), _: ExistsData) =>
       stay() applying UpdateLockEvent(false) andThen { _ =>
-        sender() ! Result(Left(Done))
+        sender() ! Done
       }
   }
 
 
   whenUnhandled {
     case Event(_, NotExistsData) =>
-      sender() ! Result(Right(ErrorMessage(s"User does not exist: $shardedActorId")))
+      sender() ! Failure(new Exception(s"User does not exist: $shardedActorId"))
       stay()
     case Event(("createUser", _: UserDetailedInfo), _) =>
-      sender() ! Result(Right(ErrorMessage(s"duplicate user id: $shardedActorId")))
+      sender() ! Failure(new Exception(s"duplicate user id: $shardedActorId"))
       stay()
     case Event(_, data) =>
-      sender() ! Result(Right(ErrorMessage(s"user in invalid state: $shardedActorId ($data)")))
+      sender() ! Failure(new Exception(s"user in invalid state: $shardedActorId ($data)"))
       stay()
   }
 
@@ -158,7 +152,7 @@ object UserManagerImpl {
   : UserManager = {
 
     val ref = system.start(
-      typeName = "token-manager",
+      typeName = "user-manager",
       entityProps = Props(new UserManagerImpl()),
       extractEntityId = {
         case (userId: UserId, msg) =>
@@ -168,14 +162,10 @@ object UserManagerImpl {
     def ask[T](command: String, userId: UserId, message: Any)
               (implicit ec: ExecutionContext,
                timeout: Timeout,
-               sender: ActorRef = ActorRef.noSender)
+               sender: ActorRef = ActorRef.noSender,
+               classTag: ClassTag[T])
     : Future[T] = {
-      (new AskableActorRef(ref) ? (userId, (command, message)))
-        .map {
-          case Result(Left(value)) => value.asInstanceOf[T]
-          case Result(Right(ErrorMessage(errorMessage))) =>
-            throw new Exception(errorMessage)
-        }
+      (new AskableActorRef(ref) ? (userId, (command, message))).mapTo[T]
     }
 
     new UserManager() {
@@ -191,44 +181,40 @@ object UserManagerImpl {
                              (implicit ec: ExecutionContext,
                               timeout: Timeout,
                               sender: ActorRef = ActorRef.noSender)
-      : Future[Done] = ask("createUser", userInfo.userId, userInfo)
+      : Future[Done] = ask[Done]("createUser", userInfo.userId, userInfo)
 
 
       override def updateRoles(userId: UserId, roles: Set[UserManager.Role])
                               (implicit ec: ExecutionContext,
                                timeout: Timeout,
                                sender: ActorRef = ActorRef.noSender)
-      : Future[Done] = ask("updateRoles", userId, roles)
+      : Future[Done] = ask[Done]("updateRoles", userId, roles)
 
       override def updateAdditionalAttributes(userId: UserId, attrs: Map[String, Option[String]])
                                              (implicit ec: ExecutionContext,
                                               timeout: Timeout,
                                               sender: ActorRef = ActorRef.noSender)
-      : Future[Done] = ask("updateAdditionalAttributes", userId, attrs)
+      : Future[Done] = ask[Done]("updateAdditionalAttributes", userId, attrs)
 
       override def getUser(userId: UserId)
                           (implicit ec: ExecutionContext,
                            timeout: Timeout,
                            sender: ActorRef = ActorRef.noSender)
-      : Future[UserManager.UserDetailedInfo] = ask("getUser", userId, NotUsed)
+      : Future[UserManager.UserDetailedInfo] = ask[UserManager.UserDetailedInfo]("getUser", userId, NotUsed)
 
       override def lockUser(userId: UserId)
                            (implicit ec: ExecutionContext,
                             timeout: Timeout,
                             sender: ActorRef = ActorRef.noSender)
-      : Future[Done] = ask("lockUser", userId, NotUsed)
+      : Future[Done] = ask[Done]("lockUser", userId, NotUsed)
 
       override def unLockUser(userId: UserId)
                              (implicit ec: ExecutionContext,
                               timeout: Timeout,
                               sender: ActorRef = ActorRef.noSender)
-      : Future[Done] = ask("unLockUser", userId, NotUsed)
+      : Future[Done] = ask[Done]("unLockUser", userId, NotUsed)
     }
   }
-
-  private case class ErrorMessage(message: String)
-
-  private case class Result[T](res: Either[T, ErrorMessage])
 
   sealed trait UserData
 
