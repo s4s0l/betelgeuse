@@ -30,6 +30,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo.{As, Id}
 import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo}
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkaauth.common.{UserAttributes, UserId}
+import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions.{UserAlreadyExist, UserDoesNotExist, UserIllegalState}
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedAttributes, UserDetailedInfo}
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.UserManagerImpl._
@@ -53,6 +54,8 @@ class UserManagerImpl()(implicit val domainEventClassTag: ClassTag[DomainEvent])
     with ActorLogging {
 
   override val timeoutTime: FiniteDuration = context.system.settings.config.getDuration("bg.auth.provider.entity-passivation-timeout")
+
+  lazy val userId: UserId = UserId(shardedActorId)
 
   startWith(InitialState, NotExistsData)
 
@@ -109,13 +112,13 @@ class UserManagerImpl()(implicit val domainEventClassTag: ClassTag[DomainEvent])
 
   whenUnhandled {
     case Event(_, NotExistsData) =>
-      sender() ! Failure(new Exception(s"User does not exist: $shardedActorId"))
+      sender() ! Failure(UserDoesNotExist(userId))
       stay()
     case Event(("createUser", _: UserDetailedInfo), _) =>
-      sender() ! Failure(new Exception(s"duplicate user id: $shardedActorId"))
+      sender() ! Failure(UserAlreadyExist(userId))
       stay()
-    case Event(_, data) =>
-      sender() ! Failure(new Exception(s"user in invalid state: $shardedActorId ($data)"))
+    case Event(_, _) =>
+      sender() ! Failure(UserIllegalState(userId))
       stay()
   }
 

@@ -21,6 +21,7 @@ import java.util.{Date, UUID}
 import akka.Done
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkaauth.common._
+import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions.{TokenAlreadyExist, TokenDoesNotExist}
 import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
@@ -88,11 +89,11 @@ class TokenManagerImplTest extends BgTestRoach with ScalaFutures {
         }
         private val tokenSaved2 = service.tokenManager.saveToken(sampleToken(tokenId), userId)
         whenReady(tokenSaved2.failed) { ex =>
-          assert(ex.getMessage.contains("duplicate token"))
+          assert(ex.isInstanceOf[TokenAlreadyExist])
         }
         whenReady(service.tokenManager
           .revokeToken(TokenId(UUID.randomUUID().toString)).failed) { ex =>
-          assert(ex.getMessage.contains("not exist"))
+          assert(ex.isInstanceOf[TokenDoesNotExist])
         }
       }
       aService.restartService()

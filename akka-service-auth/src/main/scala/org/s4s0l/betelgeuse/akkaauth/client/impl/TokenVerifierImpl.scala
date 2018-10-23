@@ -21,12 +21,15 @@ import java.util.Date
 
 import akka.actor.ActorRef
 import akka.util.Timeout
+import com.fasterxml.jackson.core.JsonProcessingException
+import org.s4s0l.betelgeuse.akkaauth.client.ClientExceptions._
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
-import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.{TokenExpired, TokenFormatError, TokenInvalidException}
+import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.{TokenExpired, TokenFormatError, TokenProcessingError}
 import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl.JwtAttributes
 import org.s4s0l.betelgeuse.akkaauth.common
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
+import pdi.jwt.exceptions.JwtException
 import pdi.jwt.{JwtAlgorithm, JwtJson4s}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -81,7 +84,10 @@ class TokenVerifierImpl[A](publicKey: PublicKey, attrsUnmarshaller: Map[String, 
         }
         info
       }
-    Future.fromTry(decodingResult)
+    Future.fromTry(decodingResult.recover {
+      case ex: JwtException => throw TokenInvalidException(TokenProcessingError(ex.getMessage))
+      case ex: JsonProcessingException => throw TokenInvalidException(TokenFormatError(ex.getMessage))
+    })
   }
 
   protected val accessTokenName: String = "access"

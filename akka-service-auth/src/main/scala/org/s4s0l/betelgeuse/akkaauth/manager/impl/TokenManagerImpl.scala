@@ -32,6 +32,7 @@ import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkaauth.common
 import org.s4s0l.betelgeuse.akkaauth.common.{AccessToken, RefreshToken, TokenId, UserId}
+import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions.{TokenAlreadyExist, TokenDoesNotExist, TokenIllegalState}
 import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.TokenManagerImpl._
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
@@ -54,6 +55,8 @@ private class TokenManagerImpl()(implicit val domainEventClassTag: ClassTag[Doma
     with ActorLogging {
 
   override val timeoutTime: FiniteDuration = context.system.settings.config.getDuration("bg.auth.provider.entity-passivation-timeout")
+
+  lazy val tokenId: TokenId = TokenId(shardedActorId)
 
   startWith(InitialState, InitialData)
 
@@ -94,14 +97,14 @@ private class TokenManagerImpl()(implicit val domainEventClassTag: ClassTag[Doma
 
   whenUnhandled {
     case Event(_, InitialData) =>
-      sender() ! Failure(new Exception(s"Token does not exist: $shardedActorId"))
+      sender() ! Failure(TokenDoesNotExist(tokenId))
       shardedPassivate()
       stay()
     case Event(_: CreateEvent, _) =>
-      sender() ! Failure(new Exception(s"duplicate token id: $shardedActorId"))
+      sender() ! Failure(TokenAlreadyExist(tokenId))
       stay()
-    case Event(_, data) =>
-      sender() ! Failure(new Exception(s"token in invalid state: $shardedActorId ($data)"))
+    case Event(_, _) =>
+      sender() ! Failure(TokenIllegalState(tokenId))
       stay()
   }
 

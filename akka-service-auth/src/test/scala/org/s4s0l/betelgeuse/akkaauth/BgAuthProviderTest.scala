@@ -142,11 +142,11 @@ class BgAuthProviderTest
 
       Post("/auth/login", adminPasswordCredentials.copy(password = "wrong")) ~>
         csrf.csrfHeaders ~> providerRoute ~> check {
-        status shouldBe StatusCodes.Unauthorized
+        status shouldBe StatusCodes.Forbidden
       }
       Post("/auth/login", adminPasswordCredentials.copy(login = "wrong")) ~>
         csrf.csrfHeaders ~> providerRoute ~> check {
-        status shouldBe StatusCodes.Unauthorized
+        status shouldBe StatusCodes.Forbidden
       }
       Post("/auth/login", Map[String, String]()) ~>
         csrf.csrfHeaders ~> providerRoute ~> check {
@@ -297,7 +297,7 @@ class BgAuthProviderTest
       Post("/auth/login", credentials) ~>
         userCsrfContext.csrfHeaders ~> providerRoute ~>
         check {
-          status shouldBe StatusCodes.Unauthorized
+          status shouldBe StatusCodes.Forbidden
         }
       context.verifySecured(Put("/manage-user/un-lock", userId), providerRoute) {
         responseAs[JustSuccess] shouldBe JustSuccess()

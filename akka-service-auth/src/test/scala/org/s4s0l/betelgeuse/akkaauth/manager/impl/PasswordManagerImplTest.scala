@@ -25,6 +25,7 @@ import com.miguno.akka.testing.VirtualTime
 import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
 import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider.HashedValue
+import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions.{PasswordAlreadyEnabled, PasswordNotEnabled, PasswordNotFound, PasswordValidationError}
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.PasswordManagerCommand._
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.Settings
 import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
@@ -75,7 +76,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
 
         manager ! VerifyPassword(PasswordCredentials("login", "password"))
         testKit.expectMsgPF(500 millis, "not enabled") {
-          case Failure(reason) => assert(reason.getMessage.contains("enabled"))
+          case Failure(reason) => assert(reason.isInstanceOf[PasswordNotEnabled])
         }
 
         manager ! EnablePassword("login")
@@ -86,7 +87,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
 
         manager ! VerifyPassword(PasswordCredentials("login", "otherPassword"))
         testKit.expectMsgPF(500 millis, "not yet changed") {
-          case Failure(reason) => assert(reason.getMessage.contains("Bad password"))
+          case Failure(reason) => assert(reason.isInstanceOf[PasswordValidationError])
         }
 
         manager ! UpdatePassword(PasswordCredentials("login", "otherPassword"))
@@ -100,7 +101,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
 
         manager ! VerifyPassword(PasswordCredentials("login", "otherPassword"))
         testKit.expectMsgPF(500 millis, "removed") {
-          case Failure(reason) => assert(reason.getMessage.contains("No credentials found"))
+          case Failure(reason) => assert(reason.isInstanceOf[PasswordNotFound])
         }
       }
     }
@@ -113,7 +114,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
         implicit val patienceConfig: PatienceConfig = PatienceConfig(5.seconds, 500.millis)
 
         whenReady(manager.verifyPassword(PasswordCredentials("admin", "password")).failed) { ex =>
-          assert(ex.getMessage contains "No credentials found")
+          assert(ex.isInstanceOf[PasswordNotFound])
         }
 
         whenReady(manager.createPassword(UserId("id"), PasswordCredentials("admin", "password"))) { rsp =>
@@ -121,11 +122,11 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
         }
 
         whenReady(manager.updatePassword(PasswordCredentials("admin", "password2")).failed) { ex =>
-          assert(ex.getMessage contains "not enabled") // we cannot update password when it was not enabled
+          assert(ex.isInstanceOf[PasswordNotEnabled]) // we cannot update password when it was not enabled
         }
 
         whenReady(manager.verifyPassword(PasswordCredentials("admin", "password")).failed) { ex =>
-          assert(ex.getMessage contains "not enabled")
+          assert(ex.isInstanceOf[PasswordNotEnabled])
         }
 
         whenReady(manager.enablePassword("admin")) { rsp =>
@@ -133,7 +134,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
         }
 
         whenReady(manager.enablePassword("admin").failed) { ex =>
-          assert(ex.getMessage contains "Already enabled")
+          assert(ex.isInstanceOf[PasswordAlreadyEnabled])
         }
 
         whenReady(manager.verifyPassword(PasswordCredentials("admin", "password"))) { rsp =>
@@ -141,7 +142,7 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
         }
 
         whenReady(manager.verifyPassword(PasswordCredentials("admin", "wrong")).failed) { ex =>
-          assert(ex.getMessage contains "Bad password")
+          assert(ex.isInstanceOf[PasswordValidationError])
         }
 
         whenReady(manager.updatePassword(PasswordCredentials("admin", "new_password"))) { rsp =>

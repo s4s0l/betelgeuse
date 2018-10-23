@@ -82,7 +82,7 @@ class UserManagerImplTest extends BgTestRoach with ScalaFutures {
           assert(done == Done)
         }
         whenReady(service.userManager.createUser(udi).failed) { ex =>
-          assert(ex.getMessage.contains("duplicate"))
+          assert(ex.getMessage.contains("User already exist"))
         }
         whenReady(service.userManager.getUser(userId)) { user =>
           assert(user == udi)

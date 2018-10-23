@@ -41,9 +41,6 @@ trait TokenVerifier[A] {
 
 object TokenVerifier {
 
-  case class TokenInvalidException(reason: TokenInvalidReason)
-    extends Exception(reason.msg)
-
   @JsonInclude(Include.NON_NULL)
   @JsonTypeInfo(use = Id.NAME, include = As.PROPERTY, property = "type")
   @JsonSubTypes(Array(

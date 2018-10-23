@@ -31,7 +31,7 @@ import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkaauth.common.{PasswordCredentials, UserId}
 import org.s4s0l.betelgeuse.akkaauth.manager.HashProvider.HashedValue
-import org.s4s0l.betelgeuse.akkaauth.manager.PasswordManager.PasswordLoginAlreadyTaken
+import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions._
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.PasswordManagerCommand._
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.PasswordManagerImpl.{PasswordManagerCommand, _}
 import org.s4s0l.betelgeuse.akkaauth.manager.{HashProvider, PasswordManager}
@@ -95,14 +95,14 @@ class PasswordManagerImpl(hashProvider: HashProvider)
           if (hashProvider.checkPassword(currentState.hash, password)) {
             sender() ! currentState.userId
           } else {
-            sender() ! Failure(PasswordManager.PasswordValidationError(login))
+            sender() ! Failure(PasswordValidationError(login))
           }
         } else {
-          sender() ! Failure(new Exception("Password not enabled"))
+          sender() ! Failure(PasswordNotEnabled(login))
         }
       }
 
-    case EnablePassword(_) if isInitialized =>
+    case EnablePassword(login) if isInitialized =>
       state foreach { currentState =>
         if (!currentState.enabled) {
           persist(PasswordEnabled()) { evt =>
@@ -110,11 +110,11 @@ class PasswordManagerImpl(hashProvider: HashProvider)
             sender() ! currentState.userId
           }
         } else {
-          sender() ! Failure(new Exception("Already enabled"))
+          sender() ! Failure(PasswordAlreadyEnabled(login))
         }
       }
 
-    case UpdatePassword(PasswordCredentials(_, password)) => state foreach { currentState =>
+    case UpdatePassword(PasswordCredentials(login, password)) => state foreach { currentState =>
       if (currentState.enabled) {
         val h = hashProvider.hashPassword(password)
         persist(PasswordChanged(hash = encoder.encodeToString(h.hash), salt = encoder.encodeToString(h.salt))) { evt =>
@@ -122,18 +122,19 @@ class PasswordManagerImpl(hashProvider: HashProvider)
           sender() ! Done
         }
       } else {
-        sender() ! Failure(new Exception("Password can't be changed while it is not enabled"))
+        sender() ! Failure(PasswordNotEnabled(login))
       }
     }
 
     case RemovePassword(_) if isInitialized => persist(PasswordRemoved()) { evt =>
       updateState(evt)
       sender() ! Done
+      shardedPassivate()
     }
 
     case cmd: PasswordManagerCommand if !isInitialized =>
       log.warning("Request to login for uninitialized password, login = {}", cmd.login)
-      sender() ! Failure(PasswordManager.PasswordNotFound(cmd.login))
+      sender() ! Failure(PasswordNotFound(cmd.login))
       shardedPassivate()
 
   }

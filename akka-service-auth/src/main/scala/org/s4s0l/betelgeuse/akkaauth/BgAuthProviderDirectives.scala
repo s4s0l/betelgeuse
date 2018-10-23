@@ -22,21 +22,19 @@ import akka.http.scaladsl.marshalling.ToEntityMarshaller
 import akka.http.scaladsl.model.headers.HttpCookie
 import akka.http.scaladsl.model.{DateTime, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Directive0, Route}
+import akka.http.scaladsl.server.{Directive0, ExceptionHandler, Route}
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.BgAuthProviderDirectives._
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.{AllRoles, GivenRoles, RoleSet}
-import org.s4s0l.betelgeuse.akkaauth.manager.PasswordManager
-import org.s4s0l.betelgeuse.akkaauth.manager.PasswordManager.PasswordLoginAlreadyTaken
+import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions._
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedAttributes, UserDetailedInfo}
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.utils.AllUtils._
 import pdi.jwt.exceptions.JwtLengthException
 
 import scala.concurrent.duration.FiniteDuration
-import scala.util.{Failure, Success}
 
 /**
   * @author Marcin Wielgus
@@ -61,11 +59,13 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   lazy val bgAuthProviderRestTimeout: FiniteDuration = config.getDuration("bg.auth.provider.rest-api-timeout")
 
   def bgAuthProviderDefaultRoutes: Route =
-    concat(
-      bgAuthProviderLoginRoutes,
-      bgAuthProviderSelfUserManagement,
-      bgAuthProviderUserManagement
-    )
+    bgAuthHandleExceptions {
+      concat(
+        bgAuthProviderLoginRoutes,
+        bgAuthProviderSelfUserManagement,
+        bgAuthProviderUserManagement
+      )
+    }
 
   def bgAuthProviderLoginRoutes: Route = {
     pathPrefix("auth") {
@@ -86,6 +86,40 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
       }
     }
   }
+
+  def bgAuthHandleExceptions: Directive0 = handleExceptions(ExceptionHandler {
+    case PasswordLoginAlreadyTaken(_) =>
+      complete(HttpResponse(StatusCodes.Conflict, entity = "Login already taken"))
+    case PasswordValidationError(_) =>
+      complete(HttpResponse(StatusCodes.Forbidden, entity = "Bad password"))
+    case PasswordNotFound(login) =>
+      LOGGER.warn("Password not found for login {}", login)
+      complete(HttpResponse(StatusCodes.Forbidden, entity = "Password not found"))
+    case TokenDoesNotExist(tokenId) =>
+      LOGGER.warn("Token does not exists {}", tokenId)
+      complete(HttpResponse(StatusCodes.NotFound, entity = "Not found"))
+    case TokenAlreadyExist(tokenId) =>
+      LOGGER.warn("Token already exists {}", tokenId)
+      complete(HttpResponse(StatusCodes.Conflict, entity = "Token already exists"))
+    case ex@TokenIllegalState(tokenId) =>
+      LOGGER.error("Token in illegal state {}", tokenId, ex: Any)
+      complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal error"))
+    case UserDoesNotExist(userId) =>
+      LOGGER.warn("User does not exists {}", userId)
+      complete(HttpResponse(StatusCodes.NotFound, entity = "Not found"))
+    case UserLocked(userId) =>
+      LOGGER.warn("User locked {}", userId)
+      complete(HttpResponse(StatusCodes.Forbidden, entity = "Not allowed"))
+    case UserAlreadyExist(userId) =>
+      LOGGER.warn("User already exists {}", userId)
+      complete(HttpResponse(StatusCodes.Conflict, entity = "User already exists"))
+    case ex@UserIllegalState(userId) =>
+      LOGGER.error("User in illegal state {}", userId, ex: Any)
+      complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal error"))
+    case ex =>
+      LOGGER.error("Auth provider error", ex)
+      complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal error"))
+  })
 
   def bgAuthProviderSelfUserManagement: Route = {
     pathPrefix("current-user") {
@@ -169,14 +203,8 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
             request.roles.map(it => Role(it)).toSet,
             request.additionalAttributes
           )
-          onComplete(bgAuthManager.createUser(userDetails, request.credentials)) {
-            case Success(userId) =>
-              complete(userId)
-            case Failure(PasswordLoginAlreadyTaken(_)) =>
-              complete(HttpResponse(StatusCodes.Conflict, entity = "Login already taken"))
-            case Failure(ex) =>
-              LOGGER.error("User creation failed", ex)
-              complete(HttpResponse(StatusCodes.InternalServerError, entity = ex.getMessage))
+          onSuccess(bgAuthManager.createUser(userDetails, request.credentials)) { userId =>
+            complete(userId)
           }
         }
       }
@@ -241,14 +269,8 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
                   userId <- bgAuthPasswordManager.verifyPassword(passwordCredentials) if userId == authInfo.userInfo.userId;
                   done <- bgAuthManager.changePassword(userId, newPassword)
                 ) yield done
-                onComplete(updateProcess) {
-                  case Success(_) =>
-                    complete(JustSuccess())
-                  case Failure(PasswordManager.PasswordValidationError(_) | PasswordManager.PasswordValidationError(_)) =>
-                    complete(HttpResponse(StatusCodes.Forbidden, entity = "Bad password"))
-                  case Failure(ex) =>
-                    LOGGER.error("Password update error: " + ex.getMessage)
-                    complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal server error"))
+                onSuccess(updateProcess) { _ =>
+                  complete(JustSuccess())
                 }
             }
         }
@@ -270,16 +292,10 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
           case PasswordCredentials(null, _) | PasswordCredentials(_, null) =>
             complete(HttpResponse(StatusCodes.BadRequest, entity = "Credentials missing"))
           case _ =>
-            onComplete(bgAuthManager.login(login)) {
-              case Success(token) =>
-                setToken(token) {
-                  complete(SuccessfulLoginResult())
-                }
-              case Failure(PasswordManager.PasswordValidationError(_) | PasswordManager.PasswordValidationError(_)) =>
-                complete(HttpResponse(StatusCodes.Unauthorized, entity = "Bad password"))
-              case Failure(ex) =>
-                LOGGER.error("Password verification error: " + ex.getMessage)
-                complete(HttpResponse(StatusCodes.Unauthorized, entity = "Authorization failed"))
+            onSuccess(bgAuthManager.login(login)) { token =>
+              setToken(token) {
+                complete(SuccessfulLoginResult())
+              }
             }
         }
 

@@ -21,11 +21,15 @@ import java.util.Date
 import akka.Done
 import akka.actor.ActorRef
 import akka.util.Timeout
+import org.s4s0l.betelgeuse.akkaauth.client.ClientExceptions.TokenInvalidException
+import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.TokenRevoked
 import org.s4s0l.betelgeuse.akkaauth.common
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.RoleSet
+import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions.UserLocked
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{UserDetailedAttributes, UserDetailedInfo}
 import org.s4s0l.betelgeuse.akkaauth.manager._
+import org.s4s0l.betelgeuse.akkaauth.manager.impl.AuthManagerImpl._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -51,7 +55,9 @@ class AuthManagerImpl[A](
       case pc: PasswordCredentials =>
         for (
           userId <- passwordManager.verifyPassword(pc);
-          userDetails <- userManager.getUser(userId) if !userDetails.locked;
+          userDetails <- userManager.getUser(userId).check { ud =>
+            if (ud.locked) throw UserLocked(ud.userId)
+          };
           issuedToken <- tokenFactory.issueLoginToken(userDetails, userDetails.attributes.roles.map(it => Grant(it.name)));
           _ <- tokenManager.saveToken(issuedToken.tokenInfo, userId)
         ) yield issuedToken.tokenInfo
@@ -64,7 +70,9 @@ class AuthManagerImpl[A](
                               sender: ActorRef = ActorRef.noSender)
   : Future[Done] = {
     for (
-      userDetails <- userManager.getUser(userId) if !userDetails.locked;
+      userDetails <- userManager.getUser(userId).check { ud =>
+        if (ud.locked) throw UserLocked(ud.userId)
+      };
       res <- passwordManager.updatePassword(PasswordCredentials(userDetails.login.get, newPassword))
     ) yield res
   }
@@ -129,7 +137,9 @@ class AuthManagerImpl[A](
                               sender: ActorRef = ActorRef.noSender)
   : Future[common.AccessToken] = {
     for (
-      userDetails <- userManager.getUser(userId) if !userDetails.locked;
+      userDetails <- userManager.getUser(userId).check { ud =>
+        if (ud.locked) throw UserLocked(ud.userId)
+      };
       token <- tokenFactory.issueApiToken(userDetails, calculateGrants(roles, userDetails) ++ grants, expiryDate);
       _ <- tokenManager.saveToken(token.tokenInfo, userId)
     ) yield token.tokenInfo.tokenType
@@ -162,7 +172,22 @@ class AuthManagerImpl[A](
   : Future[common.SerializedToken] = {
     for (
       authInfo <- tokenFactory.verify(accessToken);
-      valid <- tokenManager.isValid(authInfo.tokenInfo.tokenType.tokenId) if valid
+      _ <- tokenManager.isValid(authInfo.tokenInfo.tokenType.tokenId).check { valid =>
+        if (!valid) throw TokenInvalidException(TokenRevoked())
+      }
     ) yield authInfo.tokenInfo.tokenType.serializedToken
   }
+}
+
+object AuthManagerImpl {
+
+  implicit class CustomIfComprehension[T](f: Future[T]) {
+    def check(fun: T => Unit)(implicit ec: ExecutionContext): Future[T] = {
+      f.map { element =>
+        fun(element)
+        element
+      }
+    }
+  }
+
 }

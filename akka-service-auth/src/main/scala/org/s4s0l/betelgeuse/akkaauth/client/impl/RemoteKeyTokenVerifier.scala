@@ -20,6 +20,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, FSM, Props, T
 import akka.pattern._
 import akka.util.Timeout
 import akka.{Done, util}
+import org.s4s0l.betelgeuse.akkaauth.client.ClientExceptions.PublicKeyMissing
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
 import org.s4s0l.betelgeuse.akkaauth.client.impl.RemoteKeyTokenVerifier._
 import org.s4s0l.betelgeuse.akkaauth.common
@@ -51,7 +52,7 @@ class RemoteKeyTokenVerifier[A](remoteApi: RemoteApi,
       fetchKey()
       stay()
     case Event(Verify(_, _), _) =>
-      sender() ! Failure(new Exception("public key missing"))
+      sender() ! Failure(PublicKeyMissing())
       stay()
     case Event(RemoteResponse(Some(theKey)), _) =>
       val key = KeyManager.publicKeyFromBase64(theKey)

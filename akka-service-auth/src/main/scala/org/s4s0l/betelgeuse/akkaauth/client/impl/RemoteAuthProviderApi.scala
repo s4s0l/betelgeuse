@@ -17,7 +17,7 @@ package org.s4s0l.betelgeuse.akkaauth.client.impl
 
 import akka.actor.ActorRef
 import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.TokenInvalidException
+import org.s4s0l.betelgeuse.akkaauth.client.ClientExceptions.TokenInvalidException
 import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.ResolveApiTokenResponse.{ResolveApiTokenResponseNotOk, ResolveApiTokenResponseOk}
 import org.s4s0l.betelgeuse.akkaauth.common.RemoteApi.{GetPublicKeyRequest, GetPublicKeyResponse, ResolveApiTokenRequest, ResolveApiTokenResponse}
 import org.s4s0l.betelgeuse.akkaauth.common.{RemoteApi, SerializedToken}
@@ -35,7 +35,7 @@ class RemoteAuthProviderApi(remoteManagerTarget: ActorTarget) extends RemoteApi 
                             sender: ActorRef = ActorRef.noSender)
   : Future[SerializedToken] = {
     remoteManagerTarget.?(ResolveApiTokenRequest(token))
-      .map(_.asInstanceOf[ResolveApiTokenResponse])
+      .mapTo[ResolveApiTokenResponse]
       .map {
         case ResolveApiTokenResponseOk(resultingToken) =>
           resultingToken
@@ -50,7 +50,7 @@ class RemoteAuthProviderApi(remoteManagerTarget: ActorTarget) extends RemoteApi 
                             sender: ActorRef = ActorRef.noSender)
   : Future[RemoteApi.GetPublicKeyResponse] = {
     remoteManagerTarget.?(GetPublicKeyRequest())
-      .map(_.asInstanceOf[GetPublicKeyResponse])
+      .mapTo[GetPublicKeyResponse]
   }
 
 }
