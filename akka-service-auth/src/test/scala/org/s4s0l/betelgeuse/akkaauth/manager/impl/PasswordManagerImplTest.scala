@@ -113,12 +113,20 @@ class PasswordManagerImplTest extends BgTestRoach with ScalaFutures {
 
         implicit val patienceConfig: PatienceConfig = PatienceConfig(5.seconds, 500.millis)
 
+        whenReady(manager.verifyLogin("admin")) { res =>
+          assert(res.isEmpty)
+        }
+
         whenReady(manager.verifyPassword(PasswordCredentials("admin", "password")).failed) { ex =>
           assert(ex.isInstanceOf[PasswordNotFound])
         }
 
         whenReady(manager.createPassword(UserId("id"), PasswordCredentials("admin", "password"))) { rsp =>
           assert(rsp == Done)
+        }
+
+        whenReady(manager.verifyLogin("admin")) { res =>
+          assert(res.contains(UserId("id")))
         }
 
         whenReady(manager.updatePassword(PasswordCredentials("admin", "password2")).failed) { ex =>

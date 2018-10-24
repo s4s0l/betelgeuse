@@ -42,6 +42,16 @@ trait PasswordManager {
   : Future[Done]
 
   /**
+    * checks if given login exists, does not check any state of password
+    * just returns user id if is known or None otherwise
+    */
+  def verifyLogin(login: String)
+                 (implicit ec: ExecutionContext,
+                  timeout: Timeout,
+                  sender: ActorRef = ActorRef.noSender)
+  : Future[Option[UserId]]
+
+  /**
     * verifies given credentials returning UserId on success.
     * Fails when password is disabled od removed for given login.
     */

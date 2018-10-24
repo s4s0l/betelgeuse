@@ -89,6 +89,26 @@ class PasswordManagerImpl(hashProvider: HashProvider)
             sender() ! Done
           }
       }
+
+    case VerifyLogin(_) =>
+      state match {
+        case Some(passwordState) => sender() ! Some(passwordState.userId)
+        case None => sender() ! None
+      }
+
+    case VerifyPassword(PasswordCredentials(login, password)) if isInitialized =>
+      state.foreach { currentState =>
+        if (currentState.enabled) {
+          if (hashProvider.checkPassword(currentState.hash, password)) {
+            sender() ! currentState.userId
+          } else {
+            sender() ! Failure(PasswordValidationError(login))
+          }
+        } else {
+          sender() ! Failure(PasswordNotEnabled(login))
+        }
+      }
+
     case VerifyPassword(PasswordCredentials(login, password)) if isInitialized =>
       state.foreach { currentState =>
         if (currentState.enabled) {
@@ -176,6 +196,13 @@ object PasswordManagerImpl {
                                   sender: ActorRef = ActorRef.noSender): Future[UserId] =
         actorTarget.?(VerifyPassword(credentials)).mapTo[UserId]
 
+      override def verifyLogin(login: String)
+                              (implicit ec: ExecutionContext,
+                               timeout: Timeout,
+                               sender: ActorRef = ActorRef.noSender): Future[Option[UserId]] =
+        actorTarget.?(VerifyLogin(login)).mapTo[Option[UserId]]
+
+
       override def enablePassword(login: String)
                                  (implicit ec: ExecutionContext,
                                   timeout: Timeout,
@@ -205,6 +232,8 @@ object PasswordManagerImpl {
     case class CreatePassword(userId: UserId, credentials: PasswordCredentials) extends PasswordManagerCommand {
       def login: String = credentials.login
     }
+
+    case class VerifyLogin(login: String) extends PasswordManagerCommand
 
     case class VerifyPassword(credentials: PasswordCredentials) extends PasswordManagerCommand {
       def login: String = credentials.login
