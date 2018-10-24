@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs
 import java.util.concurrent.ConcurrentLinkedQueue
 
 import akka.actor.{Actor, ActorRef, Props}
-import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgService
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.Protocol.{Publish, PublishNotOk, PublishOk, PublishResult, Subscribe, SubscribeOk}
 import org.s4s0l.betelgeuse.akkacommons.patterns.mandatorysubs.MandatorySubsActor.{MessageForwarder, MessageForwarderContext, Settings}
@@ -39,8 +38,9 @@ class MandatorySubsActorTest extends BgTestService {
 
   private val s = testWith(new BgService {})
 
-  val to: FiniteDuration = 5 second
-  implicit val timeUnit: Timeout = to
+  s.to = 15.second
+
+  s.timeout = s.to
 
 
   feature("Mandatory subs actor that can broadcast messages to its subscribers confirming if all mandatory subscribers confirmed it") {
@@ -173,11 +173,11 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(Publish("1", "hello1", to))
+        subs.send(Publish("1", "hello1", 3.seconds))
 
         Then("Ack does not arrive back in 2*timeout time")
 
-        assert(testKit.expectMsgClass(classOf[PublishNotOk[String]]).correlationId == "1")
+        assert(testKit.expectMsgClass(7.seconds, classOf[PublishNotOk[String]]).correlationId == "1")
         And("both subscribers got the message anyway")
         assert(MandatorySubsActorTest.queue.contains("ONE:hello1"))
         assert(MandatorySubsActorTest.queue.contains("TWO:hello1"))
@@ -206,10 +206,10 @@ class MandatorySubsActorTest extends BgTestService {
         assert(Await.result(subs.subscribe(Subscribe("two", two)), 1 second) == SubscribeOk("two"))
 
         When("Sending publication message")
-        subs.send(Publish("1", "hello1", to))
+        subs.send(Publish("1", "hello1", 3.second))
 
         Then("Ack does not arrive back in 2*timeout time")
-        assert(testKit.expectMsgClass(classOf[PublishNotOk[String]]).correlationId == "1")
+        assert(testKit.expectMsgClass(4.seconds, classOf[PublishNotOk[String]]).correlationId == "1")
         And("only one subscriber got the message")
         assert(MandatorySubsActorTest.queue.contains("TWO:hello1"))
         assert(MandatorySubsActorTest.queue.size() == 1)

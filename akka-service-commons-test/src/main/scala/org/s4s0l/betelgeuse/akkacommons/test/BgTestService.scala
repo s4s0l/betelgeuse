@@ -1,6 +1,6 @@
 
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,7 +129,7 @@ object BgTestService {
 
   class TestedService[T <: BgService](bgServiceFactory: => T) {
 
-    var to: FiniteDuration = 2 seconds
+    var to: FiniteDuration = 10 seconds
     var timeout: Timeout = Timeout(to)
     var service: T = _
     var system: ActorSystem = _

@@ -1,5 +1,5 @@
 /*
- * Copyright© 2017 the original author or authors.
+ * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-def x(a: => String): Unit = {
-  //  val aa =a
-  val aaa = a
-}
+package org.s4s0l.betelgeuse.akkaauth.common
 
+/**
+  * @author Marcin Wielgus
+  */
+trait AdditionalAttrsManager[A] {
 
-x {
-  println("AAA")
-  "w"
+  def unMarshallAttrs(tokenAttrs: Map[String, String])
+  : A
 }

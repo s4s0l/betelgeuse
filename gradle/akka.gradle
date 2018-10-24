@@ -23,7 +23,7 @@ ext {
 
 dependencies {
     compile "ch.megard:akka-http-cors_${scalaBinaryVersion}:0.2.1"
-    compile "com.softwaremill.akka-http-session:core_${scalaBinaryVersion}:0.4.0"
+    compile "com.softwaremill.akka-http-session:core_${scalaBinaryVersion}:0.5.2"
     compile "com.typesafe.akka:akka-actor_${scalaBinaryVersion}:${akkaVersion}"
     compile "com.typesafe.akka:akka-remote_${scalaBinaryVersion}:${akkaVersion}"
     compile "com.typesafe.akka:akka-cluster_${scalaBinaryVersion}:${akkaVersion}"
