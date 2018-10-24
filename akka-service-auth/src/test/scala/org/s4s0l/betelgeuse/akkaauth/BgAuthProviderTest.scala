@@ -36,8 +36,8 @@ import org.s4s0l.betelgeuse.akkacommons.serialization.{HttpMarshalling, JacksonJ
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
 import org.scalatest.concurrent.ScalaFutures
 
-import scala.concurrent.Promise
 import scala.concurrent.duration._
+import scala.concurrent.{Future, Promise}
 
 /**
   * @author Marcin Wielgus
@@ -509,11 +509,14 @@ class BgAuthProviderTest
       _ =>
     }
     val adminCreationProcess =
-      provider.service.bgAuthPasswordManager.verifyPassword(adminPasswordCredentials)
-        .recoverWith {
-          case _ =>
-            provider.service.bgAuthManager.createUser(adminDetailedAttributes, Some(adminPasswordCredentials))
+      provider.service.bgAuthPasswordManager.verifyLogin(adminPasswordCredentials.login)
+        .flatMap {
+          case Some(userId) => Future.successful(userId)
+          case None =>
+            provider.service.bgAuthManager
+              .createUser(adminDetailedAttributes, Some(adminPasswordCredentials))
         }
+
     whenReady(adminCreationProcess) {
       userID =>
         assert(userID.id.length > 10)
