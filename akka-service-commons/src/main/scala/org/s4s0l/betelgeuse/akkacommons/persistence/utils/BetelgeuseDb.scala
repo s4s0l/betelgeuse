@@ -26,6 +26,8 @@ import org.s4s0l.betelgeuse.utils.AllUtils
 import org.slf4j.LoggerFactory
 import scalikejdbc.config._
 import scalikejdbc.{DBSession, GlobalSettings, NamedDB, SettingsProvider}
+import scalikejdbc._
+import scalikejdbc.streams._
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
@@ -35,7 +37,9 @@ import scala.language.postfixOps
 /**
   * @author Marcin Wielgus
   */
-class BetelgeuseDb(val config: Config)(implicit executor: ExecutionContext, scheduler: Scheduler)
+class BetelgeuseDb(val config: Config)
+                  (implicit locksExecutor: ExecutionContext,
+                   scheduler: Scheduler)
   extends DBs
     with TypesafeConfigReader
     with TypesafeConfig
@@ -66,6 +70,14 @@ class BetelgeuseDb(val config: Config)(implicit executor: ExecutionContext, sche
           execution(session)
         }
     }
+  }
+
+  def streamRead[A](execution: StreamReadySQL[A],
+                    ec: ExecutionContext,
+                    name: String = getDefaultPoolName.get,
+                    settingsProvider: SettingsProvider = SettingsProvider.default)
+  : DatabasePublisher[A] = {
+    underlyingPureScalikeJdbcDb(name, settingsProvider).readOnlyStream(execution)(ec)
   }
 
   val localTxExecutor: TxExecutor = new TxExecutor {

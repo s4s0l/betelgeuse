@@ -18,40 +18,12 @@
 package org.s4s0l.betelgeuse.akkacommons.persistence
 
 import akka.actor.{ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
-import akka.dispatch.MessageDispatcher
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelgeuseDb, DbAccess, DbLocks}
-import scalikejdbc.DBSession
-
-import scala.concurrent.{ExecutionContext, Future}
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{BetelgeuseDb, DbAccess, DbAccessImpl}
 
 /**
   * @author Marcin Wielgus
   */
 class BgPersistenceExtension(private val system: ExtendedActorSystem) extends Extension {
-
-  val dbAccess: DbAccess = new DbAccess {
-    override def query[A](execution: (DBSession) => A): A = BgPersistenceExtension.this.query(execution)
-
-    override def locksSupport(): DbLocks = BgPersistenceExtension.this.locksSupport()
-
-    override def update[A](execution: (DBSession) => A): A = BgPersistenceExtension.this.update(execution)
-
-    lazy val ec: MessageDispatcher = system.dispatchers.lookup("db-dispatcher")
-
-    override def dbDispatcher: ExecutionContext = ec
-
-    override def queryAsync[A](execution: (DBSession) => A)(implicit ec: ExecutionContext = dbDispatcher): Future[A] = {
-      Future {
-        query(execution)
-      }(ec)
-    }
-
-    override def updateAsync[A](execution: (DBSession) => A)(implicit ec: ExecutionContext = dbDispatcher): Future[A] = {
-      Future {
-        update(execution)
-      }(ec)
-    }
-  }
 
   private val betelgeuseDb: BetelgeuseDb = {
     val db = new BetelgeuseDb(system.settings.config)(system.dispatcher, system.scheduler)
@@ -59,24 +31,14 @@ class BgPersistenceExtension(private val system: ExtendedActorSystem) extends Ex
     db
   }
 
+  lazy val dbAccess: DbAccess = new DbAccessImpl(betelgeuseDb, defaultPoolName)(system)
+
   def defaultSchemaName: String = {
     betelgeuseDb.getDefaultSchemaNameFromPoolName(defaultPoolName).get
   }
 
   def defaultPoolName: String = {
     betelgeuseDb.getDefaultPoolName.get
-  }
-
-  private def query[A](execution: DBSession => A, name: String = defaultPoolName): A = {
-    betelgeuseDb.readOnly(execution, name = name)
-  }
-
-  private def locksSupport(name: String = defaultPoolName): DbLocks = {
-    betelgeuseDb.getLocks(name)
-  }
-
-  private def update[A](execution: DBSession => A, name: String = defaultPoolName): A = {
-    betelgeuseDb.localTx(execution, name = name)
   }
 
   private[persistence] def closeDb(): Unit = {

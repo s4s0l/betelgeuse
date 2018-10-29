@@ -17,10 +17,16 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
+import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Sink
 import com.miguno.akka.testing.VirtualTime
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.{BeforeAndAfterAll, FeatureSpec}
 import scalikejdbc.interpolation.SQLSyntax
+
+import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.duration._
 
 
 /**
@@ -28,11 +34,23 @@ import scalikejdbc.interpolation.SQLSyntax
   */
 class BetelgeuseDbTestRoach extends FeatureSpec with BeforeAndAfterAll {
 
-  lazy val scalike = new BetelgeuseDb(ConfigFactory.load("BetelgeuseDbTestRoach.conf"))(concurrent.ExecutionContext.Implicits.global, (new VirtualTime).scheduler)
+  private val akkaConfig: Config = ConfigFactory.load("BetelgeuseDbTestRoach.conf")
+  lazy val scalike = new BetelgeuseDb(akkaConfig)(concurrent.ExecutionContext.Implicits.global, (new VirtualTime).scheduler)
   lazy val TEST_TABLE_SCHEMA: SQLSyntax = SQLSyntax.createUnsafely("betelgeusedbtestroach")
 
   feature("BetelgeuseDb allows use of scalikeJdbc") {
     import scalikejdbc._
+    import scalikejdbc.streams._
+    scenario("Streaming works") {
+      implicit val system = ActorSystem("stream_sample_system", akkaConfig)
+      implicit val actorMaterializer = ActorMaterializer()
+      val dbAccess = new DbAccessImpl(scalike, scalike.getDefaultPoolName.get)
+      val stream = dbAccess.stream {
+        sql"select 1".map(rs => rs.int(1)).iterator()
+      }
+      val res = Await.result(stream.runWith(Sink.seq), 15.seconds)
+      assert(res == Seq(1))
+    }
 
     scenario("Readonly interpolation queries") {
       val memberIds = scalike.readOnly { implicit session =>

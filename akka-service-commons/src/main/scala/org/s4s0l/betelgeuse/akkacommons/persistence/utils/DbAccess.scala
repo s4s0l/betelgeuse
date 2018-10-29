@@ -17,7 +17,10 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.utils
 
+import akka.NotUsed
+import akka.stream.scaladsl.Source
 import scalikejdbc.DBSession
+import scalikejdbc.streams.StreamReadySQL
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -32,10 +35,19 @@ trait DbAccess {
 
   def update[A](execution: DBSession => A): A
 
-  def dbDispatcher: ExecutionContext
+  def stream[A](execution: StreamReadySQL[A])
+               (implicit ec: PersistenceBlockingDispatcher = dbDispatcher)
+  : Source[A, NotUsed]
 
-  def queryAsync[A](execution: DBSession => A)(implicit ec: ExecutionContext = dbDispatcher): Future[A]
+  def dbDispatcher: PersistenceBlockingDispatcher
 
-  def updateAsync[A](execution: DBSession => A)(implicit ec: ExecutionContext = dbDispatcher): Future[A]
+  def queryAsync[A](execution: DBSession => A)
+                   (implicit ec: PersistenceBlockingDispatcher = dbDispatcher)
+  : Future[A]
+
+  def updateAsync[A](execution: DBSession => A)
+                    (implicit ec: PersistenceBlockingDispatcher = dbDispatcher)
+  : Future[A]
+
 
 }

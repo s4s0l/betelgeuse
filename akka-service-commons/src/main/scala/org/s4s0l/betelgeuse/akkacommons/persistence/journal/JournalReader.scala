@@ -16,19 +16,19 @@
 
 package org.s4s0l.betelgeuse.akkacommons.persistence.journal
 
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.DbAccess
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.{DbAccess, PersistenceBlockingDispatcher}
 import scalikejdbc.DBSession
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 
 /**
   * @author Marcin Wielgus
   */
 trait JournalReader {
 
-  def dbDispatcher: ExecutionContext = dbAccess.dbDispatcher
+  def dbDispatcher: PersistenceBlockingDispatcher = dbAccess.dbDispatcher
 
-  def allActorsAsync(actorType: String)(implicit executionContext: ExecutionContext = dbDispatcher)
+  def allActorsAsync(actorType: String)(implicit executionContext: PersistenceBlockingDispatcher = dbDispatcher)
   : Future[Seq[PersistenceId]] = {
     dbAccess.queryAsync { implicit session => allActors(actorType) }
   }
