@@ -20,6 +20,7 @@ import akka.Done
 import akka.actor.ActorRef
 import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkaauth.common.{TokenId, TokenInfo, TokenType, UserId}
+import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager.TokenCreationParams
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -34,7 +35,7 @@ trait TokenManager {
     * Token saved is valid after save until revoke is called.
     * Apart from explicit attributes should persist type of token.
     */
-  def saveToken(token: TokenInfo[_ <: TokenType], userId: UserId)
+  def saveToken(creationParams: TokenCreationParams)
                (implicit ec: ExecutionContext,
                 timeout: Timeout,
                 sender: ActorRef = ActorRef.noSender)
@@ -64,5 +65,17 @@ trait TokenManager {
                  timeout: Timeout,
                  sender: ActorRef = ActorRef.noSender)
   : Future[UserId]
+
+}
+
+object TokenManager {
+
+  case class TokenPurpose(purposeName: String) extends AnyVal
+
+  case class TokenCreationParams(token: TokenInfo[_ <: TokenType],
+                                 userId: UserId,
+                                 purpose: TokenPurpose,
+                                 description: Option[String]
+                                )
 
 }

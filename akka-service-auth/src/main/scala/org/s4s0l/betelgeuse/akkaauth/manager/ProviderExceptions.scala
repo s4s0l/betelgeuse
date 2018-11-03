@@ -23,7 +23,11 @@ import org.s4s0l.betelgeuse.akkaauth.common.{TokenId, UserId}
   */
 object ProviderExceptions {
 
-  sealed trait ProviderException
+  sealed trait ProviderException {
+    ex: Exception =>
+
+    def description: String = ex.getMessage
+  }
 
   case class PasswordLoginAlreadyTaken(login: String)
     extends Exception(s"Login has been already initialized: $login")
@@ -71,6 +75,10 @@ object ProviderExceptions {
 
   case class UserLocked(userId: UserId)
     extends Exception(s"User is locked $userId")
+      with ProviderException
+
+  case class BadRequestFormat(message: String)
+    extends Exception(s"Bad request: $message")
       with ProviderException
 
 }

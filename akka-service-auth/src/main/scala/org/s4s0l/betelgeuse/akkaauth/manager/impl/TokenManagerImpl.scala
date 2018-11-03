@@ -22,8 +22,7 @@ import akka.Done
 import akka.actor.Status.Failure
 import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.pattern.AskableActorRef
-import akka.persistence.fsm.PersistentFSM
-import akka.persistence.fsm.PersistentFSM.FSMState
+import akka.persistence.fsm.PersistentFSM.{FSMState, StateChangeEvent}
 import akka.util.Timeout
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.annotation.JsonSubTypes.Type
@@ -31,10 +30,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo.{As, Id}
 import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo}
 import com.typesafe.config.Config
 import org.s4s0l.betelgeuse.akkaauth.common
-import org.s4s0l.betelgeuse.akkaauth.common.{AccessToken, RefreshToken, TokenId, UserId}
+import org.s4s0l.betelgeuse.akkaauth.common.{TokenId, UserId}
 import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions.{TokenAlreadyExist, TokenDoesNotExist, TokenIllegalState}
 import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager
-import org.s4s0l.betelgeuse.akkaauth.manager.impl.TokenManagerImpl._
+import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager.{TokenCreationParams, TokenPurpose}
+import org.s4s0l.betelgeuse.akkaauth.manager.impl.TokenManagerImpl.{DomainEvent, TokenData, _}
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringShardingExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils.PersistentShardedActor
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
@@ -50,7 +50,6 @@ import scala.reflect.ClassTag
   */
 private class TokenManagerImpl()(implicit val domainEventClassTag: ClassTag[DomainEvent])
   extends PersistentShardedActor
-    with PersistentFSM[TokenState, TokenData, DomainEvent]
     with TimeoutShardedActor
     with ActorLogging {
 
@@ -58,59 +57,67 @@ private class TokenManagerImpl()(implicit val domainEventClassTag: ClassTag[Doma
 
   lazy val tokenId: TokenId = TokenId(shardedActorId)
 
-  startWith(InitialState, InitialData)
+  //noinspection ActorMutableStateInspection
+  private var state: TokenData = InitialData
 
-  when(InitialState, 5.second) {
-    case Event(ce: CreateEvent, InitialData) =>
-      goto(CreatedState) applying ce andThen { _ =>
+  override def receiveCommand: Receive = {
+    case a if receiveCommandInternal.isDefinedAt(a) => receiveCommandInternal.apply(a)
+  }
+
+  /**
+    * as receive command is not called upon every message, we need something
+    * we need to wrap in receiveCommand, its done this way to organize case
+    * statements 'state match' first, then command.
+    *
+    * @return
+    */
+  private def receiveCommandInternal = state match {
+    case InitialData => withDefault {
+      case ce: CreateEvent =>
+        persist(ce) { evt =>
+          applyEvent(evt)
+          sender() ! Done
+        }
+      case _ =>
+        sender() ! Failure(TokenDoesNotExist(tokenId))
+        shardedPassivate()
+    }
+    case CreatedData(created) => withDefault {
+      case "revoke" =>
+        persist(RevokeEvent(new Date())) { evt =>
+          applyEvent(evt)
+          sender() ! Done
+        }
+      case "is-valid" =>
+        sender() ! true
+      case "get-subject" =>
+        sender() ! UserId(created.userId)
+    }
+    case RevokedData(ce, _) => withDefault {
+      case "revoke" =>
         sender() ! Done
-      }
-    case Event(StateTimeout, _) =>
-      shardedPassivate()
-      stay()
+      case "is-valid" =>
+        sender() ! false
+      case "get-subject" =>
+        sender() ! UserId(ce.userId)
+    }
   }
 
-  when(CreatedState) {
-    case Event("revoke", CreatedData(_)) =>
-      goto(RevokedState) applying RevokeEvent(new Date()) andThen { _ =>
-        sender() ! Done
-      }
-    case Event("is-valid", CreatedData(_)) =>
-      sender() ! true
-      stay()
-    case Event("get-subject", CreatedData(ce)) =>
-      sender() ! UserId(ce.userId)
-      stay()
+  override def receiveRecover: Receive = {
+    case evt: DomainEvent => applyEvent(evt)
+    case StateChangeEvent(_, _) =>
   }
 
-  when(RevokedState) {
-    case Event("revoke", RevokedData(_, _)) =>
-      sender() ! Done
-      stay()
-    case Event("is-valid", RevokedData(_, _)) =>
-      sender() ! false
-      stay()
-    case Event("get-subject", RevokedData(ce, _)) =>
-      sender() ! UserId(ce.userId)
-      stay()
-  }
-
-  whenUnhandled {
-    case Event(_, InitialData) =>
-      sender() ! Failure(TokenDoesNotExist(tokenId))
-      shardedPassivate()
-      stay()
-    case Event(_: CreateEvent, _) =>
+  private def withDefault(receive: Receive): Receive = receive orElse {
+    case _: CreateEvent =>
       sender() ! Failure(TokenAlreadyExist(tokenId))
-      stay()
-    case Event(_, _) =>
+    case _ =>
       sender() ! Failure(TokenIllegalState(tokenId))
-      stay()
   }
 
-  override def applyEvent(domainEvent: DomainEvent, currentData: TokenData): TokenData = {
-    (domainEvent, currentData) match {
-      case (ce: CreateEvent, _) =>
+  private def applyEvent(domainEvent: DomainEvent): Unit = {
+    state = (domainEvent, state) match {
+      case (ce: CreateEvent, InitialData) =>
         CreatedData(ce)
       case (re: RevokeEvent, CreatedData(ce)) =>
         RevokedData(ce, re.when)
@@ -146,23 +153,24 @@ object TokenManagerImpl {
     }
 
     new TokenManager() {
-      override def saveToken(token: common.TokenInfo[_ <: common.TokenType],
-                             userId: common.UserId)
+      override def saveToken(creationParams: TokenCreationParams)
                             (implicit ec: ExecutionContext,
                              timeout: Timeout,
                              sender: ActorRef = ActorRef.noSender)
-      : Future[Done] =
+      : Future[Done] = {
+        val token = creationParams.token
+        val userId = creationParams.userId
         ask[Done](token.tokenType.tokenId, CreateEvent(
           token.tokenType.tokenId.id,
           userId.id,
           token.expiration,
           token.issuedAt,
           token.issuer,
-          token.tokenType match {
-            case _: AccessToken => "access"
-            case _: RefreshToken => "refresh"
-          }
+          token.tokenType.tokenTypeName,
+          creationParams.purpose,
+          creationParams.description
         ))
+      }
 
       override def revokeToken(tokenId: TokenId)
                               (implicit ec: ExecutionContext,
@@ -194,14 +202,23 @@ object TokenManagerImpl {
 
   private case class RevokedData(createEvent: CreateEvent, revokedAt: Date) extends TokenData
 
+  /**
+    * ########################
+    * some time ago it was a FSM, for backward compatibility
+    * leave it here
+    */
+  //noinspection ScalaUnusedSymbol
   sealed trait TokenState extends FSMState {
     override def identifier: String = getClass.getSimpleName
   }
 
+  //noinspection ScalaUnusedSymbol
   private case object InitialState extends TokenState
 
+  //noinspection ScalaUnusedSymbol
   private case object CreatedState extends TokenState
 
+  //noinspection ScalaUnusedSymbol
   private case object RevokedState extends TokenState
 
 
@@ -218,7 +235,9 @@ object TokenManagerImpl {
                                  expiration: Date,
                                  issuedAt: Date,
                                  issuer: Option[String],
-                                 tokenType: String) extends DomainEvent
+                                 tokenType: String,
+                                 purpose: TokenPurpose,
+                                 description: Option[String]) extends DomainEvent
 
   private case class RevokeEvent(when: Date) extends DomainEvent
 

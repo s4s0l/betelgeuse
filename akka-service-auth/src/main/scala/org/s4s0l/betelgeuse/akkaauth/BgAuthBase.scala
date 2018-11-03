@@ -17,8 +17,9 @@
 package org.s4s0l.betelgeuse.akkaauth
 
 import akka.NotUsed
+import akka.http.scaladsl.model.headers.HttpCookie
 import com.softwaremill.session._
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClient
 import org.s4s0l.betelgeuse.akkaauth.common.AdditionalAttrsManager
 import org.s4s0l.betelgeuse.akkacommons.BgService
@@ -42,14 +43,30 @@ private[akkaauth] trait BgAuthBase[A]
   def bgAuthClient: AuthClient[A]
 
   private[akkaauth] implicit lazy val sessionManager: SessionManager[NotUsed] = {
-    val sessionConfig: SessionConfig = SessionConfig.default("do not use _ do not use _ do not use _ do not use _ do not use _ do not use _ do not use _ ")
+    val sessionConfig: SessionConfig = SessionConfig.fromConfig(
+      config
+        .withValue("akka.http.session.server-secret", ConfigValueFactory.fromAnyRef("do not use _ do not use _ do not use _ do not use _ do not use _ do not use _ do not use _ "))
+    )
     new SessionManager[NotUsed](sessionConfig)(new SessionEncoder[NotUsed]() {
       override def encode(t: NotUsed, nowMillis: Long, config: SessionConfig): String =
         throw new IllegalStateException("session manager cannot be used")
 
       override def decode(s: String, config: SessionConfig): Try[DecodeResult[NotUsed]] =
         throw new IllegalStateException("session manager cannot be used")
-    })
+    }) {
+      override val csrfManager: CsrfManager[NotUsed] = new CsrfManager[NotUsed] {
+        override def config: SessionConfig = sessionConfig
+
+        override def createCookie(): HttpCookie = {
+          val cookie: HttpCookie = super.createCookie()
+          BgAuthBase.this.config.getString("bg.auth.csrf.cookie.same-site") match {
+            case "lax" => cookie.copy(extension = Some("SameSite=lax"))
+            case "strict" => cookie.copy(extension = Some("SameSite=strict"))
+            case _ => cookie
+          }
+        }
+      }
+    }
   }
 
   protected def jwtAttributeMapper: AdditionalAttrsManager[A]

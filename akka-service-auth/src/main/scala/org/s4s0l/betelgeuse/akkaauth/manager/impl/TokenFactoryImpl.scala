@@ -104,7 +104,7 @@ class TokenFactoryImpl[A](publicKey: PublicKey,
     toUserInfo(userDetails, grants).map { userInfo =>
       val roles = userInfo.grants.map(_.name)
       val serialized = serializer.simpleToString(JwtAttributes(
-        accessTokenName,
+        TokenType.accessTokenName,
         userInfo.login,
         roles.toList.sorted,
         attrsUnmarshaller.marshallAttrs(userInfo.attributes)

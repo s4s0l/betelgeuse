@@ -27,6 +27,7 @@ import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier
 import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.{TokenExpired, TokenFormatError, TokenProcessingError}
 import org.s4s0l.betelgeuse.akkaauth.client.impl.TokenVerifierImpl.JwtAttributes
 import org.s4s0l.betelgeuse.akkaauth.common
+import org.s4s0l.betelgeuse.akkaauth.common.TokenType._
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkacommons.serialization.{JacksonJsonSerializable, JacksonJsonSerializer}
 import pdi.jwt.exceptions.JwtException
@@ -89,9 +90,6 @@ class TokenVerifierImpl[A](publicKey: PublicKey, attrsUnmarshaller: Map[String, 
       case ex: JsonProcessingException => throw TokenInvalidException(TokenFormatError(ex.getMessage))
     })
   }
-
-  protected val accessTokenName: String = "access"
-  protected val refreshTokenName: String = "refresh"
 
 }
 

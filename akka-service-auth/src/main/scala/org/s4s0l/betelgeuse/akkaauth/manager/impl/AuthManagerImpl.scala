@@ -27,6 +27,7 @@ import org.s4s0l.betelgeuse.akkaauth.common
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthManager.RoleSet
 import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions.UserLocked
+import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager.{TokenCreationParams, TokenPurpose}
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{UserDetailedAttributes, UserDetailedInfo}
 import org.s4s0l.betelgeuse.akkaauth.manager._
 import org.s4s0l.betelgeuse.akkaauth.manager.impl.AuthManagerImpl._
@@ -59,7 +60,13 @@ class AuthManagerImpl[A](
             if (ud.locked) throw UserLocked(ud.userId)
           };
           issuedToken <- tokenFactory.issueLoginToken(userDetails, userDetails.attributes.roles.map(it => Grant(it.name)));
-          _ <- tokenManager.saveToken(issuedToken.tokenInfo, userId)
+          _ <- tokenManager
+            .saveToken(
+              TokenCreationParams(
+                token = issuedToken.tokenInfo,
+                userId = userId,
+                purpose = TokenPurpose("login"),
+                description = None))
         ) yield issuedToken.tokenInfo
     }
   }
@@ -131,7 +138,8 @@ class AuthManagerImpl[A](
   override def createApiToken(userId: UserId,
                               roles: RoleSet,
                               grants: Set[Grant],
-                              expiryDate: Date)
+                              expiryDate: Date,
+                              description: String)
                              (implicit ec: ExecutionContext,
                               timeout: Timeout,
                               sender: ActorRef = ActorRef.noSender)
@@ -141,7 +149,13 @@ class AuthManagerImpl[A](
         if (ud.locked) throw UserLocked(ud.userId)
       };
       token <- tokenFactory.issueApiToken(userDetails, calculateGrants(roles, userDetails) ++ grants, expiryDate);
-      _ <- tokenManager.saveToken(token.tokenInfo, userId)
+      _ <- tokenManager
+        .saveToken(
+          TokenCreationParams(
+            token = token.tokenInfo,
+            userId = userId,
+            purpose = TokenPurpose("api"),
+            description = Some(description)))
     ) yield token.tokenInfo.tokenType
   }
 

@@ -68,7 +68,8 @@ trait AuthManager[A] extends TokenResolver {
   def createApiToken(userId: UserId,
                      roles: RoleSet,
                      grants: Set[Grant],
-                     expiryDate: Date)
+                     expiryDate: Date,
+                     description: String)
                     (implicit ec: ExecutionContext,
                      timeout: Timeout,
                      sender: ActorRef = ActorRef.noSender)

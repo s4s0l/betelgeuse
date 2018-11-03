@@ -46,11 +46,22 @@ package object common {
     def tokenId: TokenId
 
     def serializedToken: SerializedToken
+
+    def tokenTypeName: String
   }
 
-  case class AccessToken(tokenId: TokenId, serializedToken: SerializedToken) extends TokenType
+  object TokenType {
+    val accessTokenName: String = "access"
+    val refreshTokenName: String = "refresh"
+  }
 
-  case class RefreshToken(tokenId: TokenId, serializedToken: SerializedToken) extends TokenType
+  case class AccessToken(tokenId: TokenId, serializedToken: SerializedToken) extends TokenType {
+    override def tokenTypeName: String = TokenType.accessTokenName
+  }
+
+  case class RefreshToken(tokenId: TokenId, serializedToken: SerializedToken) extends TokenType {
+    override def tokenTypeName: String = TokenType.refreshTokenName
+  }
 
   case class TokenInfo[T <: TokenType](
                                         expiration: Date,

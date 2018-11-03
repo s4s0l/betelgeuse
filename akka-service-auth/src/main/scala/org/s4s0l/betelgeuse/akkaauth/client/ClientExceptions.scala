@@ -23,7 +23,11 @@ import org.s4s0l.betelgeuse.akkaauth.client.TokenVerifier.TokenInvalidReason
   */
 object ClientExceptions {
 
-  sealed trait ClientException
+  sealed trait ClientException {
+    ex: Exception =>
+
+    def description: String = ex.getMessage
+  }
 
 
   case class TokenInvalidException(reason: TokenInvalidReason)

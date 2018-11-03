@@ -129,10 +129,16 @@ class BgAuthProviderTest
 
   feature("Users can log in and out") {
 
+
     scenario("Logged in user can be verified") {
       ensureAdminExists()
       val context = fetchJwt(fetchCsrf())
-      context.verifySecured(Get("/auth/verify"), providerRoute) {}
+      context.verifySecured(Get("/auth/verify"), providerRoute) {
+        val resp = responseAs[VerifyRestResponse]
+        assert(resp.tokenExpiration.getTime > resp.tokenIssuedAt.getTime)
+        assert(resp.userLogin.contains(adminPasswordCredentials.login))
+        assert(resp.tokenId.length > 10)
+      }
       context.verifySecuredHeaderOnly(Get("/auth/verify"), providerRoute) {}
     }
 
@@ -140,6 +146,22 @@ class BgAuthProviderTest
       ensureAdminExists()
       val csrf = fetchCsrf()
 
+      Post("/auth/login", adminPasswordCredentials.copy(password = "")) ~>
+        csrf.csrfHeaders ~> providerRoute ~> check {
+        status shouldBe StatusCodes.BadRequest
+      }
+      Post("/auth/login", adminPasswordCredentials.copy(password = null)) ~>
+        csrf.csrfHeaders ~> providerRoute ~> check {
+        status shouldBe StatusCodes.BadRequest
+      }
+      Post("/auth/login", adminPasswordCredentials.copy(login = null)) ~>
+        csrf.csrfHeaders ~> providerRoute ~> check {
+        status shouldBe StatusCodes.BadRequest
+      }
+      Post("/auth/login", adminPasswordCredentials.copy(login = "")) ~>
+        csrf.csrfHeaders ~> providerRoute ~> check {
+        status shouldBe StatusCodes.BadRequest
+      }
       Post("/auth/login", adminPasswordCredentials.copy(password = "wrong")) ~>
         csrf.csrfHeaders ~> providerRoute ~> check {
         status shouldBe StatusCodes.Forbidden
@@ -368,7 +390,7 @@ class BgAuthProviderTest
 
       val apiToken1 = context.verifySecured(
         Post("/current-user/api-token-create",
-          CreateApiTokenRequest(allRoles = true, List(), future(60))),
+          CreateApiTokenRequest(allRoles = true, List(), future(60), "apiToken1")),
         providerRoute) {
         responseAs[CreateApiTokenResponse]
       }
@@ -412,7 +434,7 @@ class BgAuthProviderTest
 
       val apiToken1 = context.verifySecured(
         Post("/current-user/api-token-create",
-          CreateApiTokenRequest(allRoles = true, List(), future(60))),
+          CreateApiTokenRequest(allRoles = true, List(), future(60), "apiToken1")),
         providerRoute) {
         responseAs[CreateApiTokenResponse]
       }
@@ -424,7 +446,7 @@ class BgAuthProviderTest
       }
       val apiToken2 = context.verifySecured(
         Post("/current-user/api-token-create",
-          CreateApiTokenRequest(allRoles = true, List(), future(3))),
+          CreateApiTokenRequest(allRoles = true, List(), future(3), "apiToken2")),
         providerRoute) {
         responseAs[CreateApiTokenResponse]
       }
@@ -441,7 +463,7 @@ class BgAuthProviderTest
       //user does not have role DUMMY
       val apiToken1 = context.verifySecured(
         Post("/current-user/api-token-create",
-          CreateApiTokenRequest(allRoles = false, List("DUMMY", "MASTER"), future(60))),
+          CreateApiTokenRequest(allRoles = false, List("DUMMY", "MASTER"), future(60), "apiToken1")),
         providerRoute) {
         responseAs[CreateApiTokenResponse]
       }
@@ -457,6 +479,23 @@ class BgAuthProviderTest
         addHeader("Authorization", s"Bearer ${apiToken1.token}") ~>
         clientRoute ~> check {
         status shouldBe StatusCodes.Forbidden
+      }
+
+    }
+    scenario("Token revoke invalid requests") {
+      val context = fetchJwt(fetchCsrf())
+      //user does not have role DUMMY
+      val apiToken1 = context.verifySecured(
+        Post("/current-user/api-token-create",
+          CreateApiTokenRequest(allRoles = false, List("DUMMY", "MASTER"), future(60), "apiToken1")),
+        providerRoute) {
+        responseAs[CreateApiTokenResponse]
+      }
+      context.callCookieSecured(
+        Put("/current-user/api-token-invalidate",
+          TokenId("")),
+        providerRoute) {
+        status shouldBe StatusCodes.BadRequest
       }
 
     }
@@ -498,6 +537,7 @@ class BgAuthProviderTest
     assert(cookie.domain.isEmpty)
     assert(!cookie.secure)
     assert(cookie.httpOnly == httpOnly)
+    assert(cookie.extension.contains("SameSite=lax"))
   }
 
   def ensureAdminExists(): UserId = {
@@ -671,6 +711,7 @@ object BgAuthProviderTest {
   implicit val u2: FromEntityUnmarshaller[JustSuccess] = m.unmarshaller
   implicit val u3: FromEntityUnmarshaller[UserId] = m.unmarshaller
   implicit val u4: FromEntityUnmarshaller[CreateApiTokenResponse] = m.unmarshaller
+  implicit val u5: FromEntityUnmarshaller[VerifyRestResponse] = m.unmarshaller
   private val adminAdditionalValue = "has a value"
   val adminDetailedAttributes = UserDetailedAttributes(
     UserAttributes(

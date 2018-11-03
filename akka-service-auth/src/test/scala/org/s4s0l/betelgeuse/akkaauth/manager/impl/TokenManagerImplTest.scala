@@ -23,6 +23,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkaauth.common._
 import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions.{TokenAlreadyExist, TokenDoesNotExist}
 import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager
+import org.s4s0l.betelgeuse.akkaauth.manager.TokenManager.{TokenCreationParams, TokenPurpose}
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.BgClusteringSharding
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestRoach
@@ -65,7 +66,14 @@ class TokenManagerImplTest extends BgTestRoach with ScalaFutures {
       val tokenId = TokenId("tokenId1")
       val userId = UserId("userId")
       new WithService(aService) {
-        private val tokenSaved = service.tokenManager.saveToken(sampleToken(tokenId), userId)
+        private val tokenSaved = service.tokenManager.saveToken(
+          TokenCreationParams(
+            sampleToken(tokenId),
+            userId,
+            TokenPurpose("dummy"),
+            Some("This is some desc")
+          )
+        )
         whenReady(tokenSaved) { done =>
           assert(done == Done)
         }
@@ -87,7 +95,13 @@ class TokenManagerImplTest extends BgTestRoach with ScalaFutures {
         whenReady(service.tokenManager.revokeToken(tokenId)) { ok =>
           assert(ok == Done)
         }
-        private val tokenSaved2 = service.tokenManager.saveToken(sampleToken(tokenId), userId)
+        private val tokenSaved2 = service.tokenManager.saveToken(
+          TokenCreationParams(
+            sampleToken(tokenId),
+            userId,
+            TokenPurpose("dummy"),
+            None
+          ))
         whenReady(tokenSaved2.failed) { ex =>
           assert(ex.isInstanceOf[TokenAlreadyExist])
         }

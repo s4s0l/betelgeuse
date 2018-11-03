@@ -72,8 +72,9 @@ class UserManagerImpl()(implicit val domainEventClassTag: ClassTag[DomainEvent])
         sender() ! Done
       }
     case Event(StateTimeout, _) =>
-      shardedPassivate()
-      stay()
+      stay() andThen { _ =>
+        shardedPassivate()
+      }
   }
 
   when(CreatedState) {
