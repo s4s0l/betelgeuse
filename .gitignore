@@ -16,3 +16,5 @@ gradle/wrapper/gradle-wrapper.properties
 .idea
 *.iml
 /akka-service-commons/native
+/akka-service-commons/out
+/akka-service-auth/out
