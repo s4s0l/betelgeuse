@@ -16,7 +16,8 @@
 
 package org.s4s0l.betelgeuse.akkaauth
 
-import java.util.Date
+import java.security.interfaces.RSAPublicKey
+import java.util.{Base64, Date}
 
 import akka.http.scaladsl.marshalling.ToEntityMarshaller
 import akka.http.scaladsl.model.headers.HttpCookie
@@ -52,12 +53,15 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
   private implicit val m4: ToEntityMarshaller[JustSuccess] = httpMarshalling.marshaller
   private implicit val m5: ToEntityMarshaller[CreateApiTokenResponse] = httpMarshalling.marshaller
   private implicit val m6: ToEntityMarshaller[VerifyRestResponse] = httpMarshalling.marshaller
+  private implicit val m7: ToEntityMarshaller[JsonWebKeySet] = httpMarshalling.marshaller
   private implicit val u1: FromEntityUnmarshaller[PasswordCredentials] = httpMarshalling.unmarshaller
   private implicit val u2: FromEntityUnmarshaller[NewPassRequest] = httpMarshalling.unmarshaller
   private implicit val u3: FromEntityUnmarshaller[CreateApiTokenRequest] = httpMarshalling.unmarshaller
   private implicit val u4: FromEntityUnmarshaller[TokenId] = httpMarshalling.unmarshaller
   private implicit val u5: FromEntityUnmarshaller[UserId] = httpMarshalling.unmarshaller
   private implicit val u6: FromEntityUnmarshaller[CreateUserRequest] = httpMarshalling.unmarshaller
+  private implicit val u7: FromEntityUnmarshaller[JsonWebKeySet] = httpMarshalling.unmarshaller
+
 
   lazy val bgAuthProviderRestTimeout: FiniteDuration = config.getDuration("bg.auth.provider.rest-api-timeout")
 
@@ -77,9 +81,15 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     pathPrefix("auth") {
       bgAuthCsrf {
         concat(
-          path("public-key") {
-            bgAuthGetKey()
-          },
+          concat(
+            path("public-key") {
+              bgAuthGetKey()
+            },
+            path(pm = ".well-known") {
+              bgAuthGetJWKS()
+            }
+
+          ),
           concat(
             path("login") {
               login
@@ -201,6 +211,16 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
     get {
       complete(bgAuthKeys.publicKeyBase64)
     }
+
+  def bgAuthGetJWKS(): Route = get {
+    val rsaKey = bgAuthKeys.publicKey.asInstanceOf[RSAPublicKey]
+
+    complete(JsonWebKeySet(List(JsonWebKey(
+      n = Base64.getUrlEncoder.encodeToString(rsaKey.getModulus.toByteArray),
+      e = Base64.getUrlEncoder.encodeToString(rsaKey.getPublicExponent.toByteArray),
+      kid = "default"
+    ))))
+  }
 
   def bgAuthCreateApiToken(grants: Set[Grant], grantRequired: Grant*): Route = {
     post {
@@ -447,6 +467,20 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
 }
 
 object BgAuthProviderDirectives {
+
+  case class JsonWebKeySet(keys: List[JsonWebKey])
+
+  /**
+    *
+    * @param n   modulus for a standard pem
+    * @param e   exponent for a standard pem
+    * @param kty key type
+    * @param alg algorithm for the keye
+    * @param use how the key was meant to be used
+    * @param kid unique identifier for the key
+    */
+  case class JsonWebKey(n: String, e: String, kty: String = "RSA", alg: String = "RS256", use: String = "sig", kid: String)
+
 
   case class SuccessfulLoginResult()
     extends JacksonJsonSerializable

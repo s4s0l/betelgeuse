@@ -72,6 +72,16 @@ class BgAuthProviderTest
         responseAs[String] shouldBe provider.service.bgAuthKeys.publicKeyBase64
       }
     }
+
+    scenario("Public keys via jwks are available unprotected") {
+      Get("/auth/.well-known") ~> providerRoute ~> check {
+        status shouldBe StatusCodes.OK
+        implicit val u7: FromEntityUnmarshaller[JsonWebKeySet] = provider.service.httpMarshalling.unmarshaller
+        val rsp = responseAs[JsonWebKeySet]
+        rsp.keys should not be empty
+        rsp.keys.head.kid shouldBe "default"
+      }
+    }
   }
 
   feature("Apis are CSRF protected") {
