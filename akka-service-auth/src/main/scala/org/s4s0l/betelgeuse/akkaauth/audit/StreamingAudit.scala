@@ -16,9 +16,10 @@
 
 package org.s4s0l.betelgeuse.akkaauth.audit
 
+import akka.Done
 import akka.http.scaladsl.model.{HttpMethod, RemoteAddress, Uri}
 import akka.http.scaladsl.server.Directive0
-import akka.http.scaladsl.server.Directives.{extractClientIP, extractMethod, extractUri, pass}
+import akka.http.scaladsl.server.Directives._
 import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto.{AuthClientEventDto, AuthInfoDto, RouteInfo, ServiceInfo}
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit._
@@ -26,15 +27,17 @@ import org.s4s0l.betelgeuse.akkaauth.common.{AdditionalAttrsManager, AuthInfo}
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthProviderAudit
 import org.s4s0l.betelgeuse.utils.UuidUtils
 
+import scala.concurrent.Future
 import scala.language.implicitConversions
 
 /**
   * @author Marcin Wielgus
   */
+
 class StreamingAudit[A](
                          serviceInfo: ServiceInfo,
                          attrsMapper: AdditionalAttrsManager[A],
-                         onEvent: StreamingAuditDto => Unit)
+                         onEvent: StreamingAuditDto => Future[Done])
   extends AuthClientAudit[A]
     with AuthProviderAudit[A] {
 
@@ -42,8 +45,9 @@ class StreamingAudit[A](
     extractClientIP.flatMap { implicit ip =>
       extractMethod.flatMap { implicit method =>
         extractUri.flatMap { implicit uri =>
-          handleClientEvent(routeInfo, evt)
-          pass
+          onSuccess(handleClientEvent(routeInfo, evt)).flatMap { _ =>
+            pass
+          }
         }
       }
     }
@@ -52,7 +56,9 @@ class StreamingAudit[A](
     extractClientIP.flatMap { implicit ip =>
       extractMethod.flatMap { implicit method =>
         extractUri.flatMap { implicit uri =>
-          pass
+          onSuccess(handleProviderEvent(routeInfo, evt)).flatMap { _ =>
+            pass
+          }
         }
       }
     }
@@ -70,8 +76,15 @@ class StreamingAudit[A](
 
   private def nextId = UuidUtils.timeBasedUuid().toString
 
+  private def handleProviderEvent(routeInfo: RouteInfo,
+                                  evt: AuthProviderAudit.AuthProviderAuditEvent[A])
+  : Future[Done] = {
+    ???
+  }
+
   private def handleClientEvent(routeInfo: RouteInfo,
-                                evt: AuthClientAudit.AuthClientAuditEvent[A]): Unit = {
+                                evt: AuthClientAudit.AuthClientAuditEvent[A])
+  : Future[Done] = {
     val event = evt match {
       case CsrfMissing() =>
         AuthClientEventDto(nextId,

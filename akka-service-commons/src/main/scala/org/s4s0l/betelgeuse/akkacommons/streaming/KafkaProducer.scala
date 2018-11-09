@@ -36,7 +36,6 @@ trait KafkaProducer[K <: AnyRef, V <: AnyRef] extends AutoCloseable {
   def single(topic: String, elems: List[V]): Future[Done]
 }
 
-
 class KafkaProducerImpl[K <: AnyRef, V <: AnyRef] private[streaming](producerSettings: ProducerSettings[K, V])(implicit ec: ExecutionContext, mat: ActorMaterializer) extends KafkaProducer[K, V] {
 
   private val shared_producer = producerSettings.createKafkaProducer()

@@ -16,16 +16,11 @@
 
 package org.s4s0l.betelgeuse.akkaauth.audit
 
-import akka.Done
-import akka.stream.OverflowStrategy
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.kafka.clients.producer.ProducerRecord
 import org.s4s0l.betelgeuse.akkaauth.BgAuthBase
 import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto.ServiceInfo
 import org.s4s0l.betelgeuse.akkacommons.streaming.BgStreaming
-
-import scala.concurrent.Future
+import org.s4s0l.betelgeuse.akkacommons.streaming.tools.GlobalProducer
 
 /**
   * @author Marcin Wielgus
@@ -36,40 +31,26 @@ trait BgAuthStreamingAudit[A]
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgAuthStreamingAudit[_]])
 
-
   override def customizeConfiguration: Config = {
     LOGGER.info("Customize config with auth-streaming.conf with fallback to...")
     ConfigFactory.parseResources("auth-streaming.conf").withFallback(super.customizeConfiguration)
   }
 
-  lazy val bgAuthStreamingAuditTopic: String = config.getString("bg.auth.streaming.topic")
-
-
-  def bgAuthStreamingAuditSink: Sink[StreamingAuditDto, Future[Done]] = {
-    val value = createDefaultKafkaAccess[String, StreamingAuditDto]
-    closeOnShutdown(value)
-    Flow[StreamingAuditDto].map { dto =>
-      new ProducerRecord(bgAuthStreamingAuditTopic, dto.id, dto)
-    }.toMat(value.producer.sink())(Keep.right)
+  private lazy val bgAuthAuditGlobalProducer: GlobalProducer[StreamingAuditDto] = {
+    val access = createDefaultKafkaAccess[String, StreamingAuditDto]()
+    closeOnShutdown(access)
+    GlobalProducer[String, StreamingAuditDto](
+      access.producer,
+      "auth-audit-producer",
+      config.getConfig("bg.auth.streaming"),
+      it => Some(it.id)
+    )
   }
 
-  lazy val bgAuthStreamingOnEvent: StreamingAuditDto => Unit = {
-    val queueSource = Source.queue[StreamingAuditDto](config.getInt("bg.auth.streaming.buffer-size"), OverflowStrategy.fail)
-    val (queue, done) = queueSource.toMat(bgAuthStreamingAuditSink)(Keep.both).run()
-    done.onComplete {
-      case scala.util.Success(_) =>
-        LOGGER.info("Audit producer stream stopped")
-      case scala.util.Failure(ex) =>
-        LOGGER.error("Audit producer stream failed", ex)
-        shutdown()
-    }
-    queue.offer
-  }
-
-  lazy val bgAuthStreamingAudit: StreamingAudit[A] = new StreamingAudit[A](
+  protected lazy val bgAuthStreamingAudit: StreamingAudit[A] = new StreamingAudit[A](
     ServiceInfo(serviceId.systemName, serviceInfo.instance.toString),
     jwtAttributeMapper,
-    bgAuthStreamingOnEvent
+    bgAuthAuditGlobalProducer.publishAsync
   )
 
   override protected def initialize(): Unit = {

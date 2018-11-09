@@ -77,6 +77,9 @@ class BgAuthAuditCollector
         LOGGER.debug("Kafka consumer stream finished successfully")
       case Failure(ex) =>
         LOGGER.error("Kafka consumer stream finished with error", ex)
+        //this should be done better with some backoff restarting strategy enclosed in some kind
+        //        of actor
+        shutdown()
     }
   }
 
