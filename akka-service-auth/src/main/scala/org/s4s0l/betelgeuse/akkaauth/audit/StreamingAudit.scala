@@ -1,0 +1,120 @@
+/*
+ * Copyright© 2018 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.s4s0l.betelgeuse.akkaauth.audit
+
+import akka.http.scaladsl.model.{HttpMethod, RemoteAddress, Uri}
+import akka.http.scaladsl.server.Directive0
+import akka.http.scaladsl.server.Directives.{extractClientIP, extractMethod, extractUri, pass}
+import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto.{AuthClientEventDto, AuthInfoDto, RouteInfo, ServiceInfo}
+import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit
+import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit._
+import org.s4s0l.betelgeuse.akkaauth.common.{AdditionalAttrsManager, AuthInfo}
+import org.s4s0l.betelgeuse.akkaauth.manager.AuthProviderAudit
+import org.s4s0l.betelgeuse.utils.UuidUtils
+
+import scala.language.implicitConversions
+
+/**
+  * @author Marcin Wielgus
+  */
+class StreamingAudit[A](
+                         serviceInfo: ServiceInfo,
+                         attrsMapper: AdditionalAttrsManager[A],
+                         onEvent: StreamingAuditDto => Unit)
+  extends AuthClientAudit[A]
+    with AuthProviderAudit[A] {
+
+  override def logClientEvent(evt: AuthClientAudit.AuthClientAuditEvent[A]): Directive0 =
+    extractClientIP.flatMap { implicit ip =>
+      extractMethod.flatMap { implicit method =>
+        extractUri.flatMap { implicit uri =>
+          handleClientEvent(routeInfo, evt)
+          pass
+        }
+      }
+    }
+
+  override def logProviderEvent(evt: AuthProviderAudit.AuthProviderAuditEvent[A]): Directive0 = {
+    extractClientIP.flatMap { implicit ip =>
+      extractMethod.flatMap { implicit method =>
+        extractUri.flatMap { implicit uri =>
+          pass
+        }
+      }
+    }
+  }
+
+  private def routeInfo(implicit remoteIp: RemoteAddress,
+                        uri: Uri,
+                        method: HttpMethod)
+  : RouteInfo = RouteInfo(
+    remoteIp.toString(),
+    method.value,
+    uri.toString(),
+    uri.path.toString()
+  )
+
+  private def nextId = UuidUtils.timeBasedUuid().toString
+
+  private def handleClientEvent(routeInfo: RouteInfo,
+                                evt: AuthClientAudit.AuthClientAuditEvent[A]): Unit = {
+    val event = evt match {
+      case CsrfMissing() =>
+        AuthClientEventDto(nextId,
+          serviceInfo, routeInfo, "csrfMissing",
+        )
+      case TokenMissing() =>
+        AuthClientEventDto(nextId,
+          serviceInfo, routeInfo, "tokenMissing",
+        )
+      case Granted(token) =>
+        AuthClientEventDto(nextId,
+          serviceInfo, routeInfo, "granted",
+          authInfo = token
+        )
+      case InsufficientGrants(token, grantsMissing) =>
+        AuthClientEventDto(nextId,
+          serviceInfo, routeInfo, "insufficientGrants",
+          authInfo = token,
+          missingGrants = grantsMissing.map(_.name).toList
+        )
+      case TokenInvalid(ex) =>
+        AuthClientEventDto(nextId,
+          serviceInfo, routeInfo, "tokenInvalid",
+          errorMessage = Some(ex.description)
+        )
+      case InternalAuthError(ex) =>
+        AuthClientEventDto(nextId,
+          serviceInfo, routeInfo, "internalAuthError",
+          errorMessage = Some(ex.getMessage)
+        )
+    }
+    onEvent(event)
+  }
+
+  private implicit def toDtoOpt(auth: Option[AuthInfo[A]]): Option[AuthInfoDto] =
+    auth.flatMap(toDto)
+
+  private implicit def toDto(auth: AuthInfo[A]): Option[AuthInfoDto] =
+    Some(AuthInfoDto(
+      auth.tokenInfo.tokenType.tokenId.id,
+      auth.tokenInfo.tokenType.tokenTypeName,
+      auth.userInfo.login,
+      auth.userInfo.userId.id,
+      attrsMapper.marshallAttrs(auth.userInfo.attributes)
+    ))
+}

@@ -14,25 +14,19 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.manager
+package org.s4s0l.betelgeuse.akkaauth.audit
 
-import akka.actor.ActorRef
-import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkaauth.common.AdditionalAttrsManager
-import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
-
-import scala.concurrent.{ExecutionContext, Future}
-
+import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit
+import org.s4s0l.betelgeuse.akkaauth.{BgAuthBase, BgAuthClientDirectives}
 
 /**
   * @author Marcin Wielgus
   */
-trait AdditionalUserAttrsManager[A] extends AdditionalAttrsManager[A] {
+trait BgAuthClientStreamingAudit[A]
+  extends BgAuthStreamingAudit[A]
+    with BgAuthClientDirectives[A] {
+  this: BgAuthBase[A] =>
 
-  def mapAttrsToToken(userAttrs: UserDetailedInfo)
-                     (implicit ec: ExecutionContext,
-                      timeout: Timeout,
-                      sender: ActorRef = ActorRef.noSender)
-  : Future[A]
-
+  override lazy val bgAuthClientAudits: Seq[AuthClientAudit[A]] =
+    super.bgAuthClientAudits :+ bgAuthStreamingAudit
 }

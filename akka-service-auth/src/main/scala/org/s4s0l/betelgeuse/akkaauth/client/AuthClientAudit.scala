@@ -26,7 +26,7 @@ import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, Grant}
   */
 trait AuthClientAudit[T] {
 
-  def log(evt: AuthClientAuditEvent[T]): Directive0
+  def logClientEvent(evt: AuthClientAuditEvent[T]): Directive0
 
 }
 

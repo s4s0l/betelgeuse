@@ -33,7 +33,7 @@ import org.s4s0l.betelgeuse.akkaauth.manager.AuthProviderAudit
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthProviderAudit._
 import org.s4s0l.betelgeuse.akkaauth.manager.ProviderExceptions._
 import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.{Role, UserDetailedAttributes, UserDetailedInfo}
-import org.s4s0l.betelgeuse.akkaauth.manager.impl.LoggingProviderAudit
+import org.s4s0l.betelgeuse.akkaauth.manager.impl.{LoggingProviderAudit, ProviderAuditStack}
 import org.s4s0l.betelgeuse.akkacommons.serialization.JacksonJsonSerializable
 import org.s4s0l.betelgeuse.utils.AllUtils._
 import pdi.jwt.exceptions.JwtLengthException
@@ -44,8 +44,9 @@ import scala.concurrent.duration.FiniteDuration
 /**
   * @author Marcin Wielgus
   */
-private[akkaauth] trait BgAuthProviderDirectives[A] {
-  this: BgAuthProvider[A] =>
+private[akkaauth] trait BgAuthProviderDirectives[A]
+  extends BgAuthProvider[A] {
+
 
   private implicit val m1: ToEntityMarshaller[SuccessfulLoginResult] = httpMarshalling.marshaller
   private implicit val m3: ToEntityMarshaller[UserId] = httpMarshalling.marshaller
@@ -65,7 +66,10 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
 
   lazy val bgAuthProviderRestTimeout: FiniteDuration = config.getDuration("bg.auth.provider.rest-api-timeout")
 
-  lazy val bgAuthProviderAudit: AuthProviderAudit[A] = new LoggingProviderAudit()
+  def bgAuthProviderAudits: Seq[AuthProviderAudit[A]] = Seq(new LoggingProviderAudit())
+
+  lazy val bgAuthProviderAudit: AuthProviderAudit[A] = new ProviderAuditStack[A](bgAuthProviderAudits)
+
 
   def bgAuthProviderDefaultRoutes: Route =
     bgAuthHandleExceptions(None) {
@@ -105,55 +109,55 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
 
   def bgAuthHandleExceptions(authInfo: Option[AuthInfo[A]]): Directive0 = handleExceptions(ExceptionHandler {
     case ex: PasswordLoginAlreadyTaken =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.Conflict, entity = "Login already taken"))
       }
     case ex: PasswordValidationError =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.Forbidden, entity = "Bad password"))
       }
     case ex: PasswordNotFound =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.Forbidden, entity = "Password not found"))
       }
     case ex: TokenDoesNotExist =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.NotFound, entity = "Not found"))
       }
     case ex: TokenAlreadyExist =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.Conflict, entity = "Token already exists"))
       }
     case ex: TokenIllegalState =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal error"))
       }
     case ex: UserDoesNotExist =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.NotFound, entity = "Not found"))
       }
     case ex: UserLocked =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.Forbidden, entity = "Not allowed"))
       }
     case ex: UserAlreadyExist =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.Conflict, entity = "User already exists"))
       }
     case ex: UserIllegalState =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal error"))
       }
     case ex: BadRequestFormat =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.BadRequest, entity = ex.message))
       }
     case ex: ProviderException =>
-      bgAuthProviderAudit.log(ProviderError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal error"))
       }
     case ex =>
-      bgAuthProviderAudit.log(ProviderInternalError(authInfo, ex)) {
+      bgAuthProviderAudit.logProviderEvent(ProviderInternalError(authInfo, ex)) {
         complete(HttpResponse(StatusCodes.InternalServerError, entity = "Internal error"))
       }
   })
@@ -199,7 +203,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
           implicit val to: Timeout = bgAuthProviderRestTimeout
           onSuccess(bgAuthUserManager.getUser(authInfo.userInfo.userId)) {
             details =>
-              bgAuthProviderAudit.log(GetUserDetails(authInfo, details)) {
+              bgAuthProviderAudit.logProviderEvent(GetUserDetails(authInfo, details)) {
                 complete(details)
               }
           }
@@ -236,7 +240,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
               request.description
             )
             onSuccess(creationProcess) { accessToken =>
-              bgAuthProviderAudit.log(CreateApiToken(authInfo, request, accessToken.tokenId)) {
+              bgAuthProviderAudit.logProviderEvent(CreateApiToken(authInfo, request, accessToken.tokenId)) {
                 complete(
                   CreateApiTokenResponse(
                     accessToken.tokenId.id,
@@ -262,7 +266,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
               request.additionalAttributes
             )
             onSuccess(bgAuthManager.createUser(userDetails, request.credentials)) { userId =>
-              bgAuthProviderAudit.log(CreateUser(authInfo, request, userId)) {
+              bgAuthProviderAudit.logProviderEvent(CreateUser(authInfo, request, userId)) {
                 complete(userId)
               }
             }
@@ -285,7 +289,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
                 inv <- bgAuthManager.invalidateApiToken(id)
               ) yield inv
               onSuccess(process) { _ =>
-                bgAuthProviderAudit.log(RevokeApiToken(authInfo, id)) {
+                bgAuthProviderAudit.logProviderEvent(RevokeApiToken(authInfo, id)) {
                   complete(JustSuccess())
                 }
               }
@@ -301,7 +305,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
           entity(as[UserId]) { id =>
             implicit val to: Timeout = bgAuthProviderRestTimeout
             onSuccess(bgAuthManager.lockUser(id)) { _ =>
-              bgAuthProviderAudit.log(LockUser(authInfo, id)) {
+              bgAuthProviderAudit.logProviderEvent(LockUser(authInfo, id)) {
                 complete(JustSuccess())
               }
             }
@@ -318,7 +322,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
           entity(as[UserId]) { id =>
             implicit val to: Timeout = bgAuthProviderRestTimeout
             onSuccess(bgAuthManager.unlockUser(id)) { _ =>
-              bgAuthProviderAudit.log(UnLockUser(authInfo, id)) {
+              bgAuthProviderAudit.logProviderEvent(UnLockUser(authInfo, id)) {
                 complete(JustSuccess())
               }
             }
@@ -347,7 +351,7 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
                     done <- bgAuthManager.changePassword(userId, newPassword)
                   ) yield done
                   onSuccess(updateProcess) { _ =>
-                    bgAuthProviderAudit.log(ChangePass(authInfo)) {
+                    bgAuthProviderAudit.logProviderEvent(ChangePass(authInfo)) {
                       complete(JustSuccess())
                     }
                   }
@@ -391,8 +395,8 @@ private[akkaauth] trait BgAuthProviderDirectives[A] {
             throw BadRequestFormat("Credentials missing")
           case _ =>
             onSuccess(bgAuthManager.login(login)) { token =>
-              setToken(token) {
-                bgAuthProviderAudit.log(AuthProviderAudit.LoginSuccess(token.tokenType.tokenId, login.login)) {
+              setToken(token.tokenInfo) {
+                bgAuthProviderAudit.logProviderEvent(AuthProviderAudit.LoginSuccess(token)) {
                   complete(SuccessfulLoginResult())
                 }
               }

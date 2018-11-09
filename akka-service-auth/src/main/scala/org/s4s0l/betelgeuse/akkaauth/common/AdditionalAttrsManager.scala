@@ -23,4 +23,7 @@ trait AdditionalAttrsManager[A] {
 
   def unMarshallAttrs(tokenAttrs: Map[String, String])
   : A
+
+  def marshallAttrs(tokenAttrs: A)
+  : Map[String, String]
 }

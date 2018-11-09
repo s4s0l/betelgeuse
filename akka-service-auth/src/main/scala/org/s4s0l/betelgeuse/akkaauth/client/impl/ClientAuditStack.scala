@@ -14,25 +14,20 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkaauth.manager
+package org.s4s0l.betelgeuse.akkaauth.client.impl
 
-import akka.actor.ActorRef
-import akka.util.Timeout
-import org.s4s0l.betelgeuse.akkaauth.common.AdditionalAttrsManager
-import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
-
-import scala.concurrent.{ExecutionContext, Future}
-
+import akka.http.scaladsl.server.{Directive0, Directives}
+import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit
 
 /**
   * @author Marcin Wielgus
   */
-trait AdditionalUserAttrsManager[A] extends AdditionalAttrsManager[A] {
-
-  def mapAttrsToToken(userAttrs: UserDetailedInfo)
-                     (implicit ec: ExecutionContext,
-                      timeout: Timeout,
-                      sender: ActorRef = ActorRef.noSender)
-  : Future[A]
-
+class ClientAuditStack[T](seq: Seq[AuthClientAudit[T]])
+  extends AuthClientAudit[T] {
+  override def logClientEvent(evt: AuthClientAudit.AuthClientAuditEvent[T])
+  : Directive0 = {
+    seq.reverse.foldLeft(Directives.pass) { (c, next) =>
+      c.tflatMap(_ => next.logClientEvent(evt))
+    }
+  }
 }

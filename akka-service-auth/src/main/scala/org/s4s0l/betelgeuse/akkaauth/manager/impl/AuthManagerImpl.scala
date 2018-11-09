@@ -51,7 +51,7 @@ class AuthManagerImpl[A](
                     (implicit ec: ExecutionContext,
                      timeout: Timeout,
                      sender: ActorRef = ActorRef.noSender)
-  : Future[TokenInfo[AccessToken]] = {
+  : Future[AuthInfo[A]] = {
     credentials match {
       case pc: PasswordCredentials =>
         for (
@@ -67,7 +67,7 @@ class AuthManagerImpl[A](
                 userId = userId,
                 purpose = TokenPurpose("login"),
                 description = None))
-        ) yield issuedToken.tokenInfo
+        ) yield issuedToken
     }
   }
 

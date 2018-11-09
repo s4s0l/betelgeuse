@@ -26,7 +26,7 @@ import org.s4s0l.betelgeuse.akkaauth.BgAuthClientDirectives.{LocalResolution, Re
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit._
 import org.s4s0l.betelgeuse.akkaauth.client.ClientExceptions.ClientException
-import org.s4s0l.betelgeuse.akkaauth.client.impl.LoggingClientAudit
+import org.s4s0l.betelgeuse.akkaauth.client.impl.{ClientAuditStack, LoggingClientAudit}
 import org.s4s0l.betelgeuse.akkaauth.common.{AuthInfo, Grant, SerializedToken}
 import org.s4s0l.betelgeuse.utils.AllUtils._
 
@@ -44,7 +44,9 @@ private[akkaauth] trait BgAuthClientDirectives[A] {
   lazy val bgAuthClientExtractTimeout: FiniteDuration = config.getDuration("bg.auth.client.token-extract-timeout")
 
 
-  lazy val bgAuthClientAudit: AuthClientAudit[A] = new LoggingClientAudit()
+  def bgAuthClientAudits: Seq[AuthClientAudit[A]] = Seq(new LoggingClientAudit())
+
+  lazy val bgAuthClientAudit: AuthClientAudit[A] = new ClientAuditStack[A](bgAuthClientAudits)
 
   private lazy val check = CsrfOptions.checkHeader
 
@@ -53,7 +55,7 @@ private[akkaauth] trait BgAuthClientDirectives[A] {
       case None =>
         recoverRejections { rejections =>
           if (rejections.contains(check.manager.csrfManager.tokenInvalidRejection)) {
-            bgAuthClientAudit.log(CsrfMissing()) {
+            bgAuthClientAudit.logClientEvent(CsrfMissing()) {
               reject(rejections: _*)
             }
           }
@@ -75,13 +77,13 @@ private[akkaauth] trait BgAuthClientDirectives[A] {
         val grantsPresent = grant.toSet
           .forall(it => token.userInfo.grants.contains(it))
         if (grantsPresent) {
-          bgAuthClientAudit.log(Granted[A](token)).tflatMap { _ =>
+          bgAuthClientAudit.logClientEvent(Granted[A](token)).tflatMap { _ =>
             provide(token)
           }
         } else {
           val missingGrants = grant.toSet -- token.userInfo.grants
           val auditEvent = InsufficientGrants[A](token, missingGrants.toSeq)
-          bgAuthClientAudit.log(auditEvent).tflatMap { _ =>
+          bgAuthClientAudit.logClientEvent(auditEvent).tflatMap { _ =>
             complete(HttpResponse(StatusCodes.Forbidden, entity = "Missing grants"))
           }
         }
@@ -100,11 +102,11 @@ private[akkaauth] trait BgAuthClientDirectives[A] {
   : Try[AuthInfo[A]] => Directive[R] = {
     case Success(a) => block(a)
     case Failure(ex: ClientException) =>
-      bgAuthClientAudit.log(TokenInvalid(ex)).tflatMap { _ =>
+      bgAuthClientAudit.logClientEvent(TokenInvalid(ex)).tflatMap { _ =>
         complete(HttpResponse(StatusCodes.Forbidden, entity = "Not Allowed"))
       }
     case Failure(exception) =>
-      bgAuthClientAudit.log(InternalAuthError(exception)).tflatMap { _ =>
+      bgAuthClientAudit.logClientEvent(InternalAuthError(exception)).tflatMap { _ =>
         complete(HttpResponse(StatusCodes.Forbidden, entity = "Not Allowed"))
       }
   }
@@ -112,7 +114,7 @@ private[akkaauth] trait BgAuthClientDirectives[A] {
   private def requiredToken: Directive1[AuthInfo[A]] = {
     readToken.flatMap {
       case None =>
-        bgAuthClientAudit.log(TokenMissing()).tflatMap { _ =>
+        bgAuthClientAudit.logClientEvent(TokenMissing()).tflatMap { _ =>
           complete(HttpResponse(StatusCodes.Unauthorized, entity = "Authorization required"))
         }
       case Some((v, transport)) =>

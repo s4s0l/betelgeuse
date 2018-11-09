@@ -27,7 +27,7 @@ import org.s4s0l.betelgeuse.akkaauth.manager.UserManager.UserDetailedInfo
   * @author Marcin Wielgus
   */
 trait AuthProviderAudit[T] {
-  def log(evt: AuthProviderAuditEvent[T]): Directive0
+  def logProviderEvent(evt: AuthProviderAuditEvent[T]): Directive0
 }
 
 object AuthProviderAudit {
@@ -58,7 +58,7 @@ object AuthProviderAudit {
   case class ChangePass[T](authInfo: AuthInfo[T])
     extends AuthProviderAuditEvent[T]
 
-  case class LoginSuccess[T](tokenId: TokenId, login: String)
+  case class LoginSuccess[T](authInfo: AuthInfo[T])
     extends AuthProviderAuditEvent[T]
 
   case class UnLockUser[T](authInfo: AuthInfo[T], userId: UserId)

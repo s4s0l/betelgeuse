@@ -16,6 +16,7 @@
 
 package org.s4s0l.betelgeuse.akkaauth.client.impl
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{HttpMethod, RemoteAddress, Uri}
 import akka.http.scaladsl.server.Directive0
 import akka.http.scaladsl.server.Directives._
@@ -26,39 +27,47 @@ import org.s4s0l.betelgeuse.akkaauth.common.AuthInfo
 /**
   * @author Marcin Wielgus
   */
-class LoggingClientAudit[T] extends AuthClientAudit[T] {
-  private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[LoggingClientAudit[_]])
+class LoggingClientAudit[T](marker: String = "[S]")
+                           (implicit actorSystem: ActorSystem)
+  extends AuthClientAudit[T] {
 
-  override def log(evt: AuthClientAudit.AuthClientAuditEvent[T]): Directive0 = {
+  private lazy val LOGGER = akka.event.Logging.getLogger(actorSystem, this)
+
+  override def logClientEvent(evt: AuthClientAudit.AuthClientAuditEvent[T]): Directive0 = {
     extractClientIP.flatMap { implicit ip =>
       extractMethod.flatMap { implicit method =>
         extractUri.flatMap { implicit uri =>
           evt match {
             case CsrfMissing() =>
-              LOGGER.warn(format("Csrf missing"))
+              if (LOGGER.isWarningEnabled)
+                LOGGER.warning(format("Csrf missing"))
             case TokenMissing() =>
-              LOGGER.warn(format("Token missing"))
+              if (LOGGER.isWarningEnabled)
+                LOGGER.warning(format("Token missing"))
             case Granted(token) =>
-              LOGGER.debug(formatWithToken(token, s"Granted access"))
+              if (LOGGER.isDebugEnabled)
+                LOGGER.debug(formatWithToken(token, s"Granted access"))
             case InsufficientGrants(token, grantsMissing) =>
-              LOGGER.debug(formatWithToken(token, s"Not enough grants [${grantsMissing.map(_.name).mkString(", ")}]"))
+              if (LOGGER.isDebugEnabled)
+                LOGGER.debug(formatWithToken(token, s"Not enough grants [${grantsMissing.map(_.name).mkString(", ")}]"))
             case TokenInvalid(ex) =>
-              LOGGER.warn(format(s"Token invalid: ${ex.description}"))
+              if (LOGGER.isWarningEnabled)
+                LOGGER.warning(format(s"Token invalid: ${ex.description}"))
             case InternalAuthError(ex) =>
-              LOGGER.error(format(s"Internal auth error : ${ex.getMessage}"), ex)
+              if (LOGGER.isErrorEnabled)
+                LOGGER.error(format(s"Internal auth error : ${ex.getMessage}"), ex)
           }
           pass
         }
       }
     }
-
   }
 
   def formatWithToken(authIn: AuthInfo[T], message: String)(implicit remoteIp: RemoteAddress,
                                                             uri: Uri,
                                                             method: HttpMethod): String = {
     val authInfo = formatAuthInfo(authIn)
-    s"[S] $authInfo<$remoteIp> - ${method.value} $uri: $message"
+    s"$marker $authInfo<$remoteIp> - ${method.value} $uri: $message"
   }
 
   def formatAuthInfo(authIn: AuthInfo[T]): String = {
@@ -68,7 +77,7 @@ class LoggingClientAudit[T] extends AuthClientAudit[T] {
   def format(message: String)(implicit remoteIp: RemoteAddress,
                               uri: Uri,
                               method: HttpMethod): String = {
-    s"[S] <$remoteIp> - ${method.value} ${uri.path}: $message"
+    s"$marker <$remoteIp> - ${method.value} ${uri.path}: $message"
   }
 
 

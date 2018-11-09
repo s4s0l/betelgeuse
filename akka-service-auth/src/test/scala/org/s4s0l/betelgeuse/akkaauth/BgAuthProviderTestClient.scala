@@ -18,6 +18,7 @@ package org.s4s0l.betelgeuse.akkaauth
 import akka.http.scaladsl.server.Directives.{complete, get, path, pathPrefix, post, _}
 import akka.http.scaladsl.server.Route
 import com.typesafe.config.Config
+import org.s4s0l.betelgeuse.akkaauth.audit.BgAuthClientStreamingAudit
 import org.s4s0l.betelgeuse.akkaauth.common.Grant
 import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
@@ -29,6 +30,7 @@ import org.s4s0l.betelgeuse.akkacommons.http.BgHttp
   */
 class BgAuthProviderTestClient
   extends BgAuthClient[String]
+    with BgAuthClientStreamingAudit[String]
     with BgHttp {
 
   override protected def systemName: String = "BgAuthProviderTestClient"
@@ -92,11 +94,9 @@ class BgAuthProviderTestClient
 
   override protected def bgAuthProviderServiceId
   : BgServiceId
-
   = BgServiceId("BgAuthProviderTestProvider", 1)
 
-  override protected def jwtAttributeMapper: AdditionalUserAttrsManager[String]
-
-  =
-    SampleJwtAttributes
+  override protected def jwtAttributeMapper
+  : AdditionalUserAttrsManager[String]
+  = SampleJwtAttributes
 }

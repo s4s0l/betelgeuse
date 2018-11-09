@@ -38,7 +38,7 @@ trait AuthManager[A] extends TokenResolver {
            (implicit ec: ExecutionContext,
             timeout: Timeout,
             sender: ActorRef = ActorRef.noSender)
-  : Future[TokenInfo[AccessToken]]
+  : Future[AuthInfo[A]]
 
   def changePassword(userId: UserId, newPassword: String)
                     (implicit ec: ExecutionContext,
