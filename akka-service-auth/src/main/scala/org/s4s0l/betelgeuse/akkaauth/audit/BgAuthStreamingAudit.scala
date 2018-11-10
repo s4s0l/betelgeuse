@@ -20,7 +20,6 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.s4s0l.betelgeuse.akkaauth.BgAuthBase
 import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto.ServiceInfo
 import org.s4s0l.betelgeuse.akkacommons.streaming.BgStreaming
-import org.s4s0l.betelgeuse.akkacommons.streaming.tools.GlobalProducer
 
 /**
   * @author Marcin Wielgus
@@ -36,10 +35,10 @@ trait BgAuthStreamingAudit[A]
     ConfigFactory.parseResources("auth-streaming.conf").withFallback(super.customizeConfiguration)
   }
 
-  private lazy val bgAuthAuditGlobalProducer: GlobalProducer[StreamingAuditDto] = {
+  private lazy val bgAuthAuditGlobalProducer: Events2Streams[StreamingAuditDto] = {
     val access = createDefaultKafkaAccess[String, StreamingAuditDto]()
     closeOnShutdown(access)
-    GlobalProducer[String, StreamingAuditDto](
+    Events2Streams[String, StreamingAuditDto](
       access.producer,
       "auth-audit-producer",
       config.getConfig("bg.auth.streaming"),

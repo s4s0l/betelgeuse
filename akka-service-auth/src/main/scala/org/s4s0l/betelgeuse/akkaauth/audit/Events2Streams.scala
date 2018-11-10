@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.s4s0l.betelgeuse.akkacommons.streaming.tools
+package org.s4s0l.betelgeuse.akkaauth.audit
 
 import akka.Done
 import akka.actor.SupervisorStrategy.{Escalate, Restart}
@@ -37,7 +37,7 @@ import scala.util.Failure
 /**
   * @author Marcin Wielgus
   */
-trait GlobalProducer[V] {
+trait Events2Streams[V] {
 
   def publish(v: V)
              (implicit sender: ActorRef = ActorRef.noSender): Unit
@@ -47,22 +47,23 @@ trait GlobalProducer[V] {
   : Future[Done]
 
   /**
-    * confirmation will arrive as [[GlobalProducer.GlobalProducerConfirmation]]
+    * confirmation will arrive as [[Events2Streams.GlobalProducerConfirmation]]
     */
   def atLeastOnce(alod: AtLeastOnceDelivery, v: V, context: AnyRef): Unit
 }
 
-object GlobalProducer {
+object Events2Streams {
 
   case class GlobalProducerConfirmation(deliveryId: Long, context: AnyRef)
 
-  private case class StoppingMsg(ex: Throwable)
 
   private case class InternalMessageWrapper[V](message: V, confirmation: Option[DeliveryConfirmation])
 
   private case class BoundaryMessageWrapper[V](message: V, respondWith: Option[Any])
 
   private case class DeliveryConfirmation(to: ActorRef, message: Any)
+
+  private case class StoppingMsg(ex: Throwable)
 
   private case class ProducerRestartingException(msg: String, cause: Throwable) extends RuntimeException(msg, cause)
 
@@ -72,9 +73,9 @@ object GlobalProducer {
                                       keyExtractor: V => Option[K] = (_: V) => None,
                                       partitionChooser: V => Option[Int] = (_: V) => None)
                                      (implicit actorSystem: ActorSystem)
-  : GlobalProducer[V] = {
+  : Events2Streams[V] = {
 
-    val config = producerConfig.withFallback(actorSystem.settings.config.getConfig("bg.streaming.global-producers"))
+    val config = producerConfig.withFallback(actorSystem.settings.config.getConfig("bg.streaming.events-2-streams"))
     val topic = config.getString("topic")
     val bufferSize = config.getInt("buffer-size")
     val minBackOff: FiniteDuration = config.getDuration("min-backoff")
@@ -127,7 +128,7 @@ object GlobalProducer {
         val (ret, done) = createStream.run()
         done.onComplete {
           case scala.util.Success(_) =>
-            log.info(s"Global Producer actor started $topic, named $name")
+            log.info(s"Event 2 Stream actor started $topic, named $name")
           case Failure(reason) =>
             self ! StoppingMsg(reason)
         }
@@ -144,14 +145,14 @@ object GlobalProducer {
             incoming.message,
             incoming.respondWith.map(DeliveryConfirmation(sender(), _)))
         case StoppingMsg(reason) =>
-          throw ProducerRestartingException(s"Global Producer for topic $topic, named $name failed!", reason)
+          throw ProducerRestartingException(s"Event 2 Stream for topic $topic, named $name failed!", reason)
       }
     }
 
     val supervisor =
       Backoff.onFailure(
         childProps = Props(globalProducerActorFactory),
-        childName = s"global-producer-$name",
+        childName = s"event-2-stream-$name",
         minBackoff = minBackOff,
         maxBackoff = maxBackOff,
         randomFactor = 0.2)
@@ -166,7 +167,7 @@ object GlobalProducer {
 
     val ref = actorSystem.actorOf(BackoffSupervisor.props(supervisor))
 
-    new GlobalProducer[V] {
+    new Events2Streams[V] {
       override def publish(v: V)
                           (implicit sender: ActorRef = ActorRef.noSender)
       : Unit = {

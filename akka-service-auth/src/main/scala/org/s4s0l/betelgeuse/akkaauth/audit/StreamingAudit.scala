@@ -20,11 +20,12 @@ import akka.Done
 import akka.http.scaladsl.model.{HttpMethod, RemoteAddress, Uri}
 import akka.http.scaladsl.server.Directive0
 import akka.http.scaladsl.server.Directives._
-import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto.{AuthClientEventDto, AuthInfoDto, RouteInfo, ServiceInfo}
+import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto._
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit
 import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit._
 import org.s4s0l.betelgeuse.akkaauth.common.{AdditionalAttrsManager, AuthInfo}
 import org.s4s0l.betelgeuse.akkaauth.manager.AuthProviderAudit
+import org.s4s0l.betelgeuse.akkaauth.manager.AuthProviderAudit._
 import org.s4s0l.betelgeuse.utils.UuidUtils
 
 import scala.concurrent.Future
@@ -79,7 +80,57 @@ class StreamingAudit[A](
   private def handleProviderEvent(routeInfo: RouteInfo,
                                   evt: AuthProviderAudit.AuthProviderAuditEvent[A])
   : Future[Done] = {
-    ???
+    val event = evt match {
+      case ProviderError(auth, ex) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "providerError", auth,
+          errorMessage = Some(ex.description)
+        )
+      case ProviderInternalError(auth, ex) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "providerInternalError", auth,
+          errorMessage = Some(ex.getMessage)
+        )
+      case GetUserDetails(auth, x) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "getUserDetails", auth,
+          inBehalfOfUserId = Some(x.userId.id)
+        )
+      case CreateApiToken(auth, _, token) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "createApiToken", auth,
+          tokenId = Some(token.id)
+        )
+      case RevokeApiToken(auth, token) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "revokeApiToken", auth,
+          tokenId = Some(token.id)
+        )
+      case CreateUser(auth, _, userId) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "createUser", auth,
+          inBehalfOfUserId = Some(userId.id)
+        )
+      case LockUser(auth, userId) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "lockUser", auth,
+          inBehalfOfUserId = Some(userId.id)
+        )
+      case UnLockUser(auth, userId) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "unLockUser", auth,
+          inBehalfOfUserId = Some(userId.id)
+        )
+      case ChangePass(auth) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "changePassword", auth,
+        )
+      case LoginSuccess(auth) =>
+        AuthProviderEventDto(nextId,
+          serviceInfo, routeInfo, "login", auth,
+        )
+    }
+    onEvent(event)
   }
 
   private def handleClientEvent(routeInfo: RouteInfo,

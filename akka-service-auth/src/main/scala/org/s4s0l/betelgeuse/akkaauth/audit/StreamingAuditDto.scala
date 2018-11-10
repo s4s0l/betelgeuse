@@ -42,8 +42,8 @@ object StreamingAuditDto {
                                   routeInfo: RouteInfo,
                                   eventType: String,
                                   authInfo: Option[AuthInfoDto] = None,
-                                  inBehalfOfUserId: Option[String],
-                                  tokenId: Option[String],
+                                  inBehalfOfUserId: Option[String] = None,
+                                  tokenId: Option[String] = None,
                                   errorMessage: Option[String] = None
                                  )
     extends StreamingAuditDto
