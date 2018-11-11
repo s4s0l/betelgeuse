@@ -96,7 +96,7 @@ class BgAuthProviderTest
           .filter(_.name == "XSRF-TOKEN")
           .head
       }
-      assertCookieScope(httpOnly = false)(cookie)
+      assertCookieScope(httpOnly = false)(cookie)(expiresDefined = false)
     }
 
 
@@ -110,7 +110,7 @@ class BgAuthProviderTest
           .filter(_.name == "XSRF-TOKEN")
           .head
       }
-      assertCookieScope(httpOnly = false)(cookie)
+      assertCookieScope(httpOnly = false)(cookie)(expiresDefined = false)
     }
 
     scenario("CSRF tokens are random") {
@@ -201,9 +201,9 @@ class BgAuthProviderTest
             .map(it => it.name -> it)
             .toMap
 
-          assertCookieScope(httpOnly = false)(sessionHeaders(jwtCookiesPrefix + "_header"))
-          assertCookieScope(httpOnly = false)(sessionHeaders(jwtCookiesPrefix + "_claims"))
-          assertCookieScope(httpOnly = true)(sessionHeaders(jwtCookiesPrefix + "_signature"))
+          assertCookieScope(httpOnly = false)(sessionHeaders(jwtCookiesPrefix + "_header"))(expiresDefined = true)
+          assertCookieScope(httpOnly = false)(sessionHeaders(jwtCookiesPrefix + "_claims"))(expiresDefined = true)
+          assertCookieScope(httpOnly = true)(sessionHeaders(jwtCookiesPrefix + "_signature"))(expiresDefined = false)
 
           val decodedHeader = Base64.getDecoder.decode(sessionHeaders(jwtCookiesPrefix + "_header").value)
           val jsonHeader = jsonSerializer.simpleFromBinary[Map[String, String]](decodedHeader)
@@ -542,11 +542,12 @@ class BgAuthProviderTest
     LoginContext(csrf, ("_", "_", "_"))
   }
 
-  private def assertCookieScope(httpOnly: Boolean)(cookie: HttpCookie) = {
+  private def assertCookieScope(httpOnly: Boolean)(cookie: HttpCookie)(expiresDefined: Boolean) = {
     assert(cookie.path.contains("/"))
     assert(cookie.domain.isEmpty)
     assert(!cookie.secure)
     assert(cookie.httpOnly == httpOnly)
+    assert(cookie.expires.isDefined == expiresDefined)
     assert(cookie.extension.contains("SameSite=lax"))
   }
 

@@ -423,39 +423,39 @@ private[akkaauth] trait BgAuthProviderDirectives[A]
     setCookie(
       createHeadersCookie(header, expires),
       createClaimsCookie(claims, expires),
-      createSignatureCookie(signature, expires),
+      createSignatureCookie(signature),
     )
   }
 
-  private def createSignatureCookie(value: String, expires: DateTime) =
+  private def createSignatureCookie(value: String) =
     createCookie(
       nameSuffix = "_signature",
       value = value,
-      expires = expires,
+      expiresOpt = None, // signature cookie should expire only on browser closed
       httpOnly = true)
 
   private def createHeadersCookie(value: String, expires: DateTime) =
     createCookie(
       nameSuffix = "_header",
       value = value,
-      expires = expires,
+      expiresOpt = Some(expires),
       httpOnly = false)
 
   private def createClaimsCookie(value: String, expires: DateTime) =
     createCookie(
       nameSuffix = "_claims",
       value = value,
-      expires = expires,
+      expiresOpt = Some(expires),
       httpOnly = false)
 
   private def createCookie(nameSuffix: String,
                            value: String,
-                           expires: DateTime,
+                           expiresOpt: Option[DateTime],
                            httpOnly: Boolean) = {
     val cookie = HttpCookie(
       name = sessionManager.config.sessionCookieConfig.name + nameSuffix,
       value = value,
-      expires = Some(expires),
+      expires = expiresOpt,
       maxAge = None,
       domain = sessionManager.config.sessionCookieConfig.domain,
       path = sessionManager.config.sessionCookieConfig.path,
