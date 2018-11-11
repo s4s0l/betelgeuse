@@ -24,7 +24,7 @@ import org.s4s0l.betelgeuse.akkacommons.streaming.BgStreaming
 /**
   * @author Marcin Wielgus
   */
-trait BgAuthStreamingAudit[A]
+private[audit] trait BgAuthStreamingAudit[A]
   extends BgStreaming {
   this: BgAuthBase[A] =>
 
@@ -38,11 +38,13 @@ trait BgAuthStreamingAudit[A]
   private lazy val bgAuthAuditGlobalProducer: Events2Streams[StreamingAuditDto] = {
     val access = createDefaultKafkaAccess[String, StreamingAuditDto]()
     closeOnShutdown(access)
+    val configToUse = config.getConfig("bg.auth.streaming-events")
+      .withFallback(config.getConfig("bg.auth.streaming"))
     Events2Streams[String, StreamingAuditDto](
-      access.producer,
-      "auth-audit-producer",
-      config.getConfig("bg.auth.streaming"),
-      it => Some(it.id)
+      kafkaAccess = access.producer,
+      name = "auth-audit-producer",
+      configToUse,
+      keyExtractor = it => Some(it.id)
     )
   }
 

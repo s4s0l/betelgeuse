@@ -19,8 +19,7 @@ package org.s4s0l.betelgeuse.akkaauth
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import org.s4s0l.betelgeuse.akkaauth.audit.BgAuthProviderStreamingAudit
-import org.s4s0l.betelgeuse.akkaauth.manager.impl.{LoggingProviderAudit, ProviderAuditStack}
-import org.s4s0l.betelgeuse.akkaauth.manager.{AdditionalUserAttrsManager, AuthProviderAudit}
+import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
 
 /**
@@ -34,12 +33,6 @@ class BgAuthProviderTestProvider extends BgPersistenceJournalRoach
   override protected def systemName: String = "BgAuthProviderTestProvider"
 
   override protected def portBase: Int = 1
-
-  override lazy val bgAuthProviderAudit: AuthProviderAudit[String] =
-    new ProviderAuditStack[String](Seq(
-      new LoggingProviderAudit[String]("[TestProvider1]"),
-      new LoggingProviderAudit[String]("[TestProvider2]")
-    ))
 
   override protected def jwtAttributeMapper: AdditionalUserAttrsManager[String] =
     SampleJwtAttributes

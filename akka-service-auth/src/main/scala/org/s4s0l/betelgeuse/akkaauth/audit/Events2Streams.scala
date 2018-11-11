@@ -35,19 +35,29 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.Failure
 
 /**
+  *
+  * An abstraction for publishing events in topic
+  *
   * @author Marcin Wielgus
   */
 trait Events2Streams[V] {
 
+  /**
+    * Sends an event to stream. Best effort.
+    */
   def publish(v: V)
              (implicit sender: ActorRef = ActorRef.noSender): Unit
 
+  /**
+    * gives a future based confirmation of whether event was successfully.
+    */
   def publishAsync(v: V)
                   (implicit sender: ActorRef = ActorRef.noSender)
   : Future[Done]
 
   /**
-    * confirmation will arrive as [[Events2Streams.GlobalProducerConfirmation]]
+    * confirmation will arrive as [[Events2Streams.GlobalProducerConfirmation]].
+    * To be used when source of event is a persistent actor
     */
   def atLeastOnce(alod: AtLeastOnceDelivery, v: V, context: AnyRef): Unit
 }
@@ -75,7 +85,8 @@ object Events2Streams {
                                      (implicit actorSystem: ActorSystem)
   : Events2Streams[V] = {
 
-    val config = producerConfig.withFallback(actorSystem.settings.config.getConfig("bg.streaming.events-2-streams"))
+    val config = producerConfig
+      .withFallback(actorSystem.settings.config.getConfig("bg.streaming.events-2-streams"))
     val topic = config.getString("topic")
     val bufferSize = config.getInt("buffer-size")
     val minBackOff: FiniteDuration = config.getDuration("min-backoff")

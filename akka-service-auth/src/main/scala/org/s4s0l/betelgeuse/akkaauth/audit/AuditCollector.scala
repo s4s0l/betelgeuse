@@ -27,16 +27,16 @@ import scala.concurrent.ExecutionContext
 /**
   * @author Marcin Wielgus
   */
-object StreamingAudit2Db {
+object AuditCollector {
 
   private[audit] def dbCall(implicit jacksonJsonSerializer: JacksonJsonSerializer)
   : (DBSession, List[StreamingAuditDto]) => Unit = { (session, records) =>
     import scalikejdbc._
-    val valuesSql = records.tail.foldLeft(sqls" (?, ?) ") {
-      case (sqlSoFar, _) => sqlSoFar.append(sqls", (?, ?)")
+    val valuesSql = records.tail.foldLeft(sqls" (?, ?,?) ") {
+      case (sqlSoFar, _) => sqlSoFar.append(sqls", (?, ?,?)")
     }
-    val values = records.flatMap(evt => Seq(evt.id, jacksonJsonSerializer.simpleToString(evt)))
-    sql"insert into auth_audit_log (uuid, event) values $valuesSql ON CONFLICT (uuid)  DO NOTHING"
+    val values = records.flatMap(evt => Seq(evt.id, jacksonJsonSerializer.simpleToString(evt), evt.timestamp))
+    sql"insert into auth_audit_log (uuid, event,ts) values $valuesSql ON CONFLICT (uuid)  DO NOTHING"
       .tags("reporter.batch")
       .bind(values: _*)
       .update().

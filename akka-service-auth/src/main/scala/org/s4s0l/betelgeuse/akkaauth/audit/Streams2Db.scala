@@ -38,14 +38,23 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 
 /**
+  * see [[Streams2Db.apply]]
+  *
   * @author Marcin Wielgus
   */
 trait Streams2Db {
 
+  /**
+    * Stops processing messages
+    */
   def close()
            (implicit sender: ActorRef = ActorRef.noSender,
             ec: ExecutionContext): Future[Done]
 
+  /**
+    * Performs registration of shutdown hook that will close this
+    * stream when akka system is shutting down.
+    */
   def registerOnShutdown(bgService: BgService)
                         (implicit sender: ActorRef = ActorRef.noSender,
                          ec: ExecutionContext): Unit
@@ -63,6 +72,16 @@ object Streams2Db {
 
   private case class ProducerRestartingException(msg: String, cause: Throwable) extends RuntimeException(msg, cause)
 
+  /**
+    * Creates a self resuming stream pumping data from kafka topic ('topic' key in given configuration)
+    * to database. It is meant to be used with batch inserts. After successful inserts it
+    * commits offset back to kafka.
+    *
+    * Provided name is used to distinguish akka actors created to facilitate stream and as a name of kamon metrics.
+    * It has no relation to topic being drain.
+    *
+    * @return
+    */
   def apply[K <: AnyRef, V <: AnyRef](kafkaAccess: KafkaConsumer[K, V],
                                       name: String,
                                       producerConfig: Config)

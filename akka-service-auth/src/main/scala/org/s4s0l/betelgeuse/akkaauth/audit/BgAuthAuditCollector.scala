@@ -22,18 +22,23 @@ import org.s4s0l.betelgeuse.akkacommons.streaming.BgStreaming
 /**
   * @author Marcin Wielgus
   */
-class BgAuthAuditCollector
-  extends BgStreaming {
-  this: BgPersistence =>
+trait BgAuthAuditCollector
+  extends BgStreaming
+    with BgPersistence {
 
   private lazy val LOGGER: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(classOf[BgAuthStreamingAudit[_]])
 
+  override protected def flytrackLocations(): Seq[String] =
+    super.flytrackLocations() :+ "db/migration/AuthStreaming"
+
   override protected def onInitialized(): Unit = {
     super.onInitialized()
+    LOGGER.info("On Initialized...")
     val access = createDefaultKafkaAccess[String, StreamingAuditDto]()
     closeOnShutdown(access)
-    val s2d = StreamingAudit2Db(access.consumer)
+    val s2d = AuditCollector(access.consumer)
     s2d.registerOnShutdown(this)
+    LOGGER.info("On Initialized done.")
   }
 
 }

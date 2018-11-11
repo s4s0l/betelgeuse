@@ -16,12 +16,37 @@
 
 package org.s4s0l.betelgeuse.akkaauth.audit
 
+import java.util.Date
+
+import com.fasterxml.jackson.annotation.JsonInclude.Include
+import com.fasterxml.jackson.annotation.JsonSubTypes.Type
+import com.fasterxml.jackson.annotation.JsonTypeInfo.{As, Id}
+import com.fasterxml.jackson.annotation.{JsonInclude, JsonSubTypes, JsonTypeInfo}
+import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto._
+
 /**
   * @author Marcin Wielgus
   */
-sealed
-trait StreamingAuditDto {
+@JsonInclude(Include.NON_NULL)
+@JsonTypeInfo(use = Id.NAME, include = As.PROPERTY, property = "eventKind")
+@JsonSubTypes(Array(
+  new Type(name = "client", value = classOf[AuthClientEventDto]),
+  new Type(name = "provider", value = classOf[AuthProviderEventDto])
+))
+sealed trait StreamingAuditDto {
   def id: String
+
+  def serviceInfo: ServiceInfo
+
+  def routeInfo: RouteInfo
+
+  def eventType: String
+
+  def timestamp: Date
+
+  def authInfo: Option[AuthInfoDto]
+
+  def errorMessage: Option[String]
 }
 
 object StreamingAuditDto {
@@ -33,7 +58,8 @@ object StreamingAuditDto {
                                 eventType: String,
                                 authInfo: Option[AuthInfoDto] = None,
                                 missingGrants: List[String] = List(),
-                                errorMessage: Option[String] = None
+                                errorMessage: Option[String] = None,
+                                timestamp: Date = new Date()
                                )
     extends StreamingAuditDto
 
@@ -44,7 +70,8 @@ object StreamingAuditDto {
                                   authInfo: Option[AuthInfoDto] = None,
                                   inBehalfOfUserId: Option[String] = None,
                                   tokenId: Option[String] = None,
-                                  errorMessage: Option[String] = None
+                                  errorMessage: Option[String] = None,
+                                  timestamp: Date = new Date()
                                  )
     extends StreamingAuditDto
 
