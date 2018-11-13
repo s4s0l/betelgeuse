@@ -16,19 +16,42 @@
 
 package org.s4s0l.betelgeuse.akkaauth
 
+import akka.Done
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import org.s4s0l.betelgeuse.akkaauth.audit.BgAuthProviderStreamingAudit
-import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
+import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto.ServiceInfo
+import org.s4s0l.betelgeuse.akkaauth.audit.{StreamingAudit, StreamingAuditDto}
+import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit
+import org.s4s0l.betelgeuse.akkaauth.manager.{AdditionalUserAttrsManager, AuthProviderAudit}
 import org.s4s0l.betelgeuse.akkacommons.persistence.roach.BgPersistenceJournalRoach
+
+import scala.collection.mutable
+import scala.concurrent.Future
 
 /**
   * @author Marcin Wielgus
   */
 class BgAuthProviderTestProvider extends BgPersistenceJournalRoach
   with BgAuthRemoteProvider[String]
-  with BgAuthProviderStreamingAudit[String]
   with BgAuthHttpProvider[String] {
+
+  val collectedStreamingAudits: mutable.ListBuffer[StreamingAuditDto] = mutable.ListBuffer[StreamingAuditDto]()
+  val streamingAudit = new StreamingAudit[String](
+    ServiceInfo(systemName, serviceInfo.instance.toString),
+    jwtAttributeMapper,
+    { event =>
+      collectedStreamingAudits += event
+      Future.successful(Done)
+    }
+  )
+
+  override def bgAuthProviderAudits: Seq[AuthProviderAudit[String]] = {
+    super.bgAuthProviderAudits :+ streamingAudit
+  }
+
+  override def bgAuthClientAudits: Seq[AuthClientAudit[String]] = {
+    super.bgAuthClientAudits :+ streamingAudit
+  }
 
   override protected def systemName: String = "BgAuthProviderTestProvider"
 

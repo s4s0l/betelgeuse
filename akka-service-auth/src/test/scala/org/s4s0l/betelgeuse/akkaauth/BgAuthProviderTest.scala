@@ -244,6 +244,7 @@ class BgAuthProviderTest
 
     scenario("Changing password") {
       ensureAdminExists()
+      clearCollectedAudits()
       val context = fetchJwt(fetchCsrf())
       context.verifySecured(Put("/current-user/change-password", NewPassRequest(adminPasswordCredentials.password, "TheNewPassword")), providerRoute) {
         responseAs[JustSuccess] shouldBe JustSuccess()
@@ -251,6 +252,12 @@ class BgAuthProviderTest
       context.verifySecuredHeaderOnly(Put("/current-user/change-password", NewPassRequest("TheNewPassword", adminPasswordCredentials.password)), providerRoute) {
         responseAs[JustSuccess] shouldBe JustSuccess()
       }
+      assertCollectedProviderEvents(
+        "login",
+        "tokenMissing", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "granted",
+        "changePassword",
+        "granted",
+        "changePassword")
     }
 
     scenario("changing pass with wrong input") {
@@ -271,6 +278,7 @@ class BgAuthProviderTest
   feature("Master user can manage other users") {
     scenario("MASTER role can create user") {
       ensureAdminExists()
+      clearCollectedAudits()
       val context = fetchJwt(fetchCsrf())
       val attributes = UserAttributes(family_name = Some("family"), phone_number = Some(PhoneNumber("1234")))
       val credentials = PasswordCredentials("user1", "secret")
@@ -302,12 +310,17 @@ class BgAuthProviderTest
       context.callCookieSecured(Post("/manage-user/create", request), providerRoute) {
         status shouldBe StatusCodes.Conflict
       }
-
+      assertCollectedProviderEvents("login",
+        "tokenMissing", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "granted",
+        "createUser", "login",
+        "tokenMissing", "tokenMissing", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid",
+        "tokenInvalid", "granted", "getUserDetails", "insufficientGrants", "granted", "providerError")
     }
 
 
     scenario("MASTER role can lock and unlock user") {
       ensureAdminExists()
+      clearCollectedAudits()
       val context = fetchJwt(fetchCsrf())
       val credentials = PasswordCredentials("user2", "secret")
       val request = CreateUserRequest(UserAttributes(), List(), Map(), Some(credentials))
@@ -340,6 +353,15 @@ class BgAuthProviderTest
       successfulLogin2.callCookieSecured(Put("/manage-user/un-lock", userId), providerRoute) {
         status shouldBe StatusCodes.Forbidden
       }
+
+      assertCollectedProviderEvents("login",
+        "tokenMissing", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "granted",
+        "createUser", "login", "insufficientGrants",
+        "tokenMissing", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "granted",
+        "lockUser", "providerError",
+        "tokenMissing", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "granted",
+        "unLockUser", "login",
+        "insufficientGrants")
 
     }
   }
@@ -396,6 +418,7 @@ class BgAuthProviderTest
     }
     scenario("Can call clients using api tokens") {
       ensureAdminExists()
+      clearCollectedAudits()
       val context = fetchJwt(fetchCsrf())
 
       val apiToken1 = context.verifySecured(
@@ -436,6 +459,14 @@ class BgAuthProviderTest
       Get("/protected/api") ~> addHeader("Authorization", s"Bearer ${apiToken1.token}") ~> clientRoute ~> check {
         status shouldBe StatusCodes.Forbidden
       }
+
+      assertCollectedClientEvents("tokenMissing", "granted", "granted", "tokenInvalid", "tokenInvalid")
+      assertCollectedProviderEvents(
+        "login",
+        "tokenMissing", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "granted",
+        "createApiToken",
+        "tokenMissing", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "tokenInvalid", "granted",
+        "revokeApiToken")
     }
 
     scenario("Api tokens have respected validity time") {
@@ -495,7 +526,7 @@ class BgAuthProviderTest
     scenario("Token revoke invalid requests") {
       val context = fetchJwt(fetchCsrf())
       //user does not have role DUMMY
-      val apiToken1 = context.verifySecured(
+      context.verifySecured(
         Post("/current-user/api-token-create",
           CreateApiTokenRequest(allRoles = false, List("DUMMY", "MASTER"), future(60), "apiToken1")),
         providerRoute) {
@@ -703,6 +734,26 @@ class BgAuthProviderTest
         }
     }
   }
+
+  def clearCollectedAudits(): Unit = {
+    provider.service.collectedStreamingAudits.clear()
+    client.service.collectedStreamingAudits.clear()
+  }
+
+  def assertCollectedClientEvents(eventType: String*): Unit = {
+    val checkList: Seq[String] = client.service.collectedStreamingAudits.map { event =>
+      event.eventType
+    }
+    assert(checkList == eventType.toSeq)
+  }
+
+  def assertCollectedProviderEvents(eventType: String*): Unit = {
+    val checkList: Seq[String] = provider.service.collectedStreamingAudits.map { event =>
+      event.eventType
+    }
+    assert(checkList == eventType.toSeq)
+  }
+
 
 }
 

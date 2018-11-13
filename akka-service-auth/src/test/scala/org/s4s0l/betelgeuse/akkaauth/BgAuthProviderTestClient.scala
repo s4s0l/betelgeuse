@@ -15,14 +15,20 @@
  */
 package org.s4s0l.betelgeuse.akkaauth
 
+import akka.Done
 import akka.http.scaladsl.server.Directives.{complete, get, path, pathPrefix, post, _}
 import akka.http.scaladsl.server.Route
 import com.typesafe.config.Config
-import org.s4s0l.betelgeuse.akkaauth.audit.BgAuthClientStreamingAudit
+import org.s4s0l.betelgeuse.akkaauth.audit.StreamingAuditDto.ServiceInfo
+import org.s4s0l.betelgeuse.akkaauth.audit.{BgAuthClientStreamingAudit, StreamingAudit, StreamingAuditDto}
+import org.s4s0l.betelgeuse.akkaauth.client.AuthClientAudit
 import org.s4s0l.betelgeuse.akkaauth.common.Grant
-import org.s4s0l.betelgeuse.akkaauth.manager.AdditionalUserAttrsManager
+import org.s4s0l.betelgeuse.akkaauth.manager.{AdditionalUserAttrsManager, AuthProviderAudit}
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
 import org.s4s0l.betelgeuse.akkacommons.http.BgHttp
+
+import scala.collection.mutable
+import scala.concurrent.Future
 
 
 /**
@@ -30,12 +36,24 @@ import org.s4s0l.betelgeuse.akkacommons.http.BgHttp
   */
 class BgAuthProviderTestClient
   extends BgAuthClient[String]
-    with BgAuthClientStreamingAudit[String]
     with BgHttp {
 
   override protected def systemName: String = "BgAuthProviderTestClient"
 
   override protected def portBase: Int = 2
+
+  val collectedStreamingAudits: mutable.ListBuffer[StreamingAuditDto] = mutable.ListBuffer[StreamingAuditDto]()
+
+  override def bgAuthClientAudits: Seq[AuthClientAudit[String]] = {
+    super.bgAuthClientAudits :+ new StreamingAudit[String](
+      ServiceInfo(systemName, serviceInfo.instance.toString),
+      jwtAttributeMapper,
+      { event =>
+        collectedStreamingAudits += event
+        Future.successful(Done)
+      }
+    )
+  }
 
   override def customizeConfiguration
   : Config = super.customizeConfiguration
