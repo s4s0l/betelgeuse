@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,6 +83,69 @@ class SatelliteStateActorTest extends
 
       }
 
+    }
+
+    scenario("Getting last version for which distribution was completed") {
+      val idInTest = "sakjdfladjsflkjdaslf"
+      new WithService(my) {
+
+        Given("A new shard storing string values named test1")
+
+        When("We ask for last published version")
+        private val versionAsk1 = service.handlerObject.getLastCompleteVersion(idInTest)
+
+        Then("We expect failure")
+        assert(Await.result(versionAsk1.failed, to * 20).getMessage.contains("No version"))
+
+        When(s"state changing entity $idInTest to version 1 and value 'valueOne'")
+        private val change1Status = service.handlerObject.stateChange(StateChange(VersionedId(s"$idInTest", 1), "valueOne", to * 2))
+
+        Then("Version returned should have value == 0")
+        assert(Await.result(change1Status, to * 20).isInstanceOf[StateChangeOk])
+
+        When("We ask for last published version")
+        private val versionAsk2 = service.handlerObject.getLastCompleteVersion(idInTest)
+
+        Then("We expect failure")
+        assert(Await.result(versionAsk2.failed, to * 20).getMessage.contains("No version"))
+
+        When("Confirm Distribution is send")
+        private val changeDistributed = service.handlerObject.distributionComplete(DistributionComplete(VersionedId(s"$idInTest", 1), to))
+
+        Then("Distribution confirmation is received")
+        assert(Await.result(changeDistributed, to).isInstanceOf[DistributionCompleteOk])
+
+        When("We ask for last published version")
+        private val versionAsk3 = service.handlerObject.getLastCompleteVersion(idInTest)
+
+        Then("We get last published version")
+        assert(Await.result(versionAsk3, to * 20) == VersionedId(idInTest, 1))
+
+        When(s"state changing entity $idInTest to version 2 and value 'valueTwo'")
+        private val change2Status = service.handlerObject.stateChange(StateChange(VersionedId(s"$idInTest", 2), "valueTwo", to * 2))
+
+        Then("Version returned should have value == 0")
+        assert(Await.result(change2Status, to * 20).isInstanceOf[StateChangeOk])
+
+        When("We ask for last published version")
+        private val versionAsk4 = service.handlerObject.getLastCompleteVersion(idInTest)
+
+        Then("We expect version 1 to be returned")
+        assert(Await.result(versionAsk4, to * 20) == VersionedId(idInTest, 1))
+
+        When("Confirm Distribution is send")
+        private val changeDistributed2 = service.handlerObject.distributionComplete(DistributionComplete(VersionedId(s"$idInTest", 2), to))
+
+        Then("Distribution confirmation is received")
+        assert(Await.result(changeDistributed2, to).isInstanceOf[DistributionCompleteOk])
+
+        When("We ask for last published version")
+        private val versionAsk5 = service.handlerObject.getLastCompleteVersion(idInTest)
+
+        Then("We get last published version is 2")
+        assert(Await.result(versionAsk5, to * 20) == VersionedId(idInTest, 2))
+
+      }
     }
   }
 
@@ -554,6 +623,12 @@ class SatelliteStateActorTest extends
 
         And("Notifier is completed")
         assert(listenerResponse.contains(s"valueOne@$idInTest@1"))
+
+        When("Ask for last version distributed")
+        private val lastDistributed = service.successSatellite.asRemote.getLastCompleteVersion(idInTest)
+
+        Then("Distribution confirmation is received")
+        assert(Await.result(lastDistributed, to) == VersionedId(idInTest, 1))
 
       }
 

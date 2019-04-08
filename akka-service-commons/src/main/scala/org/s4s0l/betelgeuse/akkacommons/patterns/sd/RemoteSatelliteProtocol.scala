@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +22,16 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
+import java.util.UUID
+
 import akka.actor.ActorRef
 import akka.serialization.Serialization
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.Message
+import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.Headers
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.SatelliteProtocol._
+import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedId
 import org.s4s0l.betelgeuse.akkacommons.utils.ActorTarget
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -53,6 +64,23 @@ private[sd] class RemoteSatelliteProtocol[T <: AnyRef](actorTarget: ActorTarget)
       case _ =>
         StateChangeNotOk(stateChangeMessage.messageId, new Exception(s"Remote satellite unknown response error."))
     }.recover { case ex: Throwable => StateChangeNotOk(stateChangeMessage.messageId, new Exception(ex)) }
+  }
+
+
+  /**
+    * returns last version for which distribution was completed
+    */
+  override def getLastCompleteVersion(entityId: String)
+                                     (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
+  : Future[VersionedId] = {
+    val headers = Headers()
+      .withHeader("entityId", entityId)
+      .withTtl(timeout.duration)
+    val message = Message("get-complete-version", UUID.randomUUID().toString, headers)
+    actorTarget.?(message)(timeout, sender).map {
+      case msg@Message("get-complete-version-ok", _, _, _) =>
+        VersionedId(entityId, msg.headers("versionId").toInt)
+    }
   }
 
   /**

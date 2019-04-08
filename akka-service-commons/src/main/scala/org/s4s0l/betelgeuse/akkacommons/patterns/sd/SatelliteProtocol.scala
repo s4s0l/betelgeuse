@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +25,7 @@ package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 import akka.NotUsed
 import akka.actor.ActorRef
 import akka.serialization.Serialization
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.MessageHeaders.Headers
 import org.s4s0l.betelgeuse.akkacommons.patterns.message.{Message, Payload}
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.OriginStateDistributor.Protocol.ValidationError
@@ -48,6 +55,8 @@ object SatelliteProtocol {
       Message("state-change", messageId, headers, Payload.wrap(value))
     }
   }
+
+  case class GetLastCompleteVersion(entityId: String, messageId: Uuid = QA.uuid) extends UuidQuestion
 
   case class StateChangeOk(correlationId: Uuid) extends StateChangeResult with OkNullResult[Uuid]
 
@@ -79,6 +88,12 @@ trait SatelliteProtocol[T <: AnyRef] {
                  (implicit executionContext: ExecutionContext, sender: ActorRef)
   : Future[StateChangeResult]
 
+  /**
+    * returns last version for which distribution was completed
+    */
+  def getLastCompleteVersion(entityId: String)
+                            (implicit executionContext: ExecutionContext, sender: ActorRef, timeout: Timeout)
+  : Future[VersionedId]
   /**
     * informs that all destinations confirmed
     */

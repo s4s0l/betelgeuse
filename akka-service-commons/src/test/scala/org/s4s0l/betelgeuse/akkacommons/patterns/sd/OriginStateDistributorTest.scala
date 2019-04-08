@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -219,6 +225,17 @@ object OriginStateDistributorTest {
     : Future[StateChangeResult] = {
       queue.add(s"$name:SC:${msg.value}:${msg.versionedId}")
       stateChanged(msg.messageId, executionContext)
+    }
+
+
+    /**
+      * returns last version for which distribution was completed
+      */
+    override def getLastCompleteVersion(entityId: String)
+                                       (implicit executionContext: ExecutionContext,
+                                        sender: ActorRef,
+                                        timeout: Timeout): Future[VersionedId] = {
+      throw new Exception("Not used in tests")
     }
 
     /**

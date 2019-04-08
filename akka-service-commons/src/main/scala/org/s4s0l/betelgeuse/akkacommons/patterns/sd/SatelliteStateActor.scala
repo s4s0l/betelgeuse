@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +22,11 @@
 
 package org.s4s0l.betelgeuse.akkacommons.patterns.sd
 
+import akka.actor.Status.Failure
 import akka.actor.{ActorRef, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.serialization.Serialization
+import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.BgServiceId
 import org.s4s0l.betelgeuse.akkacommons.clustering.client.BgClusteringClientExtension
 import org.s4s0l.betelgeuse.akkacommons.clustering.receptionist.BgClusteringReceptionistExtension
@@ -50,6 +58,7 @@ import scala.reflect.ClassTag
   *
   * @author Marcin Wielgus
   */
+//noinspection ActorMutableStateInspection
 class SatelliteStateActor[I <: AnyRef, V](settings: Settings[I, V])
                                          (implicit classTag: ClassTag[I])
   extends VersionedEntityActor[V](VersionedEntityActor.Settings(settings.name)) {
@@ -61,6 +70,8 @@ class SatelliteStateActor[I <: AnyRef, V](settings: Settings[I, V])
     */
   private val stateChangesProcessed = mutable.Map[VersionedId, Either[Boolean, ValidationError]]()
 
+  private val versionsDistributed = mutable.ListBuffer[VersionedId]()
+
   implicit val messageForward: Message.ForwardHeaderProvider = Message.defaultForward
 
   private var stateChangeHandlingInProgress: Boolean = false
@@ -70,6 +81,9 @@ class SatelliteStateActor[I <: AnyRef, V](settings: Settings[I, V])
 
   private def processStateChangeEvents(recover: Boolean, responseFactory: StateChangeResult => Any, senderProvider: => ActorRef)
   : PartialFunction[Event, Unit] = {
+    case StateDistributedEvent(version) =>
+      this.versionsDistributed += version
+
     case x@StateChangedEvent(version, _, _, msgId) =>
       x.toHandlerResult match {
         case Left(None) =>
@@ -105,6 +119,15 @@ class SatelliteStateActor[I <: AnyRef, V](settings: Settings[I, V])
 
     case msg: StateChange[I] =>
       handleStateChangeCommand(msg.asInstanceOf[StateChange[I]])(identity)
+
+    case GetLastCompleteVersion(entityId, _) =>
+      sender ! getLastCompleteVersion
+        .getOrElse(Failure(new Exception(s"No version with completed distribution found for entity $entityId")))
+
+    case msg@Message("get-complete-version", _, _, _) =>
+      sender ! getLastCompleteVersion
+        .map(it => msg.response("get-complete-version-ok", Payload.emptyUnit, Map("versionId" -> it.version.toString)))
+        .getOrElse(Failure(new Exception(s"No version with completed distribution found for entity $shardedActorId")))
 
     case msg@Message("state-change", messageId, _, _) =>
       val versionedId: VersionedId = VersionedId(msg.get("versionedId").get)
@@ -149,7 +172,15 @@ class SatelliteStateActor[I <: AnyRef, V](settings: Settings[I, V])
 
   }
 
-  private def handleStateDistributedCommand(msg: DistributionComplete)(responseFactory: DistributionCompleteResult => Any) = {
+  private def getLastCompleteVersion = {
+    versionsDistributed
+      .sortBy(_.version)
+      .reverse
+      .headOption
+  }
+
+  private def handleStateDistributedCommand(msg: DistributionComplete)
+                                           (responseFactory: DistributionCompleteResult => Any): Unit = {
     val DistributionComplete(version, exp, msgId) = msg
     stateChangesProcessed.get(version) match {
       case None | Some(Right(_)) =>
@@ -162,30 +193,32 @@ class SatelliteStateActor[I <: AnyRef, V](settings: Settings[I, V])
         sender() ! responseFactory(DistributionCompleteOk(msgId))
       case Some(Left(true)) =>
         //we seen it and accepted it before, notifying listeners
-
-        import context.dispatcher
-        import org.s4s0l.betelgeuse.utils.AllUtils._
-        val senderTmp = sender()
-        logg("Starting distribution completed notification.", msg.versionedId)
-        val request = SatelliteStateListener.StateChanged(version, getValueAtVersion(version).getOrElse(throw new IllegalStateException()), exp)
-        settings.listener.configurationChanged(request)
-          .map {
-            case SatelliteStateListener.StateChangedOk(_) =>
-              logg("Distribution completed notification was ok.", msg.versionedId)
-              responseFactory(DistributionCompleteOk(msgId))
-            case SatelliteStateListener.StateChangedNotOk(_, ex) =>
-              logge("Distribution completed notification not ok.", msg.versionedId, ex)
-              responseFactory(DistributionCompleteNotOk(msgId, ex))
-          }
-          .recover { case it: Throwable =>
-            logge("Distribution completed notification failed.", msg.versionedId, it)
-            responseFactory(DistributionCompleteNotOk(msgId, it))
-          }
-          .pipeToWithTimeout(senderTmp, exp, () => {
-            val exception = new Exception(s"Timeout!!! waited $exp ")
-            logge("Distribution completed notification failed.", msg.versionedId, exception)
-            responseFactory(DistributionCompleteNotOk(msgId, exception))
-          }, context.system.scheduler)
+        persist(StateDistributedEvent(version)) { _ =>
+          this.versionsDistributed += version
+          import context.dispatcher
+          import org.s4s0l.betelgeuse.utils.AllUtils._
+          val senderTmp = sender()
+          logg("Starting distribution completed notification.", msg.versionedId)
+          val request = SatelliteStateListener.StateChanged(version, getValueAtVersion(version).getOrElse(throw new IllegalStateException()), exp)
+          settings.listener.configurationChanged(request)
+            .map {
+              case SatelliteStateListener.StateChangedOk(_) =>
+                logg("Distribution completed notification was ok.", msg.versionedId)
+                responseFactory(DistributionCompleteOk(msgId))
+              case SatelliteStateListener.StateChangedNotOk(_, ex) =>
+                logge("Distribution completed notification not ok.", msg.versionedId, ex)
+                responseFactory(DistributionCompleteNotOk(msgId, ex))
+            }
+            .recover { case it: Throwable =>
+              logge("Distribution completed notification failed.", msg.versionedId, it)
+              responseFactory(DistributionCompleteNotOk(msgId, it))
+            }
+            .pipeToWithTimeout(senderTmp, exp, () => {
+              val exception = new Exception(s"Timeout!!! waited $exp ")
+              logge("Distribution completed notification failed.", msg.versionedId, exception)
+              responseFactory(DistributionCompleteNotOk(msgId, exception))
+            }, context.system.scheduler)
+        }
     }
   }
 
@@ -260,11 +293,15 @@ object SatelliteStateActor {
 
   private def entityExtractor: ShardRegion.ExtractEntityId = {
     case a: IncomingMessage => (a.entityId, a)
+    case a: GetLastCompleteVersion => (a.entityId, a)
     case a: DistributionComplete => (a.versionedId.id, a)
     case a: StateChange[_] => (a.versionedId.id, a)
     case a@Message("distribution-complete" | "state-change", _, _, _)
       if a.get("versionedId").isDefined
     => (VersionedId(a("versionedId")).id, a)
+    case a@Message("get-complete-version", _, _, _)
+      if a.get("entityId").isDefined
+    => (a("entityId"), a)
   }
 
   def getRemote[I <: AnyRef](name: String, serviceId: BgServiceId)
@@ -298,6 +335,8 @@ object SatelliteStateActor {
                                             handler: SatelliteValueHandler[I, V],
                                             listener: SatelliteStateListener[V])
 
+  case class StateDistributedEvent(versionedId: VersionedId) extends Event
+
   case class StateChangedEvent[V](versionedId: VersionedId,
                                   handlerValue: JsonAnyWrapper,
                                   validationError: ValidationError,
@@ -317,6 +356,19 @@ object SatelliteStateActor {
 
 
     override def asRemote(implicit simpleSerializer: Serialization): SatelliteProtocol[I] = new RemoteSatelliteProtocol(actorTarget)
+
+
+    /**
+      * returns last version for which distribution was completed
+      */
+    override def getLastCompleteVersion(entityId: String)
+                                       (implicit executionContext: ExecutionContext,
+                                        sender: ActorRef,
+                                        timeout: Timeout)
+    : Future[VersionedId] = {
+      actorTarget.?(GetLastCompleteVersion(entityId))(timeout, sender)
+        .mapTo[VersionedId]
+    }
 
     /**
       * distributes state change

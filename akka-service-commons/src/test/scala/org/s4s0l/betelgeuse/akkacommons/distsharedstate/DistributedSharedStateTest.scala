@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -195,6 +201,11 @@ class DistributedSharedStateTest extends BgTestRoach with BgTestJackson {
       assert(satellite1.service.consumer.totalCalls.get.contains("enriched:VALUEXXX"))
       assert(satellite2.service.consumer.totalCalls.get.contains("enriched:valuexxx"))
       assert(satellite1.service.lastGlobalListenerCall.get.contains("VALUEXXX"))
+
+      val latestDistributedVersion1 = satellite1.service.cache.getDistributedVersion(id.id)(satellite1.execContext, satellite1.self)
+      assert(Await.result(latestDistributedVersion1, satellite1.to).version == 1)
+      val latestDistributedVersion2 = satellite2.service.cache.getDistributedVersion(id.id)(satellite2.execContext, satellite2.self)
+      assert(Await.result(latestDistributedVersion2, satellite2.to).version == 1)
 
     }
 

@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,6 +33,7 @@ import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.Protocol.GetCacheValue
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade
 import org.s4s0l.betelgeuse.akkacommons.patterns.nearcache.CacheAccessActor.ValueOwnerFacade.{OwnerValueNotOk, OwnerValueOk, OwnerValueResult}
+import org.s4s0l.betelgeuse.akkacommons.patterns.sd
 import org.s4s0l.betelgeuse.akkacommons.patterns.sd.{OriginStateDistributor, SatelliteStateActor, SatelliteValueHandler}
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.VersionedEntityActor.Protocol._
 import org.s4s0l.betelgeuse.akkacommons.patterns.versionedentity.{VersionedEntityActor, VersionedId}
@@ -95,6 +102,10 @@ object DistributedSharedState {
 
     def getVersion(id: String)
                   (implicit executionContext: ExecutionContext, sender: ActorRef)
+    : Future[VersionedId]
+
+    def getDistributedVersion(id: String)
+                             (implicit executionContext: ExecutionContext, sender: ActorRef)
     : Future[VersionedId]
 
     def addListener[C <: NewVersionedValueListener[R]](listener: C): ListenerStartupNotifier
@@ -186,7 +197,7 @@ object DistributedSharedState {
     }
 
     class VersionedCacheImpl[R] private[distsharedstate](cacheName: String,
-                                                         versionedEntity: VersionedEntityActor.ProtocolGetters[_],
+                                                         versionedEntity: sd.SatelliteStateActor.Protocol[_, _],
                                                          cacheWrapped: CacheAccessActor.Protocol[VersionedEntityActor.Protocol.GetValue, VersionedId, R]
                                                         )
       extends VersionedCache[R] {
@@ -237,6 +248,13 @@ object DistributedSharedState {
                     (implicit executionContext: ExecutionContext, sender: ActorRef)
       : Future[VersionedId] = {
         versionedEntity.getVersion(GetValueVersion(id)).map(_.value)
+      }
+
+      def getDistributedVersion(id: String)
+                               (implicit executionContext: ExecutionContext, sender: ActorRef)
+      : Future[VersionedId] = {
+        import scala.concurrent.duration._
+        versionedEntity.getLastCompleteVersion(id)(executionContext, sender, 5.seconds)
       }
     }
 
