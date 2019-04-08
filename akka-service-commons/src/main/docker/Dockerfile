@@ -1,4 +1,4 @@
-FROM frolvlad/alpine-oraclejdk8:slim
+FROM frolvlad/alpine-java:jdk8.202.08-slim
 ADD agent /service/agent
 ADD bglib /service/bglib
 
