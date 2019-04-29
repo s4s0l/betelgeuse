@@ -44,6 +44,7 @@ apply from: '../gradle/scalike-jdbc.gradle'
 dependencies {
     compile 'ch.qos.logback:logback-classic:1.2.3'
     compile 'ch.qos.logback:logback-core:1.2.3'
+    compile 'org.slf4j:jcl-over-slf4j:1.7.12'
     compile 'org.postgresql:postgresql:42.1.4'
     compile "org.flywaydb:flyway-core:5.1.sasol"
     compile group: "com.typesafe.akka", name: "akka-stream-kafka_${scalaBinaryVersion}", version: "0.18"
