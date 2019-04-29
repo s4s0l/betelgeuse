@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,16 +21,15 @@
  */
 
 
-
 package org.s4s0l.betelgeuse.akkacommons.persistence
 
-import java.sql.{Connection, Types}
+import java.sql.Connection
 
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.{Around, Aspect}
 import org.flywaydb.core.api.FlywayException
-import org.flywaydb.core.api.configuration.{Configuration, FlywayConfiguration}
-import org.flywaydb.core.internal.util.jdbc.{JdbcTemplate, JdbcUtils}
+import org.flywaydb.core.api.configuration.Configuration
+import org.flywaydb.core.internal.util.jdbc.JdbcTemplate
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.CrateDatabase
 
 /**
@@ -44,11 +49,11 @@ class FlywayAspects {
 
   @Around("execution(* org.flywaydb.core.internal.util.scanner.classpath.FileSystemClassPathLocationScanner.findResourceNames(..)) && args(*, *)")
   def disableFileSystemClasspath(pjp: ProceedingJoinPoint): Any = {
-      pjp.proceed()
+    pjp.proceed()
   }
 
-//  @Around("execution(* org.flywaydb.core.internal.database.cockroachdb.CockroachDBConnection.getCurrentSchemaNameOrSearchPath())")
-//  def currentSchema(pjp: ProceedingJoinPoint): Any = {
-//    pjp.proceed()
-//  }
+  //  @Around("execution(* org.flywaydb.core.internal.database.cockroachdb.CockroachDBConnection.getCurrentSchemaNameOrSearchPath())")
+  //  def currentSchema(pjp: ProceedingJoinPoint): Any = {
+  //    pjp.proceed()
+  //  }
 }

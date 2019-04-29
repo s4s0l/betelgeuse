@@ -15,6 +15,7 @@
  */
 
 include 'akka-service-commons'
+include 'akka-service-crate'
 include 'akka-service-commons-test'
 include 'akka-service-kamon'
 include 'akka-service-typed'

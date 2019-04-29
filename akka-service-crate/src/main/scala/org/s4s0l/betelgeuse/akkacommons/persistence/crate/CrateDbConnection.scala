@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
 import java.sql.Types
 
-import org.flywaydb.core.api.configuration.{Configuration, FlywayConfiguration}
+import org.flywaydb.core.api.configuration.Configuration
 import org.flywaydb.core.internal.database.Connection
 import org.flywaydb.core.internal.util.StringUtils
 import org.flywaydb.core.internal.util.jdbc.JdbcTemplate

@@ -19,7 +19,7 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 import org.flywaydb.core.internal.database.postgresql.PostgreSQLSqlStatementBuilder
 import org.flywaydb.core.internal.database.{Delimiter, ExecutableSqlScript, SqlStatementBuilder}
 import org.flywaydb.core.internal.util.PlaceholderReplacer
-import org.flywaydb.core.internal.util.scanner.{LoadableResource, Resource}
+import org.flywaydb.core.internal.util.scanner.LoadableResource
 
 /**
   * @author Marcin Wielgus

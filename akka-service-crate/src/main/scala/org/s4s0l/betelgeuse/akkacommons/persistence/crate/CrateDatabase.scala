@@ -19,13 +19,12 @@ package org.s4s0l.betelgeuse.akkacommons.persistence.crate
 
 
 import java.sql
-import java.sql.Types
 
-import org.flywaydb.core.api.configuration.{Configuration, FlywayConfiguration}
+import org.flywaydb.core.api.configuration.Configuration
 import org.flywaydb.core.internal.database._
-import org.flywaydb.core.internal.util.{PlaceholderReplacer, StringUtils}
 import org.flywaydb.core.internal.util.jdbc.JdbcTemplate
-import org.flywaydb.core.internal.util.scanner.{LoadableResource, Resource}
+import org.flywaydb.core.internal.util.scanner.LoadableResource
+import org.flywaydb.core.internal.util.{PlaceholderReplacer, StringUtils}
 import org.slf4j.{Logger, LoggerFactory}
 
 

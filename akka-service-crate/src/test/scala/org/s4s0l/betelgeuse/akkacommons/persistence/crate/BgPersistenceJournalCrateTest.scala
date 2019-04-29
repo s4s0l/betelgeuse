@@ -24,7 +24,7 @@ import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.{BgClusteringSharding, BgClusteringShardingExtension}
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrateTest._
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithCrateDb
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BgTestWithCrateDb
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
 
 import scala.concurrent.Await
@@ -116,12 +116,12 @@ class BgPersistenceJournalCrateTest extends BgTestWithCrateDb[BgPersistenceJourn
       Thread.sleep(10000)
       shard ! CmdSharded(1, "ala")
       LOGGER.info("Message sent")
-      testKit.expectMsg(5 seconds,List("ala"))
+      testKit.expectMsg(5 seconds, List("ala"))
       testKit.expectMsg(20 seconds, "down")
       shard ! CmdSharded(1, "ma")
-      testKit.expectMsg(2 seconds,List("ala","ma"))
+      testKit.expectMsg(2 seconds, List("ala", "ma"))
       shard ! CmdSharded(1, "kota")
-      testKit.expectMsg(2 seconds,List("ala","ma", "kota"))
+      testKit.expectMsg(2 seconds, List("ala", "ma", "kota"))
     }
 
   }
