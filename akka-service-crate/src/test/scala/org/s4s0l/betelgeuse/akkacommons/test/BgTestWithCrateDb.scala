@@ -1,22 +1,13 @@
-/*
- * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited.
- * This file is proprietary and confidential.
- */
-
-package org.s4s0l.betelgeuse.akkacommons.persistence.utils
-
-;
-
-/**
-  * @author Marcin Wielgus
-  */
+package org.s4s0l.betelgeuse.akkacommons.test
 
 import org.flywaydb.core.internal.util.StringUtils
 import org.s4s0l.betelgeuse.akkacommons.persistence.BgPersistenceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceCrate
-import org.s4s0l.betelgeuse.akkacommons.test.{BgTestWithPersistence, DbCrateTest};
+import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BetelgeuseDb
 
+/**
+  * @author Marcin Wielgus
+  */
 @deprecated("Please migrate to BgTestCrate", "?")
 trait BgTestWithCrateDb[T <: BgPersistenceCrate] extends BgTestWithPersistence[T] {
 

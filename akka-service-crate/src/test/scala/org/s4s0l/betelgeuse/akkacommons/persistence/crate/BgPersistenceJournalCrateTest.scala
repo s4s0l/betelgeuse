@@ -24,7 +24,7 @@ import akka.util.Timeout
 import org.s4s0l.betelgeuse.akkacommons.clustering.sharding.{BgClusteringSharding, BgClusteringShardingExtension}
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrateTest._
 import org.s4s0l.betelgeuse.akkacommons.persistence.utils
-import org.s4s0l.betelgeuse.akkacommons.persistence.utils.BgTestWithCrateDb
+import org.s4s0l.betelgeuse.akkacommons.test.BgTestWithCrateDb
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
 
 import scala.concurrent.Await

@@ -21,9 +21,9 @@ import akka.persistence.{PersistentActor, SnapshotOffer}
 import org.s4s0l.betelgeuse.akkacommons.BgServiceExtension
 import org.s4s0l.betelgeuse.akkacommons.persistence.crate.BgPersistenceJournalCrate
 import org.s4s0l.betelgeuse.akkacommons.persistence.{BgPersistenceExtension, utils}
-import org.s4s0l.betelgeuse.akkacommons.test.BgTestCrateTest._
 import org.s4s0l.betelgeuse.akkacommons.test.BgTestService.WithService
 import org.s4s0l.betelgeuse.akkacommons.utils.TimeoutShardedActor
+import BgTestCrateTest._
 import scalikejdbc._
 
 import scala.concurrent.duration._
