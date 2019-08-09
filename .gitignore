@@ -17,4 +17,4 @@ gradle/wrapper/gradle-wrapper.properties
 *.iml
 /akka-service-commons/native
 /akka-service-commons/out
-/akka-service-auth/out
+/akka-service-*/out
