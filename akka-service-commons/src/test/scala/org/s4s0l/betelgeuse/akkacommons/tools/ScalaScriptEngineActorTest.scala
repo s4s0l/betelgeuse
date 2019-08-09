@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +47,7 @@ class ScalaScriptEngineActorTest extends BgTestService {
         When("Script is evaluated")
         private val res = service.scriptEngine.eval[Int](script)(execContext, 20 seconds)
         Then("script evaluation succeeds, first time it may take longer")
-        assert(Await.result(res, 10 seconds) == 2)
+        assert(Await.result(res, 20 seconds) == 2)
         When("Script is evaluated again")
         private val res2 = service.scriptEngine.eval[Int]("2+2")(execContext, 1 second)
         Then("script evaluation succeeds, response is blazing fast...")
