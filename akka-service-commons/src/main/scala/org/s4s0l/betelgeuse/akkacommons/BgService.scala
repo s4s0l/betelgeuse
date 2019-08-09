@@ -1,4 +1,10 @@
 /*
+ * Copyright© 2019 by Ravenetics Sp. z o.o. - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited.
+ * This file is proprietary and confidential.
+ */
+
+/*
  * Copyright© 2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +22,7 @@
 
 package org.s4s0l.betelgeuse.akkacommons
 
+import java.io.File
 import java.lang.reflect.{Field, Modifier}
 import java.net.URI
 
@@ -43,7 +50,7 @@ trait BgService
 
   private var configInited = false
   private var mainRunned = false
-  private val classNameMatch = "[^A-Z]+([A-Z][^$\\.]+)(?:.*)".r
+  private val classNameMatch = "[^A-Z]+([A-Z][^$.]+)(?:.*)".r
 
   protected lazy val defaultSystemName: String = {
     this.getClass.getName match {
@@ -83,10 +90,39 @@ trait BgService
       .withFallback(ConfigFactory.parseResources("serialization-jackson.conf"))
   }
 
+  def externalFileConfiguration: Config = {
+    val configsPaths = System.getProperty("bg.configs")
+    if (configsPaths != null && configsPaths.trim != "") {
+      LOGGER.info(s"Picked up bg.configs = $configsPaths")
+      configsPaths
+        .split(s"[,${File.pathSeparator}]+")
+        .reverse
+        .map { it =>
+          val f = new File(it)
+          if (f.exists() && f.canRead) {
+            LOGGER.info(s"Going to use ${f.getAbsolutePath} as config file")
+            ConfigFactory.parseFile(f)
+          } else {
+            throw new Exception(s"Config file ${f.getAbsolutePath} does not exist!")
+          }
+        }
+        .foldLeft(ConfigFactory.empty()) { (c, n) =>
+          c.withFallback(n)
+        }
+    } else {
+      LOGGER.info(s"No external configs found")
+      ConfigFactory.empty()
+    }
+  }
+
   def configFile: String = s"$systemName.conf"
 
   final implicit lazy val config: Config = {
-    ConfigFactory.load(ConfigFactory.parseResources(configFile).withFallback(customizeConfiguration))
+    externalFileConfiguration.withFallback(
+      ConfigFactory.load(
+        ConfigFactory.parseResources(configFile)
+          .withFallback(customizeConfiguration))
+    )
   }
 
   final implicit lazy val system: ActorSystem = {
@@ -191,7 +227,35 @@ trait BgService
 
   }
 
+  def displayDiagnostics(): Unit = {
+    LOGGER.info(s"Working dir is: [${new File(".").getAbsolutePath}]")
+    LOGGER.info(s"java info: java.home=${System.getProperty("java.home")}")
+    LOGGER.info(s"java info: java.version=${System.getProperty("java.version")}")
+    LOGGER.info(s"java info: java.version.date=${System.getProperty("java.version.date")}")
+    LOGGER.info(s"java info: java.vendor=${System.getProperty("java.vendor")}")
+    LOGGER.info(s"java info: java.vendor.version=${System.getProperty("java.vendor.version")}")
+    LOGGER.info(s"java info: java.vendor.url=${System.getProperty("java.vendor.url")}")
+    LOGGER.info(s"java info: java.vendor.url.bug=${System.getProperty("java.vendor.url.bug")}")
+    LOGGER.info(s"java info: java.specification.name=${System.getProperty("java.specification.name")}")
+    LOGGER.info(s"java info: java.specification.vendor=${System.getProperty("java.specification.vendor")}")
+    LOGGER.info(s"java info: java.specification.version=${System.getProperty("java.specification.version")}")
+    LOGGER.info(s"java info: java.vm.name=${System.getProperty("java.vm.name")}")
+    LOGGER.info(s"java info: java.vm.vendor=${System.getProperty("java.vm.vendor")}")
+    LOGGER.info(s"java info: java.vm.version=${System.getProperty("java.vm.version")}")
+    LOGGER.info(s"java info: java.vm.info=${System.getProperty("java.vm.info")}")
+    LOGGER.info(s"java info: java.vm.specification.name=${System.getProperty("java.vm.specification.name")}")
+    LOGGER.info(s"java info: java.vm.specification.vendor=${System.getProperty("java.vm.specification.vendor")}")
+    LOGGER.info(s"java info: java.vm.specification.version=${System.getProperty("java.vm.specification.version")}")
+    LOGGER.info(s"java info: java.runtime.name=${System.getProperty("java.runtime.name")}")
+    LOGGER.info(s"java info: java.runtime.version=${System.getProperty("java.runtime.version")}")
+    LOGGER.info(s"java info: java.class.version=${System.getProperty("java.class.version")}")
+    LOGGER.info(s"java info: jdk.debug=${System.getProperty("jdk.debug")}")
+    LOGGER.info(s"java info: sun.java.launcher=${System.getProperty("sun.java.launcher")}")
+    LOGGER.info(s"java info: sun.management.compiler=${System.getProperty("sun.management.compiler")}")
+  }
+
   final def run(): ActorSystem = {
+    displayDiagnostics()
     val versions = getVersionsInfo
     log.info("Betelgeuse@{} is starting application {}@{} generated from {}",
       versions.bgVersions.implementation,
@@ -212,7 +276,7 @@ trait BgService
     run()
   }
 
-  private def fixUriBug(): Unit = {
+  protected def fixUriBug(): Unit = {
     val testString = "akka.tcp://toktme-story-handler@toktme-story_handlerservice:40000/system/bg_receptionist"
     if (new URI(testString).getUserInfo == null) {
       LOGGER.info("Fixing URI bug (https://bugs.openjdk.java.net/browse/JDK-8170265)")
