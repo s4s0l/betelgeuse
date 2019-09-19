@@ -122,7 +122,7 @@ trait BgService
       ConfigFactory.load(
         ConfigFactory.parseResources(configFile)
           .withFallback(customizeConfiguration))
-    )
+    ).resolve()
   }
 
   final implicit lazy val system: ActorSystem = {
